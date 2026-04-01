@@ -1,0 +1,6 @@
+{
+  "login":      "https://the-internet.herokuapp.com/login",
+  "home":       "https://the-internet.herokuapp.com/",
+  "secure":     "https://the-internet.herokuapp.com/secure",
+"saintcore":  "https://saintcore.kr/"
+}

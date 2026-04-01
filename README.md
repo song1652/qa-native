@@ -1,0 +1,191 @@
+# QA Automation — Claude Code Native
+
+> **독자**: 사람 — 신규 진입점. 설치·실행 방법과 내부 문서 링크 모음.
+
+API 비용 없이 Claude Code 토큰만으로 동작하는 QA 자동화 시스템.
+
+---
+
+## 실행 파일 목록
+
+| 파일 | 언제 실행? | 하는 일 |
+|---|---|---|
+| `run_qa.py` | 단일 URL 테스트 시작 | state/pipeline.json 생성 후 Claude에게 파이프라인 실행 지시 |
+| `run_qa_parallel.py` | 여러 URL 동시 테스트 | pages.json 기반 워커 생성 + 병렬 실행 지시 |
+| `run_team.py` | 팀 토론 주제 등록 | state/discuss.json 생성 (대시보드 버튼으로 대체 가능) |
+| `agents/dashboard/serve.py` | 모니터링 대시보드 실행 | http://localhost:8765 에서 파이프라인 실행·모니터링·토론 관리 |
+| `parallel/99_merge.py` | 병렬 실행 완료 후 | pytest 일괄 실행 + HTML 리포트 생성 + workers 정리 |
+| `parallel/99_merge.py --group` | 빠른 실행 (대시보드) | 특정 그룹만 pytest 실행 (전체 파이프라인 불필요) |
+| `telegram_bot.py` | 텔레그램 봇 서버 | 텔레그램에서 Claude에게 QA 명령 전달 |
+
+> **scripts/ 폴더 안의 파일들은 직접 실행하지 않습니다.** Claude가 파이프라인 순서에 따라 자동으로 호출합니다.
+
+---
+
+## 설치
+
+```bash
+pip install -r requirements.txt
+playwright install chromium
+```
+
+---
+
+## 실행
+
+```bash
+# 폴더 지정 (권장) — 폴더 내 tc_*.md 파일 전체를 자동 읽음
+python run_qa.py --url https://example.com/login --cases testcases/login/
+```
+
+케이스 수에 따라 자동 분기됩니다:
+
+| 케이스 수 | 동작 |
+|---|---|
+| 1개 | 단일 파이프라인 — `state/pipeline.json` 생성 후 Claude Code가 순차 실행 |
+| N개 | 병렬 파이프라인 — 케이스별 worker 자동 생성, Claude Code가 동시 실행 |
+
+---
+
+## 테스트 케이스 작성
+
+케이스는 `testcases/` 하위 그룹 폴더에 `.md` 파일로 작성합니다. **1파일 = 1케이스.**
+
+```
+testcases/
+  login/          ← 10개 케이스 (URL은 config/pages.json 참조)
+    tc_01_login_success.md
+    tc_02_wrong_password.md
+    ...
+  saintcore/      ← 10개 케이스 (URL은 config/pages.json 참조)
+    tc_01_login_success.md
+    tc_02_wrong_password.md
+    ...
+```
+
+**케이스 파일 형식 (YAML frontmatter + Markdown):**
+
+```markdown
+---
+id: tc_01
+data_key: valid_user
+priority: high
+tags: [positive, smoke]
+type: structured
+---
+# 정상 로그인 성공
+
+## Precondition
+0. 로그인 페이지 접속 상태
+
+## Steps
+1. username 필드에 test_data[valid_user].username 입력
+2. password 필드에 test_data[valid_user].password 입력
+3. Login 버튼 클릭
+
+## Expected
+- You logged into a secure area! 메시지가 표시되어야 한다.
+```
+
+- frontmatter 필수: `id`, `data_key`, `priority`, `tags`, `type`
+- Steps 입력값은 `test_data[{data_key}].{속성}` 형식 (하드코딩 금지)
+
+자세한 작성 규칙: [`doc/TEST_CASE_GUIDE.md`](doc/TEST_CASE_GUIDE.md)
+
+---
+
+## 병렬 파이프라인 직접 실행 (선택)
+
+`run_qa.py`의 자동 라우팅 대신 targets.json으로 직접 제어할 때:
+
+```bash
+python run_qa_parallel.py --targets testcases/targets_login.json
+# Claude Code가 각 worker를 동시에 실행 (코드 생성)
+python parallel/99_merge.py
+# pytest 일괄 실행 + HTML 리포트 + workers 정리
+```
+
+> targets.json 작성법 상세: [`doc/TEST_CASE_GUIDE.md`](doc/TEST_CASE_GUIDE.md) 참조
+
+---
+
+## 산출물
+
+| 파일 | 내용 |
+|---|---|
+| `tests/generated/{group}/{label}.py` | Claude Code가 작성한 테스트 코드 |
+| `tests/reports/parallel_index_{ts}.html` | 통합 HTML 리포트 |
+| `tests/screenshots/*.png` | 실패 케이스 자동 스크린샷 |
+
+---
+
+## 파일 구조
+
+| 파일/폴더 | 역할 |
+|---|---|
+| `run_qa.py` | 파이프라인 진입점 (단일/병렬 자동 분기) |
+| `run_qa_parallel.py` | 병렬 파이프라인 직접 실행용 |
+| `run_team.py` | 팀 토론 진입점 |
+| `telegram_bot.py` | 텔레그램 봇 서버 |
+| `scripts/01~06_*.py` | 단계별 스크립트 (LLM 없음) |
+| `scripts/02a,03a,06a_dialog.py` | 심의 컨텍스트 수집·출력 |
+| `scripts/check_pending_*.py` | 훅 스크립트 (승인·토론·병렬·구현 트리거 감지) |
+| `scripts/_python.py` | .venv Python 경로 자동 감지 헬퍼 |
+| `parallel/99_merge.py` | pytest 일괄 실행 + 리포트 + workers 정리 |
+| `agents/` | 사수-부사수 역할 정의, 팀 토론 dialog 로그, lessons_learned |
+| `testcases/` | 테스트 케이스 `.md` 파일 (login 10개, saintcore 10개) |
+| `config/pages.json` | 페이지명 → URL 매핑 |
+| `config/test_data.json` | 테스트 입력값 중앙 관리 (계정, 폼 데이터 등) |
+| `state/pipeline.json` | 단일 파이프라인 상태 |
+| `state/discuss.json` | 팀 토론 상태 |
+| `state/parallel.json` | 병렬 파이프라인 실행 결과 |
+| `state/quick.json` | 빠른 실행 결과 (병렬 파이프라인과 분리) |
+| `state/heal_context.json` | 힐링 루프용 traceback (실패 시 생성) |
+| `prompts/` | 심의 Agent 프롬프트 템플릿 (CLAUDE.md에서 분리) |
+| `logs/` | 실행 로그 (run_qa.txt, run_parallel.txt, merge.txt, quick_run.txt) |
+| [`CLAUDE.md`](CLAUDE.md) | Claude Code 행동 지침 |
+
+---
+
+## 트러블슈팅
+
+| 증상 | 원인 | 해결 |
+|---|---|---|
+| `state/pipeline.json 없음` | 파이프라인 초기화 미실행 | `run_qa.py` 또는 `run_qa_parallel.py` 재실행 |
+| `tests/generated/` 파일 없음 | subagent 코드 생성 미완료 | Claude Code에 subagent 재실행 요청 |
+| 특정 케이스 FAIL | assertion / locator 오류 | 해당 `.py` 파일 직접 확인 후 수정, 또는 Healer 재실행 |
+| 스크린샷 미생성 | conftest.py 중복 로드 | `tests/generated/` 하위에 conftest.py 없어야 함 |
+| 힐링 3회 반복 실패 | selector/assertion 불일치 | MCP로 실제 페이지 DOM 확인 (`Playwright_navigate` → `playwright_get_visible_html`) |
+| 병렬 힐링 후 lessons_learned 누락 경고 | 힐링 패치만 적용, 기록 누락 | `agents/lessons_learned.md`에 힐링 기록 추가 후 `99_merge.py` 재실행 |
+| DOM 분석 실패 | 네트워크 / URL 오류 | URL 접근 가능 여부 확인 |
+
+---
+
+## 대시보드 (선택)
+
+```bash
+python agents/dashboard/serve.py
+# http://localhost:8765
+```
+
+대시보드에서 할 수 있는 것:
+- **단일 파이프라인**: 페이지 선택 → 케이스 폴더 선택 → 실행 + 7단계 프로그레스 바 + 승인/반려
+- **병렬 파이프라인**: 전체 실행 버튼 → 워커 카드 그리드 → 99_merge 실행
+- **빠른 실행**: `tests/generated/` 폴더 선택 → pytest 바로 실행 (전체 파이프라인 불필요)
+- **팀 토론**: 주제 입력 → 사수/부사수 실시간 대화 → 항목별 승인/반려
+- **리포트**: HTML 리포트 열람
+- **실행 로그**: 실시간 로그 표시
+
+> QA 파이프라인 심의(Plan·코드리뷰·힐링) 결과는 `state/pipeline.json`에 저장되며, 터미널 로그에서도 확인 가능합니다.
+
+---
+
+## 내부 문서 (`doc/`)
+
+> `doc/` 폴더는 **사람 전용** 상세 문서 공간입니다. 에이전트(Claude)가 읽지 않습니다.
+
+| 파일 | 내용 |
+|---|---|
+| [`doc/SCRIPTS_GUIDE.md`](doc/SCRIPTS_GUIDE.md) | **모든 .py 파일 역할·실행 방법 정리** |
+| [`doc/PROJECT_OVERVIEW.md`](doc/PROJECT_OVERVIEW.md) | 아키텍처·설계 의도 상세 |
+| [`doc/TEST_CASE_GUIDE.md`](doc/TEST_CASE_GUIDE.md) | 테스트케이스 작성 규칙 |

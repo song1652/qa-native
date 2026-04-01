@@ -1,0 +1,8 @@
+# LLM SDK 없음 — Claude Code 토큰만 사용
+
+playwright>=1.44.0
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+pytest-playwright>=0.5.0
+pytest-html>=4.1.0
+flake8>=7.0.0

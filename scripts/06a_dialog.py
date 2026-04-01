@@ -1,0 +1,101 @@
+"""
+Step 6a — 힐링 심의 컨텍스트 준비
+LLM 없음. 심의 agent에 전달할 컨텍스트를 수집·출력한다.
+결과는 state.json에만 저장 (dialog.json은 팀 토론 전용).
+모든 파일 읽기를 이 스크립트에서 처리 → agent는 파일 읽기 없이 바로 심의 시작.
+"""
+import json
+import sys
+from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
+from _paths import PIPELINE_STATE
+
+
+def read_file(path):
+    p = Path(path)
+    return p.read_text(encoding="utf-8") if p.exists() else ""
+
+
+def main():
+    state_path = PIPELINE_STATE
+
+    if not state_path.exists():
+        print("[오류] state/pipeline.json 없음.")
+        sys.exit(1)
+
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    heal_context = state.get("heal_context")
+
+    if not heal_context:
+        print("[오류] heal_context 없음. 06_heal.py를 먼저 실행하세요.")
+        sys.exit(1)
+
+    if state.get("step") != "heal_needed":
+        print("[스킵] heal_needed 상태가 아님.")
+        sys.exit(0)
+
+    generated_path = state.get("generated_file_path", "tests/generated/test_generated.py")
+
+    # 모든 컨텍스트 파일 병렬 읽기 (프로젝트 루트 기준 절대 경로)
+    project_root = Path(__file__).parent.parent
+    paths = {
+        "team_charter":    project_root / "agents/team_charter.md",
+        "senior_role":     project_root / "agents/roles/senior.md",
+        "junior_role":     project_root / "agents/roles/junior.md",
+        "lessons_learned": project_root / "agents/lessons_learned.md",
+        "generated_code":  generated_path,
+    }
+    with ThreadPoolExecutor() as ex:
+        futures = {k: ex.submit(read_file, v) for k, v in paths.items()}
+        ctx = {k: f.result() for k, f in futures.items()}
+
+    heal_count = heal_context.get("heal_count", 1)
+
+    # 실패 스크린샷 경로 수집 (힐링 시 시각 검증용)
+    failures = heal_context.get("failures", [])
+    screenshots = {}
+    for f in failures:
+        shot = f.get("screenshot")
+        if shot and shot.get("path"):
+            screenshots[f["test_name"]] = shot
+
+    context_payload = {
+        "stage": "healing",
+        "url": state["url"],
+        "generated_file_path": generated_path,
+        "generated_code": ctx["generated_code"],
+        "heal_context": heal_context,
+        "dom_info": state.get("dom_info", {}),
+        "team_charter": ctx["team_charter"],
+        "senior_role": ctx["senior_role"],
+        "junior_role": ctx["junior_role"],
+        "lessons_learned": ctx["lessons_learned"],
+        "screenshots": screenshots,
+        "mcp_instructions": {
+            "when": "traceback만으로 원인 불명확한 Locator/Assertion/Timeout 오류 시",
+            "steps": [
+                "1. Read tool로 screenshot.path 파일 열기 → 실패 시점 화면 확인",
+                "2. Playwright_navigate → URL 접속 (필요 시)",
+                "3. playwright_get_visible_html → 현재 DOM 구조 확인",
+                "4. playwright_get_visible_text → 현재 페이지 텍스트 확인",
+                "5. Playwright_evaluate → document.querySelector() 로 셀렉터 검증",
+            ],
+            "url": state.get("url", ""),
+            "note": "MCP 브라우저와 pytest 브라우저는 별개 세션 (쿠키 비공유)",
+        },
+    }
+
+    print(f"[06a] 힐링 심의 컨텍스트 준비 완료 ({heal_count}회차)")
+    print(f"  실패 케이스: {len(failures)}건")
+    if screenshots:
+        print(f"  스크린샷: {len(screenshots)}개 (시각 검증 가능)")
+    for i, f in enumerate(failures[:3], 1):
+        print(f"    [{i}] {f.get('test_name', 'unknown')}")
+    print()
+    print("=== DELIBERATION_CONTEXT_START ===")
+    print(json.dumps(context_payload, ensure_ascii=False))
+    print("=== DELIBERATION_CONTEXT_END ===")
+
+
+if __name__ == "__main__":
+    main()

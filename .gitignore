@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Runtime state & logs
+state/
+logs/
+
+# Test outputs
+tests/generated/
+tests/screenshots/
+tests/reports/
+
+# Log files in parallel/
+parallel/*.txt
+
+# Cache
+.pytest_cache/
+
+# Environment
+.env
+
+# macOS
+.DS_Store
+
+# Tools
+.claude/
+.playwright-mcp/
