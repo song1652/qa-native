@@ -1,19 +1,40 @@
 {
   "login": {
-    "valid_user": { "username": "tomsmith", "password": "SuperSecretPassword!" },
-    "invalid_password": { "username": "tomsmith", "password": "wrongpassword" },
-    "invalid_username": { "username": "wronguser", "password": "SuperSecretPassword!" },
-    "empty_username": { "username": "", "password": "SuperSecretPassword!" },
-    "empty_password": { "username": "tomsmith", "password": "" },
-    "empty_both": { "username": "", "password": "" },
-    "case_sensitive": { "username": "TomSmith", "password": "SuperSecretPassword!" },
-    "sql_injection": { "username": "' OR '1'='1", "password": "' OR '1'='1" },
-    "whitespace_only": { "username": "   ", "password": "SuperSecretPassword!" }
-  },
-  "saintcore": {
-    "valid_user": { "username": "skj942", "password": "danawa1631" },
-    "invalid_password": { "username": "skj942", "password": "wrongpassword123" },
-    "empty_id": { "username": "", "password": "danawa1631" },
-    "empty_password": { "username": "skj942", "password": "" }
+    "valid_user": {
+      "username": "tomsmith",
+      "password": "SuperSecretPassword!"
+    },
+    "invalid_password": {
+      "username": "tomsmith",
+      "password": "wrongpassword"
+    },
+    "invalid_username": {
+      "username": "wronguser",
+      "password": "SuperSecretPassword!"
+    },
+    "empty_username": {
+      "username": "",
+      "password": "SuperSecretPassword!"
+    },
+    "empty_password": {
+      "username": "tomsmith",
+      "password": ""
+    },
+    "empty_both": {
+      "username": "",
+      "password": ""
+    },
+    "case_sensitive": {
+      "username": "TomSmith",
+      "password": "SuperSecretPassword!"
+    },
+    "sql_injection": {
+      "username": "' OR '1'='1",
+      "password": "' OR '1'='1"
+    },
+    "whitespace_only": {
+      "username": "   ",
+      "password": "SuperSecretPassword!"
+    }
   }
 }

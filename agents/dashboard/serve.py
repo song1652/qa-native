@@ -714,6 +714,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 heal_ctx.unlink()
             self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
 
+        # ── 빠른 실행 상태 초기화 ───────────────────────────────────
+        elif path == "/api/quick/reset":
+            if QUICK_STATE_PATH.exists():
+                QUICK_STATE_PATH.unlink()
+            self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
+
         # ── 99_merge.py 실행 ─────────────────────────────────────────
         elif path == "/api/run_merge":
             import subprocess as sp

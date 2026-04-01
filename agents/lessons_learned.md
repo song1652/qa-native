@@ -45,6 +45,12 @@
 
 ## URL 오류
 
+
+### [힐링 대기] 2026-04-01 — tests/generated/saintcore/tc_01_login_success.py
+- **문제**: `E   playwright._impl._errors.Error: Page.evaluate: Execution context was destroyed, most likely because of a navigation`
+- **수정**: (힐링 후 Claude Code가 자동 기입)
+- **재발 방지**: → BASE_URL 또는 goto 인자 재확인
+
 <!-- BASE_URL 또는 goto 인자가 잘못된 경우 -->
 
 ### [힐링] 2026-03-31 — saintcore_009.py (아이디 찾기 404)
@@ -63,6 +69,11 @@
 - **문제**: `login/tc_01_login_success.py`와 `saintcore/tc_01_login_success.py`가 같은 모듈명으로 import → `import file mismatch` 에러
 - **수정**: `tests/generated/`, `tests/generated/login/`, `tests/generated/saintcore/`에 `__init__.py` 추가
 - **재발 방지**: 서브디렉토리별 테스트 파일이 동일 basename을 가질 때 반드시 `__init__.py` 배치. 없으면 pytest가 첫 import 캐시와 충돌
+
+### [힐링] 2026-04-01 — tc_01_login_success.py (evaluate context destroyed)
+- **문제**: 로그인 버튼 클릭 후 페이지 navigate 중 `page.evaluate()` 실행 → `Execution context was destroyed` 에러
+- **수정**: `page.wait_for_load_state("domcontentloaded")` 추가 + evaluate를 try/except로 감싸 navigate 충돌 방지
+- **재발 방지**: 클릭 후 navigate가 예상되면 `wait_for_load_state()` 호출 후 evaluate. 팝업 제거는 실패해도 테스트에 영향 없으므로 try/except 처리
 
 <!-- 위 분류에 속하지 않는 패턴 -->
 
