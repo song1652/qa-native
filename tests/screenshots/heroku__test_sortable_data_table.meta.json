@@ -1,0 +1,7 @@
+{
+  "test_name": "test_sortable_data_table",
+  "group": "heroku",
+  "url": "https://the-internet.herokuapp.com/tables",
+  "timestamp": "2026-04-02T18:03:50.392196",
+  "screenshot_path": "tests/screenshots/heroku__test_sortable_data_table.png"
+}
