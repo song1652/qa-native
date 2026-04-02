@@ -120,13 +120,15 @@ heal_context의 각 failure에 `screenshot` 경로가 포함되어 있으면 활
 
 04_approve.py   → 요약 출력 후 y/n 대기
 05_execute.py   → pytest 실행 → state/pipeline.json에 결과 저장
+                   (매 실행 전 tests/screenshots/ 초기화)
 
 06_heal.py      → 실패 분석 → heal_context 저장 (LLM 없음)
 
 06a_dialog.py   → 컨텍스트 수집·출력 (파일 병렬 읽기, LLM 없음)
 [심의 Agent 1회] → DELIBERATION_CONTEXT 주입 → 트레이스백 진단·패치 내부 심의
                    → 패치 확정 → test_generated.py 직접 수정
-                   → 05_execute.py 재실행 (최대 3회)
+                   → 05_execute.py --no-report 재실행 (최대 3회)
+                   → 힐링 완료 후 05_execute.py (리포트 포함) 최종 실행
 ```
 
 ### Claude Code 실행 방법
@@ -151,7 +153,11 @@ Claude Code는:
    DELIBERATION_CONTEXT JSON의 각 필드를 템플릿의 `{ctx.*}` 자리에 대입해 agent 실행.
 
 **3.** `python scripts/02_generate.py` 실행
-   완료 후 plan 기반으로 `tests/generated/test_generated.py` 직접 완성
+   `tests/generated/{group}/` 디렉토리에 케이스별 scaffold 파일이 생성됨.
+   각 scaffold 파일을 plan 기반으로 개별 완성:
+   - tc_*.md 1개 = 테스트 파일 1개 = 테스트 함수 1개
+   - 각 파일은 자체 완결 (import, BASE_URL, TEST_DATA_PATH 직접 포함)
+   - TEST_DATA_PATH: `Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"` (.parent 4번)
    - 함수명은 반드시 영문 snake_case: test_{english_snake_case} (한글 제목이어도 영어로 번역)
 
 **4.** `python scripts/03_lint.py` 실행
@@ -167,14 +173,17 @@ Claude Code는:
 **7.** 승인 시 `python scripts/05_execute.py` 실행
 
 **8.** `python scripts/06_heal.py` 실행
-   - 종료코드 0: 전체 통과 → 완료
+   - 종료코드 0: 전체 통과 → `python scripts/05_execute.py` 실행 (리포트 생성) → 완료
    - 종료코드 1: heal_context 저장됨 →
      `python scripts/06a_dialog.py` 실행
      출력에서 DELIBERATION_CONTEXT JSON 추출.
      **[심의 Agent 1회 호출]** — `prompts/heal_deliberation.md` 템플릿 참조.
      DELIBERATION_CONTEXT JSON의 각 필드를 템플릿의 `{ctx.*}` 자리에 대입해 agent 실행.
-     → 7번으로 돌아가 재실행
-   - 종료코드 2: 최대 힐링 횟수 초과 → 사용자에게 수동 수정 요청
+     → `python scripts/05_execute.py --no-report` 로 재실행 (리포트 생성 안 함)
+     → 8번으로 돌아가 반복
+   - 종료코드 2: 최대 힐링 횟수 초과 → `python scripts/05_execute.py` 실행 (최종 리포트 생성) → 사용자에게 수동 수정 요청
+
+> **리포트/스크린샷 정책**: 05_execute.py는 매 실행 전 `tests/screenshots/`를 초기화한다. 힐링 중간 실행은 `--no-report`로 리포트 생성을 건너뛴다. 최종 실행(전체 통과 또는 힐링 초과)에서만 리포트를 생성하므로, 리포트와 스크린샷 모두 마지막 실행 결과만 남는다.
 
 대시보드 실행 (선택): `python agents/dashboard/serve.py`
 
@@ -265,7 +274,10 @@ python run_team.py --topic "주제"
   "step": "init | analyzed | planned | generated | reviewed | approved | done | heal_needed | heal_failed",
   "dom_info": {},
   "plan": [],
-  "generated_file_path": "tests/generated/test_generated.py",
+  "cases_path": "testcases/{group}/",
+  "group_dir": "{group}",
+  "generated_file_path": "tests/generated/{group}/",
+  "generated_files": [],
   "lint_result": {},
   "review_summary": "",
   "approval_status": "approved | rejected",
@@ -303,7 +315,9 @@ scripts/            단계별 실행 스크립트 (LLM 없음, 순수 Python)
   parse_cases.py    tc_*.md 파싱
   _python.py        .venv 경로 자동 감지
   _paths.py         중앙 경로 상수 (state/, logs/)
-  check_pending_*.py  훅 스크립트 (approve/discuss/impl/parallel)
+  team_approve.py   팀 토론 승인 (터미널용)
+  sync_test_data.py test_data.json 동기화
+  check_pending_*.py  훅 스크립트 (approve/discuss/impl/parallel/pipeline)
 
 agents/             사수-부사수 에이전트 시스템
   team_charter.md   팀 헌장 (협업 규칙, 역할 정의)

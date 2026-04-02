@@ -13,6 +13,12 @@ from _paths import PIPELINE_STATE
 
 def read_file(path):
     p = Path(path)
+    if p.is_dir():
+        parts = []
+        for f in sorted(p.glob("*.py")):
+            if f.name not in ("__init__.py", "conftest.py"):
+                parts.append(f"# === {f.name} ===\n{f.read_text(encoding='utf-8')}")
+        return "\n\n".join(parts)
     return p.read_text(encoding="utf-8") if p.exists() else ""
 
 

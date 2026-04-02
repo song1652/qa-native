@@ -46,15 +46,20 @@ from parse_cases import load_cases
 from _paths import PIPELINE_STATE, STATE_DIR
 
 
-def init_state(url: str, test_cases: list) -> dict:
+def init_state(url: str, test_cases: list, cases_path: str) -> dict:
+    p = Path(cases_path)
+    group_dir = p.name if p.is_dir() else p.parent.name
     return {
         "url": url,
         "test_cases": test_cases,
         "step": "init",
         "created_at": datetime.now().isoformat(),
+        "cases_path": str(cases_path),
+        "group_dir": group_dir,
         "dom_info": None,
         "plan": None,
-        "generated_file_path": "tests/generated/test_generated.py",
+        "generated_file_path": f"tests/generated/{group_dir}/",
+        "generated_files": [],
         "generated_code": None,
         "lint_result": None,
         "review_summary": None,
@@ -78,12 +83,12 @@ def print_cases(test_cases: list):
                 print(f"         기대결과: {c['expected']}")
 
 
-def run_single(url: str, test_cases: list):
+def run_single(url: str, test_cases: list, cases_path: str):
     """단일 파이프라인: state/pipeline.json 생성 후 Claude Code에 실행 지시 출력."""
     natural_count    = sum(1 for c in test_cases if c["format"] == "natural")
     structured_count = sum(1 for c in test_cases if c["format"] == "structured")
 
-    state = init_state(url, test_cases)
+    state = init_state(url, test_cases, cases_path)
     STATE_DIR.mkdir(exist_ok=True)
     PIPELINE_STATE.write_text(
         json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -119,7 +124,7 @@ def main():
         print("[오류] --cases 옵션으로 케이스 파일을 지정하세요. (.md 또는 .json)")
         sys.exit(1)
 
-    run_single(args.url, test_cases)
+    run_single(args.url, test_cases, args.cases)
 
 
 if __name__ == "__main__":

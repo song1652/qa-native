@@ -1,6 +1,6 @@
 # QA-Native 팀 내규
 
-> **상태: 확정 (2026-03-31)**
+> **상태: 확정 (2026-04-02)**
 > 변경 시 사용자 승인 필요.
 
 ---
@@ -124,8 +124,8 @@ TC/코드 리뷰 시 반드시 확인:
 | 문서 유형 | 위치 | 네이밍 규칙 |
 |----------|------|------------|
 | 테스트케이스 | `testcases/{서비스}/` | `tc_{번호}_{설명}.md` |
-| 생성된 테스트 코드 | `tests/generated/` | `test_generated.py` 또는 `{서비스}/{label}.py` |
-| 테스트 리포트 | `tests/reports/` | `report_{timestamp}.html` |
+| 생성된 테스트 코드 | `tests/generated/{서비스}/` | `tc_{번호}_{설명}.py` (1파일 = 1테스트) |
+| 테스트 리포트 | `tests/reports/` | `parallel_index_{timestamp}.html` |
 | 이슈 | `reports/issues/` | `ISSUE-{YYYY-MM-DD}-{번호}.md` |
 | 실수 패턴 | [`agents/lessons_learned.md`](../agents/lessons_learned.md) | (단일 파일) |
 | 팀 결정사항 | [`agents/team_notes.md`](../agents/team_notes.md) | (단일 파일) |
@@ -133,4 +133,4 @@ TC/코드 리뷰 시 반드시 확인:
 
 ---
 
-_이 문서는 2026-03-31 확정. 변경 시 사용자 승인 필요._
+_이 문서는 2026-04-02 갱신. 변경 시 사용자 승인 필요._

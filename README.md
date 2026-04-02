@@ -53,11 +53,7 @@ python run_qa.py --url https://example.com/login --cases testcases/login/
 
 ```
 testcases/
-  login/          ← 10개 케이스 (URL은 config/pages.json 참조)
-    tc_01_login_success.md
-    tc_02_wrong_password.md
-    ...
-  saintcore/      ← 10개 케이스 (URL은 config/pages.json 참조)
+  myshop/         ← 케이스 그룹 (URL은 config/pages.json 참조)
     tc_01_login_success.md
     tc_02_wrong_password.md
     ...
@@ -96,16 +92,13 @@ type: structured
 
 ## 병렬 파이프라인 직접 실행 (선택)
 
-`run_qa.py`의 자동 라우팅 대신 targets.json으로 직접 제어할 때:
-
 ```bash
-python run_qa_parallel.py --targets testcases/targets_login.json
-# Claude Code가 각 worker를 동시에 실행 (코드 생성)
+python run_qa_parallel.py
+# pages.json + testcases/ 자동 스캔 → PARALLEL_SUBAGENT_CONTEXTS 출력
+# Claude Code가 각 subagent를 동시 실행 (코드 생성)
 python parallel/99_merge.py
-# pytest 일괄 실행 + HTML 리포트 + workers 정리
+# pytest 일괄 실행 + HTML 리포트 생성
 ```
-
-> targets.json 작성법 상세: [`doc/TEST_CASE_GUIDE.md`](doc/TEST_CASE_GUIDE.md) 참조
 
 ---
 
@@ -115,7 +108,7 @@ python parallel/99_merge.py
 |---|---|
 | `tests/generated/{group}/{label}.py` | Claude Code가 작성한 테스트 코드 |
 | `tests/reports/parallel_index_{ts}.html` | 통합 HTML 리포트 |
-| `tests/screenshots/*.png` | 실패 케이스 자동 스크린샷 |
+| `tests/screenshots/*.png` | 최종 실패 케이스 스크린샷 (힐링 완료 후 실패 시만 저장) |
 
 ---
 
@@ -129,11 +122,13 @@ python parallel/99_merge.py
 | `telegram_bot.py` | 텔레그램 봇 서버 |
 | `scripts/01~06_*.py` | 단계별 스크립트 (LLM 없음) |
 | `scripts/02a,03a,06a_dialog.py` | 심의 컨텍스트 수집·출력 |
-| `scripts/check_pending_*.py` | 훅 스크립트 (승인·토론·병렬·구현 트리거 감지) |
+| `scripts/check_pending_*.py` | 훅 스크립트 (승인·토론·병렬·구현·파이프라인 트리거 감지) |
 | `scripts/_python.py` | .venv Python 경로 자동 감지 헬퍼 |
-| `parallel/99_merge.py` | pytest 일괄 실행 + 리포트 + workers 정리 |
+| `scripts/_paths.py` | 중앙 경로 상수 (state/, logs/) |
+| `scripts/sync_test_data.py` | test_data.json 동기화 |
+| `parallel/99_merge.py` | pytest 일괄 실행 + 리포트 생성 |
 | `agents/` | 사수-부사수 역할 정의, 팀 토론 dialog 로그, lessons_learned |
-| `testcases/` | 테스트 케이스 `.md` 파일 (login 10개, saintcore 10개) |
+| `testcases/` | 테스트 케이스 `.md` 파일 (그룹별 서브폴더) |
 | `config/pages.json` | 페이지명 → URL 매핑 |
 | `config/test_data.json` | 테스트 입력값 중앙 관리 (계정, 폼 데이터 등) |
 | `state/pipeline.json` | 단일 파이프라인 상태 |

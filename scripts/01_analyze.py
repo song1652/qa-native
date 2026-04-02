@@ -8,10 +8,13 @@ dom_info를 읽고 테스트 전략(plan)을 직접 수립해서 state.json에 �
 """
 import json
 import asyncio
+import hashlib
 import sys
 from pathlib import Path
 from playwright.async_api import async_playwright
-from _paths import PIPELINE_STATE
+from _paths import PIPELINE_STATE, PROJECT_ROOT
+
+DOM_CACHE_DIR = PROJECT_ROOT / "state" / "dom_cache"
 
 
 async def analyze(url: str) -> dict:
@@ -79,6 +82,44 @@ async def analyze(url: str) -> dict:
         return dom
 
 
+def url_cache_key(url: str) -> str:
+    """URL을 해시해 캐시 파일명으로 사용."""
+    return hashlib.md5(url.encode()).hexdigest()
+
+
+def get_cached_dom(url: str) -> dict | None:
+    """캐시된 DOM 분석 결과가 있으면 반환."""
+    cache_file = DOM_CACHE_DIR / f"{url_cache_key(url)}.json"
+    if cache_file.exists():
+        try:
+            return json.loads(cache_file.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return None
+
+
+def save_dom_cache(url: str, dom: dict):
+    """DOM 분석 결과를 캐시에 저장."""
+    DOM_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_file = DOM_CACHE_DIR / f"{url_cache_key(url)}.json"
+    cache_file.write_text(json.dumps(dom, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def extract_subpage_urls(test_cases: list, base_url: str) -> list[str]:
+    """테스트 케이스의 precondition에서 고유 서브페이지 URL을 추출."""
+    urls = set()
+    for tc in test_cases:
+        precondition = tc.get("precondition", "")
+        # precondition에서 URL 추출 (https://... 패턴)
+        import re
+        found = re.findall(r'https?://[^\s,)]+', precondition)
+        for u in found:
+            u = u.rstrip(".")
+            if u != base_url and u.rstrip("/") != base_url.rstrip("/"):
+                urls.add(u)
+    return sorted(urls)
+
+
 def main():
     state_path = PIPELINE_STATE
     if not state_path.exists():
@@ -88,15 +129,43 @@ def main():
     state = json.loads(state_path.read_text(encoding="utf-8"))
     url = state["url"]
 
+    # 메인 URL 분석
     print(f"[01] 페이지 분석 중: {url}")
-    dom = asyncio.run(analyze(url))
-
-    if "error" in dom:
-        print(f"[오류] 페이지 접근 실패: {dom['error']}")
-        sys.exit(1)
+    dom = get_cached_dom(url)
+    if dom:
+        print(f"[01] 캐시 사용: {url}")
+    else:
+        dom = asyncio.run(analyze(url))
+        if "error" in dom:
+            print(f"[오류] 페이지 접근 실패: {dom['error']}")
+            sys.exit(1)
+        save_dom_cache(url, dom)
 
     state["dom_info"] = dom
     state["step"] = "analyzed"
+
+    # 서브페이지 DOM 분석 (precondition URL)
+    test_cases = state.get("test_cases", [])
+    sub_urls = extract_subpage_urls(test_cases, url)
+    if sub_urls:
+        sub_doms = {}
+        for sub_url in sub_urls:
+            cached = get_cached_dom(sub_url)
+            if cached:
+                print(f"[01] 서브페이지 캐시 사용: {sub_url}")
+                sub_doms[sub_url] = cached
+            else:
+                print(f"[01] 서브페이지 분석 중: {sub_url}")
+                sub_dom = asyncio.run(analyze(sub_url))
+                if "error" not in sub_dom:
+                    save_dom_cache(sub_url, sub_dom)
+                    sub_doms[sub_url] = sub_dom
+                else:
+                    print(f"     경고: {sub_url} 접근 실패 — {sub_dom['error']}")
+        if sub_doms:
+            state["sub_dom_info"] = sub_doms
+            print(f"[01] 서브페이지 {len(sub_doms)}개 분석 완료")
+
     state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print(f"[01] 완료 ─ 제목: {dom.get('title','')}")

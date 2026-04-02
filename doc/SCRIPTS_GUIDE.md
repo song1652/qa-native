@@ -32,7 +32,10 @@ Claude가 자동으로 호출하는 파일 (직접 실행 불필요)
     ├── check_pending_discuss.py   훅: 팀 토론 트리거 감지
     ├── check_pending_impl.py      훅: 승인 항목 자동 구현 트리거 감지
     ├── check_pending_parallel.py  훅: 병렬 파이프라인 트리거 감지
+    ├── check_pending_pipeline.py  훅: 단일 파이프라인 실행 트리거 감지
     ├── _python.py                 라이브러리: .venv Python 경로 자동 감지
+    ├── _paths.py                  라이브러리: 중앙 경로 상수 (state/, logs/)
+    ├── sync_test_data.py          test_data.json 동기화
     └── parse_cases.py             라이브러리: 테스트케이스 파일 파서
 ```
 
@@ -44,12 +47,12 @@ Claude가 자동으로 호출하는 파일 (직접 실행 불필요)
 
 테스트할 URL과 케이스 폴더를 지정하면 Claude에게 파이프라인 실행 지시를 출력합니다.
 
-```powershell
+```bash
 # 케이스 폴더 지정 (권장) — 폴더 내 tc_*.md 파일 전체를 자동 읽음
-python run_qa.py --url https://example.com/login --cases testcases/login/
+python run_qa.py --url https://example.com/ --cases testcases/myshop/
 
 # 단일 파일 지정
-python run_qa.py --url https://example.com/login --cases testcases/login/tc_01_login_success.md
+python run_qa.py --url https://example.com/ --cases testcases/myshop/tc_01_login_success.md
 ```
 
 **동작 순서:**
@@ -64,28 +67,25 @@ python run_qa.py --url https://example.com/login --cases testcases/login/tc_01_l
 
 `config/pages.json`에 등록된 URL을 기반으로 여러 URL을 동시에 테스트합니다.
 
-```powershell
+```bash
 # pages.json에 등록된 모든 URL 자동 스캔
 python run_qa_parallel.py
-
-# 특정 targets.json 지정
-python run_qa_parallel.py --targets config/targets.json
 ```
 
 **`config/pages.json` 형식:**
 ```json
 {
   "login": "https://example.com/login",
-  "mypage": "https://example.com/mypage"
+  "myshop": "https://example.com/shop/"
 }
 ```
-키 이름 = `testcases/` 하위 폴더명과 일치해야 합니다.
+키 이름 = `testcases/` 하위 폴더명과 일치해야 합니다. 해당 폴더가 없는 키는 자동 건너뜁니다.
 
 **동작 순서:**
-1. `config/pages.json` 읽기 → URL 목록 확인
-2. `parallel/00_split.py` 호출 → URL별 `workers/` 환경 생성 + DOM 분석
-3. Claude에게 각 worker를 동시 실행하라는 지시 출력
-4. 모든 worker 완료 후: `python parallel/99_merge.py` 실행
+1. `config/pages.json` 읽기 + `testcases/` 폴더 자동 스캔
+2. URL별 DOM 분석 (동일 URL 1회만, 캐시)
+3. `PARALLEL_SUBAGENT_CONTEXTS` 출력 → Claude가 subagent 동시 실행
+4. 모든 subagent 완료 후: `python parallel/99_merge.py` 실행
 
 ---
 
@@ -93,18 +93,18 @@ python run_qa_parallel.py --targets config/targets.json
 
 모든 worker의 코드 생성이 완료된 후 실행합니다. Claude가 지시를 출력하면 그때 실행합니다.
 
-```powershell
+```bash
 python parallel/99_merge.py
 # 특정 그룹만 실행
-python parallel/99_merge.py --group saintcore
+python parallel/99_merge.py --group myshop
 # 빠른 실행 모드 (state/quick.json에 결과 저장, parallel_state 미변경)
-python parallel/99_merge.py --quick --group login saintcore
+python parallel/99_merge.py --quick --group login myshop
 ```
 
 **옵션:**
 | 옵션 | 설명 |
 |---|---|
-| `--group`, `-g` | 실행할 폴더명 (예: `login saintcore`). 생략 시 전체 실행 |
+| `--group`, `-g` | 실행할 폴더명 (예: `login myshop`). 생략 시 전체 실행 |
 | `--quick` | 빠른 실행 모드. 결과를 `state/quick.json`에 저장 (`state/parallel.json` 미변경) |
 
 **동작:**
@@ -121,7 +121,7 @@ python parallel/99_merge.py --quick --group login saintcore
 
 사수/부사수 대화를 실시간으로 보고, 팀 토론을 진행·승인할 수 있는 웹 UI 서버입니다.
 
-```powershell
+```bash
 python agents/dashboard/serve.py
 # 브라우저에서 http://localhost:8765 자동 열림
 ```
@@ -179,7 +179,7 @@ python agents/dashboard/serve.py
 
 > **권장:** 대시보드의 "토론 시작" 버튼 사용. `run_team.py`는 대시보드 없이 터미널에서만 쓸 때 사용.
 
-```powershell
+```bash
 python run_team.py --topic "함수명 영문 번역 기준 정의"
 python run_team.py  # 주제를 대화형으로 입력
 ```
@@ -193,7 +193,7 @@ python run_team.py  # 주제를 대화형으로 입력
 
 텔레그램에서 Claude에게 QA 명령을 보낼 수 있는 봇 서버입니다.
 
-```powershell
+```bash
 python telegram_bot.py
 ```
 
@@ -248,7 +248,7 @@ Claude Code가 실행 중인 상태에서 함께 구동해야 합니다.
 ```
 
 **개별 실행이 필요한 경우 (cwd = 프로젝트 루트):**
-```powershell
+```bash
 python scripts/01_analyze.py
 python scripts/03_lint.py
 python scripts/05_execute.py
@@ -276,6 +276,7 @@ python scripts/05_execute.py
 | `scripts/check_pending_discuss.py` | `state/discuss.json`의 토론 요청 | Claude에게 팀 토론 진행 지시 |
 | `scripts/check_pending_impl.py` | `pending_impl.json` 존재 여부 | Claude에게 승인 항목 자동 구현 지시 |
 | `scripts/check_pending_parallel.py` | `state/parallel.json`의 `status=ready` | Claude에게 병렬 subagent 실행 지시 |
+| `scripts/check_pending_pipeline.py` | `state/pipeline.json`의 실행 대기 상태 | Claude에게 단일 파이프라인 실행 지시 |
 
 ---
 
@@ -284,8 +285,10 @@ python scripts/05_execute.py
 | 파일 | 역할 | 직접 실행 |
 |---|---|---|
 | `scripts/_python.py` | `.venv/bin/python` 경로 자동 감지 + `PYTHON_EXE` 상수 제공 | ❌ (다른 스크립트가 import) |
+| `scripts/_paths.py` | 중앙 경로 상수 (`STATE_DIR`, `LOGS_DIR` 등) | ❌ (다른 스크립트가 import) |
 | `scripts/parse_cases.py` | `.md`/`.json` 테스트케이스 파일 파서 (YAML frontmatter 지원) | ❌ (run_qa.py가 import해서 사용) |
-| `tests/conftest.py` | pytest browser/page fixture 정의 | ❌ (pytest가 자동 로드) |
+| `scripts/sync_test_data.py` | `test_data.json` 동기화 유틸 | ❌ (필요 시 import) |
+| `tests/conftest.py` | pytest browser/page fixture + 실패 시 스크린샷 자동 캡처 | ❌ (pytest가 자동 로드) |
 
 ---
 

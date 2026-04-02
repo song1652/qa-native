@@ -44,7 +44,7 @@
 
 ```
 testcases/{group}/tc_*.md  (1파일 = 1케이스)
-      ↓                     현재: login/ (10개), saintcore/ (10개)
+      ↓                     예: myshop/ (N개)
 run_qa_parallel.py
       ↓
 config/pages.json → URL 조회 + testcases/ 폴더 자동 스캔
@@ -104,6 +104,7 @@ Claude가 멀티라운드 티키타카 진행 (최소 3라운드)
 ## Healer (자가 치유)
 
 테스트 실패 시 `06_heal.py`가 traceback을 수집하고 Claude Code가 패치합니다. 최대 3회 자동 시도.
+스크린샷은 최종 실패 시에만 저장됩니다 (힐링 중간 실행에서는 매번 초기화).
 실패 스크린샷이 heal_context에 자동 연결되며, traceback만으로 원인 불명확 시 Playwright MCP 도구로 실제 페이지의 현재 DOM/텍스트를 확인할 수 있습니다.
 
 > 패치 기준표·힐링 완료 체크리스트·MCP 시각 검증 절차는 [`CLAUDE.md`](../CLAUDE.md) "공통: 힐링 패치 기준" 참조.
@@ -112,7 +113,7 @@ Claude가 멀티라운드 티키타카 진행 (최소 3라운드)
 
 ## 기술 스택
 
-Python 3.12 / Playwright (Chromium) / pytest / flake8 / Claude Code (API 없음)
+Python 3.13 / Playwright (Chromium) / pytest / flake8 / Claude Code (API 없음)
 
 > 대시보드: Python ThreadingHTTPServer + SSE + Vanilla JS (포트 8765)
 > 상세 API·기능: [`SCRIPTS_GUIDE.md`](SCRIPTS_GUIDE.md) 참조

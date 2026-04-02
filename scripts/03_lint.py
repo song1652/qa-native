@@ -20,14 +20,29 @@ def main():
     state = json.loads(state_path.read_text(encoding="utf-8"))
     file_path = state.get("generated_file_path", "tests/generated/test_generated.py")
 
-    if not Path(file_path).exists():
-        print(f"[오류] 테스트 파일 없음: {file_path}")
+    p = Path(file_path)
+    if not p.exists():
+        print(f"[오류] 테스트 경로 없음: {file_path}")
         sys.exit(1)
 
-    print(f"[03] lint 검사 중: {file_path}")
+    # 디렉토리면 내부 *.py 파일 전체 lint
+    if p.is_dir():
+        target_files = [
+            str(f) for f in sorted(p.glob("*.py"))
+            if f.name not in ("__init__.py", "conftest.py")
+        ]
+    else:
+        target_files = [file_path]
+
+    if not target_files:
+        print(f"[오류] lint 대상 파일 없음: {file_path}")
+        sys.exit(1)
+
+    print(f"[03] lint 검사 중: {len(target_files)}개 파일")
 
     result = subprocess.run(
-        [PYTHON_EXE, "-m", "flake8", file_path, "--max-line-length=120", "--statistics"],
+        [PYTHON_EXE, "-m", "flake8"] + target_files
+        + ["--max-line-length=120", "--statistics"],
         capture_output=True, text=True
     )
 
@@ -36,13 +51,13 @@ def main():
 
     lint_result = {
         "passed":      result.returncode == 0,
-        "issue_count": len([l for l in issue_lines if file_path in l]),
+        "issue_count": len(issue_lines),
         "issues":      issues_raw if issues_raw else "이슈 없음",
         "file":        file_path,
     }
 
     state["lint_result"] = lint_result
-    state["step"] = "linted"
+    # step은 변경하지 않음 (generated 유지, 리뷰 후 Claude가 reviewed 설정)
     state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
     status = "통과" if lint_result["passed"] else f"이슈 {lint_result['issue_count']}건"

@@ -55,13 +55,15 @@
 ### 안정성
 
 - [ ] 팝업/오버레이 차단 처리 (필요 시 `page.evaluate()`)
-- [ ] `page.wait_for_selector()` 또는 `expect(..., timeout=N)` 적절히 사용
+- [ ] `page.wait_for_selector()` 또는 `expect(locator).to_be_visible(timeout=N)` 적절히 사용
+- [ ] `expect()` 호출 시 timeout은 matcher 메서드에 전달 (`expect(loc, timeout=N)` 금지)
 - [ ] alert 처리 시 내용 대신 발생 여부만 검증 (사이트별 메시지 다를 수 있음)
 - [ ] 환경변수 계정 (`ENV:` prefix) 누락 시 `pytest.skip()` 처리
 
 ### MCP 시각 검증 (힐링 시)
 
-- [ ] 실패 스크린샷 자동 캡처 확인 (conftest.py → `tests/screenshots/{group}__{name}.png`)
+- [ ] 실패 스크린샷은 최종 실패 시만 저장 (힐링 중간 실행 시 매번 초기화)
+- [ ] 스크린샷 위치: `tests/screenshots/{group}__{name}.png`
 - [ ] heal_context에 screenshot 경로 포함 확인
 - [ ] Locator 오류 시 Playwright MCP로 실제 DOM 셀렉터 확인
 - [ ] Assertion 오류 시 Read tool로 스크린샷 시각 확인

@@ -6,6 +6,7 @@ LLM 없음. pytest 실행 후 결과를 state/pipeline.json에 저장.
 import ast
 import json
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -311,10 +312,13 @@ def count_test_functions(file_path: str) -> tuple[int, bool]:
     try:
         if p.is_dir():
             total = 0
-            for f in sorted(p.glob("test_*.py")):
+            for f in sorted(p.glob("*.py")):
+                if f.name in ("__init__.py", "conftest.py"):
+                    continue
                 tree = ast.parse(f.read_text(encoding="utf-8"))
                 total += sum(1 for n in tree.body
                              if isinstance(n, ast.FunctionDef) and n.name.startswith("test_"))
+            # 디렉토리 내 파일별 1함수이므로 의존성 없음
             return total, False
         tree = ast.parse(p.read_text(encoding="utf-8"))
         funcs = [n for n in tree.body
@@ -329,6 +333,10 @@ def count_test_functions(file_path: str) -> tuple[int, bool]:
 
 def _extract_group_name(state: dict) -> str:
     """pipeline.json에서 그룹명(테스트케이스 폴더명) 추출."""
+    # group_dir 필드 직접 사용 (신규)
+    if state.get("group_dir"):
+        return state["group_dir"]
+
     # test_cases[0]의 파일 경로 또는 url에서 추출 시도
     cases_path = state.get("cases_path", "")
     if cases_path:
@@ -365,6 +373,9 @@ def _extract_group_name(state: dict) -> str:
 
 
 def main():
+    # --no-report 플래그: 힐링 중간 실행 시 리포트 생성 건너뛰기
+    no_report = "--no-report" in sys.argv
+
     state_path = PIPELINE_STATE
     if not state_path.exists():
         print("[오류] state/pipeline.json 없음.")
@@ -380,6 +391,10 @@ def main():
     if not Path(file_path).exists():
         print(f"[오류] 테스트 파일 없음: {file_path}")
         sys.exit(1)
+
+    # 매 실행 전 스크린샷 초기화 (최종 실패 스크린샷만 남기기)
+    if SCREENSHOTS_DIR.exists():
+        shutil.rmtree(SCREENSHOTS_DIR, ignore_errors=True)
 
     # 리포트 경로
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -443,26 +458,50 @@ def main():
     if not test_cases:
         test_cases = _load_cases_for_group(group_name)
 
-    # 커스텀 HTML 리포트 생성
-    html_content = build_report_html(
-        test_results=test_results,
-        pytest_summary=pytest_summary,
-        created_at=now,
-        group_name=group_name,
-        test_cases=test_cases,
-    )
-    report_path.write_text(html_content, encoding="utf-8")
+    # 커스텀 HTML 리포트 생성 (힐링 중간 실행 시 건너뛰기)
+    if not no_report:
+        html_content = build_report_html(
+            test_results=test_results,
+            pytest_summary=pytest_summary,
+            created_at=now,
+            group_name=group_name,
+            test_cases=test_cases,
+        )
+        report_path.write_text(html_content, encoding="utf-8")
 
-    # 간단한 summary 텍스트 (하위 호환)
+    # 결과 집계
     total = passed_count + failed_count
+    pass_rate = round(passed_count / total * 100, 1) if total else 0
     summary = f"{passed_count} passed, {failed_count} failed" if total else "결과 없음"
 
+    # 그룹별 결과 (병렬 파이프라인과 동일 구조)
+    group_results = {}
+    if test_results:
+        gr = {"passed": 0, "failed": 0, "tests": []}
+        for nodeid, is_passed in test_results.items():
+            if is_passed:
+                gr["passed"] += 1
+            else:
+                gr["failed"] += 1
+            gr["tests"].append({
+                "nodeid": nodeid,
+                "name": nodeid.split("::")[-1] if "::" in nodeid else nodeid,
+                "passed": is_passed,
+            })
+        group_results[group_name] = gr
+
     execution_result = {
-        "passed":      result.returncode == 0,
+        "passed":      passed_count,
+        "failed":      failed_count,
+        "total":       total,
+        "pass_rate":   pass_rate,
         "exit_code":   result.returncode,
         "summary":     summary,
-        "report_path": str(report_path),
-        "executed_at": datetime.now().isoformat(),
+        "report_path": str(report_path) if not no_report else "",
+        "report_name": report_path.name if not no_report else "",
+        "group_results": group_results,
+        "executed_at": now,
+        "heal_count":  state.get("heal_count", 0),
     }
 
     state["execution_result"] = execution_result
@@ -471,9 +510,13 @@ def main():
 
     print()
     print("=" * 55)
-    status = "성공" if execution_result["passed"] else "실패"
+    all_pass = failed_count == 0
+    status = "성공" if all_pass else "실패"
     print(f"  테스트 {status}: {summary}")
-    print(f"  HTML 리포트: {report_path}")
+    if not no_report:
+        print(f"  HTML 리포트: {report_path}")
+    else:
+        print("  (힐링 중 — 리포트 생성 건너뜀)")
     print("=" * 55)
 
 

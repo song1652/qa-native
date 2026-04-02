@@ -208,6 +208,30 @@ def main():
         state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
         sys.exit(2)
 
+    # 힐링 전 사이트 접근 가능 체크
+    url = state.get("url", "")
+    if url:
+        import urllib.request
+        import urllib.error
+        try:
+            req = urllib.request.Request(url, method="HEAD")
+            resp = urllib.request.urlopen(req, timeout=10)
+            status = resp.getcode()
+            if status >= 400:
+                print(f"[06] 사이트 접근 불가: {url} (HTTP {status})")
+                print("     사이트가 다운되었거나 접근이 차단되었습니다. 힐링을 건너뜁니다.")
+                state["step"] = "heal_failed"
+                state["heal_context"] = {"error": f"사이트 접근 불가 HTTP {status}", "url": url}
+                state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+                sys.exit(2)
+        except (urllib.error.URLError, OSError) as e:
+            print(f"[06] 사이트 접근 불가: {url} ({e})")
+            print("     사이트가 다운되었거나 네트워크 문제입니다. 힐링을 건너뜁니다.")
+            state["step"] = "heal_failed"
+            state["heal_context"] = {"error": f"사이트 접근 불가: {e}", "url": url}
+            state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+            sys.exit(2)
+
     file_path = state.get("generated_file_path", "tests/generated/test_generated.py")
     if not Path(file_path).exists():
         print(f"[오류] 테스트 파일 없음: {file_path}")
@@ -258,7 +282,18 @@ def main():
     print("  [Healer] Claude Code에 전달할 지시")
     print("=" * 60)
     print(f"  heal_context의 failures를 읽고")
-    print(f"  {file_path} 를 직접 수정하세요.")
+    if Path(file_path).is_dir():
+        print(f"  각 실패 파일을 직접 수정하세요:")
+        seen = set()
+        for f in failures:
+            tid = f.get("test_id", "")
+            if "::" in tid:
+                fpath = tid.split("::")[0]
+                if fpath not in seen:
+                    seen.add(fpath)
+                    print(f"    - {fpath}")
+    else:
+        print(f"  {file_path} 를 직접 수정하세요.")
     print()
     print("  수정 기준:")
     print("  1. Locator 오류 → dom_info의 셀렉터와 대조해 수정")

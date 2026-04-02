@@ -476,11 +476,11 @@ body {
 }
 .group-result-badge.pass { background: rgba(34,197,94,.1); color: #3fb950; }
 .group-result-badge.fail { background: rgba(239,68,68,.1); color: #f85149; }
-.parallel-report-wrap {
+.parallel-report-wrap, .single-report-wrap {
   margin-top: 16px; border: 1px solid var(--border); border-radius: var(--radius);
   overflow: hidden; background: #fff;
 }
-.parallel-report-wrap iframe {
+.parallel-report-wrap iframe, .single-report-wrap iframe {
   width: 100%; height: calc(100vh - 300px); border: none;
 }
 
@@ -738,7 +738,7 @@ const MSG_STATUS_STYLE = {
 };
 
 const PIPELINE_STEPS = ['init','analyzed','planned','generated','reviewed','approved','done'];
-const STEP_LABELS = { init:'Init', analyzed:'분석', planned:'계획', generated:'생성', reviewed:'리뷰', approved:'승인', done:'완료', heal_needed:'힐링중', heal_failed:'힐링실패' };
+const STEP_LABELS = { init:'Init', analyzed:'분석', planned:'계획', generated:'생성', reviewed:'리뷰', approved:'승인', done:'완료', heal_needed:'힐링중', heal_failed:'힐링실패', scaffolded:'생성', linted:'생성' };
 
 const PARALLEL_STEPS = ['init','analyzing','ready','generating','testing','done'];
 const PARALLEL_STEP_LABELS = { init:'초기화', analyzing:'DOM 분석', ready:'코드 생성 대기', generating:'코드 생성', testing:'테스트 실행', done:'완료', heal_needed:'힐링중', heal_failed:'힐링실패' };
@@ -759,6 +759,7 @@ let quickState = {};
 let _uiState = {
   openReportName: null,         // 리포트 뷰: 열린 리포트 이름
   parallelReportName: null,     // 병렬 뷰: 열린 리포트 이름
+  singleReportName: null,       // 단일 뷰: 열린 리포트 이름
   mergeLogVisible: false,       // 병렬 뷰: merge 로그 표시 여부
   mergeLogContent: '',          // 병렬 뷰: merge 로그 내용
   scrollTop: {},                // 뷰별 스크롤 위치
@@ -1086,7 +1087,9 @@ function renderSinglePipeline(main) {
   const currentStep = state.step || 'init';
   // heal_needed/heal_failed는 approved 이후 단계이므로 approved 위치(5)에 active로 표시
   const isHeal = currentStep === 'heal_needed' || currentStep === 'heal_failed';
-  const stepIdx = isHeal ? 6 : PIPELINE_STEPS.indexOf(currentStep);
+  const STEP_COMPAT = { scaffolded: 'generated', linted: 'generated' };
+  let stepIdx = isHeal ? 6 : PIPELINE_STEPS.indexOf(currentStep);
+  if (stepIdx === -1) stepIdx = PIPELINE_STEPS.indexOf(STEP_COMPAT[currentStep] || 'init');
 
   let stepsHtml = '';
   PIPELINE_STEPS.forEach((step, i) => {
@@ -1108,14 +1111,13 @@ function renderSinglePipeline(main) {
   const healCount = state.heal_count || 0;
   const execResult = state.execution_result || {};
 
-  let actionsHtml = '<div class="pipeline-actions">';
+  let actionsHtml = '';
   if (currentStep === 'reviewed') {
+    actionsHtml = '<div class="pipeline-actions">';
     actionsHtml += `
         <button class="action-btn action-btn-success" onclick="pipelineApprove()">승인</button>
         <button class="action-btn action-btn-danger" onclick="pipelineRejectToggle()">반려</button>`;
-  }
-  actionsHtml += `<button class="action-btn action-btn-danger" onclick="pipelineReset()" style="margin-left:auto;">파이프라인 초기화</button></div>`;
-  if (currentStep === 'reviewed') {
+    actionsHtml += '</div>';
     actionsHtml += `
       <div id="pipeline-reject-wrap" style="display:none;margin-top:10px;">
         <input type="text" id="pipeline-reject-reason" class="reject-reason-input" placeholder="반려 사유...">
@@ -1123,6 +1125,8 @@ function renderSinglePipeline(main) {
         <button class="btn-reject-cancel" onclick="document.getElementById('pipeline-reject-wrap').style.display='none'">취소</button>
       </div>`;
   }
+
+  const resetBtnHtml = `<div class="pipeline-actions" style="margin-top:16px;"><button class="action-btn action-btn-danger" onclick="pipelineReset()" style="margin-left:auto;">파이프라인 초기화</button></div>`;
 
   let infoRows = `
     <div class="pipeline-info-row"><span class="pipeline-info-label">URL</span><span class="pipeline-info-val">${esc(url)}</span></div>
@@ -1132,8 +1136,59 @@ function renderSinglePipeline(main) {
   if (state.rejection_reason) {
     infoRows += `<div class="pipeline-info-row"><span class="pipeline-info-label">반려 사유</span><span class="pipeline-info-val" style="color:var(--revision-color)">${esc(state.rejection_reason)}</span></div>`;
   }
-  if (execResult.passed !== undefined) {
-    infoRows += `<div class="pipeline-info-row"><span class="pipeline-info-label">테스트 결과</span><span class="pipeline-info-val" style="color:${execResult.failed ? 'var(--revision-color)' : 'var(--approved-color)'}">PASS: ${execResult.passed || 0} / FAIL: ${execResult.failed || 0}</span></div>`;
+  // 실행 결과 카드 (병렬 파이프라인과 동일 구조)
+  let singleExecResultHtml = '';
+  if (execResult.total !== undefined && execResult.total > 0) {
+    const allPass = execResult.failed === 0;
+    const badgeCls = allPass ? 'pass' : 'fail';
+    const badgeTxt = allPass ? 'ALL PASS' : `${execResult.failed} FAILED`;
+
+    // 그룹별 결과
+    const gr = execResult.group_results || {};
+    const grNames = Object.keys(gr).sort();
+    let groupResultsHtml = '';
+    if (grNames.length) {
+      groupResultsHtml = '<div class="group-result-list">';
+      grNames.forEach(g => {
+        const gd = gr[g];
+        const gPass = gd.failed === 0;
+        const gCls = gPass ? 'pass' : 'fail';
+        const gBadge = gPass ? 'PASS' : 'FAIL';
+        groupResultsHtml += `
+          <div class="group-result-item">
+            <span class="group-result-dot ${gCls}"></span>
+            <span class="group-result-name">${esc(g.replace(/_/g, ' ').toUpperCase())}</span>
+            <span class="group-result-count">${gd.passed}/${gd.passed + gd.failed} passed</span>
+            <span class="group-result-badge ${gCls}">${gBadge}</span>
+          </div>`;
+      });
+      groupResultsHtml += '</div>';
+    }
+
+    singleExecResultHtml = `
+      <div class="exec-result-card">
+        <div class="exec-result-header">
+          <span class="exec-result-title">테스트 실행 결과</span>
+          <span class="exec-result-badge ${badgeCls}">${badgeTxt}</span>
+        </div>
+        <div class="exec-result-stats">
+          <div class="exec-stat"><div class="exec-stat-num" style="color:var(--text)">${execResult.total}</div><div class="exec-stat-label">Total</div></div>
+          <div class="exec-stat"><div class="exec-stat-num" style="color:var(--approved-color)">${execResult.passed}</div><div class="exec-stat-label">Passed</div></div>
+          <div class="exec-stat"><div class="exec-stat-num" style="color:var(--revision-color)">${execResult.failed}</div><div class="exec-stat-label">Failed</div></div>
+          <div class="exec-stat"><div class="exec-stat-num" style="color:${allPass ? 'var(--approved-color)' : 'var(--revision-color)'}">${execResult.pass_rate}%</div><div class="exec-stat-label">Pass Rate</div></div>
+        </div>
+        ${groupResultsHtml}
+        <div style="margin-top:12px;font-size:11px;color:var(--text-dim);">
+          실행: ${esc(execResult.executed_at || '')} | 힐링: ${execResult.heal_count || 0}회
+          ${execResult.report_name ? ` | <a href="#" onclick="event.preventDefault();showSingleReport('${esc(execResult.report_name)}')" style="color:var(--senior-accent);text-decoration:none;">리포트 보기</a>` : ''}
+        </div>
+      </div>
+      <div class="single-report-wrap" id="single-report-wrap" style="display:${_uiState.singleReportName ? 'block' : 'none'};">
+        <div style="display:flex;justify-content:flex-end;padding:6px 8px;background:var(--surface);border-bottom:1px solid var(--border);">
+          <button style="font-size:11px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-dim);padding:2px 10px;cursor:pointer;" onclick="_uiState.singleReportName=null;this.closest('.single-report-wrap').style.display='none';document.getElementById('single-report-iframe').src='';">닫기</button>
+        </div>
+        <iframe id="single-report-iframe"${_uiState.singleReportName ? ` src="/reports/${esc(_uiState.singleReportName)}"` : ''}></iframe>
+      </div>`;
   }
 
   main.innerHTML = `
@@ -1142,6 +1197,8 @@ function renderSinglePipeline(main) {
       <div class="step-progress">${stepsHtml}</div>
       <div class="pipeline-info">${infoRows}</div>
       ${actionsHtml}
+      ${singleExecResultHtml}
+      ${resetBtnHtml}
     </div>`;
 
   // 상태 없으면 실행 패널 + 안내 표시
@@ -1382,6 +1439,23 @@ function showParallelReport(name) {
       wrap.scrollIntoView({behavior:'smooth'});
     } else {
       _uiState.parallelReportName = null;
+      wrap.style.display = 'none';
+      iframe.src = '';
+    }
+  }
+}
+
+function showSingleReport(name) {
+  const wrap = document.getElementById('single-report-wrap');
+  const iframe = document.getElementById('single-report-iframe');
+  if (wrap && iframe) {
+    if (wrap.style.display === 'none') {
+      _uiState.singleReportName = name;
+      iframe.src = '/reports/' + name;
+      wrap.style.display = 'block';
+      wrap.scrollIntoView({behavior:'smooth'});
+    } else {
+      _uiState.singleReportName = null;
       wrap.style.display = 'none';
       iframe.src = '';
     }
@@ -2032,6 +2106,8 @@ function _shouldSkipRender() {
   if (reportWrap && reportWrap.style.display !== 'none') return true;
   const parallelReportWrap = document.getElementById('parallel-report-wrap');
   if (parallelReportWrap && parallelReportWrap.style.display !== 'none') return true;
+  const singleReportWrap = document.getElementById('single-report-wrap');
+  if (singleReportWrap && singleReportWrap.style.display !== 'none') return true;
   // 빠른 실행 중 로그 폴링 시 DOM 재생성 방지
   if (currentView === 'quick_run' && _quickRunState.running) return true;
   return false;

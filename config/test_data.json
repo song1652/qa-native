@@ -1,40 +1,18 @@
 {
-  "login": {
+  "heroku": {
     "valid_user": {
       "username": "tomsmith",
       "password": "SuperSecretPassword!"
     },
-    "invalid_password": {
-      "username": "tomsmith",
+    "invalid_user": {
+      "username": "wronguser",
       "password": "wrongpassword"
     },
-    "invalid_username": {
-      "username": "wronguser",
-      "password": "SuperSecretPassword!"
+    "js_prompt": {
+      "text": "Hello Playwright"
     },
-    "empty_username": {
-      "username": "",
-      "password": "SuperSecretPassword!"
-    },
-    "empty_password": {
-      "username": "tomsmith",
-      "password": ""
-    },
-    "empty_both": {
-      "username": "",
-      "password": ""
-    },
-    "case_sensitive": {
-      "username": "TomSmith",
-      "password": "SuperSecretPassword!"
-    },
-    "sql_injection": {
-      "username": "' OR '1'='1",
-      "password": "' OR '1'='1"
-    },
-    "whitespace_only": {
-      "username": "   ",
-      "password": "SuperSecretPassword!"
+    "forgot_email": {
+      "email": "test@example.com"
     }
   }
 }

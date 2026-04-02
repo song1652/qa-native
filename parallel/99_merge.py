@@ -11,6 +11,7 @@ LLM 없음. 순수 Python.
 import ast
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -652,7 +653,10 @@ def main():
     else:
         test_targets = [str(GENERATED_DIR)]
 
-    # 2. pytest 실행
+    # 2. pytest 실행 전 스크린샷 정리 (최종 실패 시만 남기기)
+    if SCREENSHOTS_DIR.exists():
+        shutil.rmtree(SCREENSHOTS_DIR, ignore_errors=True)
+
     # 빠른 실행 모드에서는 state/quick.json 사용, parallel_state 미변경
     quick_mode = args.quick or bool(args.group)
     QUICK_STATE_PATH = PROJECT_ROOT / "state" / "quick.json"
