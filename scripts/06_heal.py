@@ -68,12 +68,11 @@ def extract_key_lines(traceback: str) -> list[str]:
     return key[:3]
 
 
-def append_lessons(failures: list[dict], url: str):
+def append_lessons(failures: list[dict]):
     """실패 케이스를 lessons_learned.md에 자동 추가."""
     if not failures:
         return
 
-    today = datetime.now().strftime("%Y-%m-%d")
     new_entries: dict[str, list[str]] = {}  # 섹션 → 항목들
 
     for f in failures:
@@ -82,19 +81,15 @@ def append_lessons(failures: list[dict], url: str):
         error_summary = key_lines[0] if key_lines else "(traceback 없음)"
         fix_hint = ""
         if error_type == "Locator":
-            fix_hint = "→ dom_info 셀렉터 재확인, #id 우선 사용"
+            fix_hint = "dom_info 셀렉터 재확인, #id 우선 사용"
         elif error_type == "Assertion":
-            fix_hint = "→ 실제 페이지 텍스트/상태로 기댓값 수정"
+            fix_hint = "실제 페이지 텍스트/상태로 기댓값 수정"
         elif error_type == "Timeout":
-            fix_hint = "→ expect(..., timeout=10000) 또는 wait_for_selector 추가"
+            fix_hint = "expect(..., timeout=10000) 또는 wait_for_selector 추가"
         elif error_type == "URL":
-            fix_hint = "→ BASE_URL 또는 goto 인자 재확인"
+            fix_hint = "BASE_URL 또는 goto 인자 재확인"
 
-        entry = (
-            f"- **{today}** `{f['test_name']}` ({url})\n"
-            f"  - 오류: `{error_summary}`\n"
-            f"  - 힌트: {fix_hint}\n"
-        )
+        entry = f"- **{error_type}**: `{error_summary}` — {fix_hint}\n"
         new_entries.setdefault(error_type, []).append(entry)
 
     if not LESSONS_PATH.exists():
@@ -265,7 +260,7 @@ def main():
     state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
     # 실수 패턴 자동 기록
-    append_lessons(failures, state.get("url", ""))
+    append_lessons(failures)
 
     print(f"[06] 실패 케이스: {len(failures)}건")
     print()

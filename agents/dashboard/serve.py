@@ -14,7 +14,7 @@ from datetime import datetime
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
-PORT = 8765
+PORT = 8766
 HERE = Path(__file__).parent                    # agents/dashboard/
 PROJECT_ROOT = HERE.parent.parent               # qa-native/
 

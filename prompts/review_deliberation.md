@@ -8,10 +8,10 @@ lint_result: {ctx.lint_result}
 plan: {ctx.plan}
 
 수행할 작업:
-1. lint 이슈 수정 (있는 경우 tests/generated/test_generated.py 직접 편집)
+1. lint 이슈 수정 (있는 경우 해당 tests/generated/{group}/*.py 파일 직접 편집)
 2. 셀렉터·assertion 검토 후 개선 사항 반영
 3. state/pipeline.json에 review_summary 저장, step = "reviewed"
-4. 리뷰 중 발견된 문제점이 있으면 agents/lessons_learned.md 해당 섹션에 추가
+4. 리뷰 중 발견된 새로운 실수 패턴이 있으면 agents/lessons_learned.md 해당 섹션에 한 줄 패턴으로 추가 (기존 패턴과 중복 시 생략)
 
 ## 필수 검토 항목 (CLAUDE.md 발췌)
 - **lambda 금지**: `to_have_url()`, `to_have_text()` 등에 lambda/callable 전달 → `re.compile()` 필수

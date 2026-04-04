@@ -53,7 +53,7 @@ def main():
         state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
         print()
         print("  [대기] 대시보드에서 승인/반려를 기다립니다.")
-        print("  대시보드 URL: http://localhost:8765")
+        print("  대시보드 URL: http://localhost:8766")
         sys.exit(3)   # exit code 3 = awaiting approval
     else:
         # CLI 모드: stdin에서 입력 대기

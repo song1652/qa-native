@@ -107,7 +107,7 @@ Claude가 멀티라운드 티키타카 진행 (최소 3라운드)
 스크린샷은 최종 실패 시에만 저장됩니다 (힐링 중간 실행에서는 매번 초기화).
 실패 스크린샷이 heal_context에 자동 연결되며, traceback만으로 원인 불명확 시 Playwright MCP 도구로 실제 페이지의 현재 DOM/텍스트를 확인할 수 있습니다.
 
-> 패치 기준표·힐링 완료 체크리스트·MCP 시각 검증 절차는 [`CLAUDE.md`](../CLAUDE.md) "공통: 힐링 패치 기준" 참조.
+> 패치 기준표·힐링 완료 체크리스트·MCP 시각 검증 절차는 [`doc/HEALING_GUIDE.md`](HEALING_GUIDE.md) 참조.
 
 ---
 
@@ -115,5 +115,5 @@ Claude가 멀티라운드 티키타카 진행 (최소 3라운드)
 
 Python 3.13 / Playwright (Chromium) / pytest / flake8 / Claude Code (API 없음)
 
-> 대시보드: Python ThreadingHTTPServer + SSE + Vanilla JS (포트 8765)
+> 대시보드: Python ThreadingHTTPServer + SSE + Vanilla JS (포트 8766)
 > 상세 API·기능: [`SCRIPTS_GUIDE.md`](SCRIPTS_GUIDE.md) 참조

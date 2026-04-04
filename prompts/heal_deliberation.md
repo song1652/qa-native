@@ -8,20 +8,19 @@ dom_info: {ctx.dom_info}
 
 수행할 작업:
 1. 각 failure의 traceback 분석 → 오류 유형 분류 (Locator/Assertion/Timeout/URL)
-2. tests/generated/test_generated.py 직접 패치 (공통 힐링 패치 기준 참조)
+2. 실패한 테스트 파일(tests/generated/{group}/*.py)을 직접 패치 (공통 힐링 패치 기준 참조)
 3. **[필수]** agents/lessons_learned.md에 힐링 기록 (누락 시 99_merge.py가 경고)
 4. heal_context에 screenshot 경로가 있으면 Read tool로 시각 확인
 5. traceback만으로 원인 불명확 시 MCP 시각 검증 절차 참조
 
 ## 힐링 완료 체크리스트 (하나라도 빠지면 미완료)
 1. 코드 패치 적용
-2. agents/lessons_learned.md에 기록:
+2. agents/lessons_learned.md에 기록 (한 줄 패턴 형식):
    ```
-   ### [힐링] {날짜} — {파일명}
-   - **문제**: {traceback 요약}
-   - **수정**: {적용한 패치 내용}
-   - **재발 방지**: {동일 실수 방지 규칙}
+   - **{핵심 키워드}**: {상황 설명}. {해결법/교훈}
    ```
+   예: `- **중복 셀렉터 주의**: heroku dynamic_controls 페이지는 #loading이 2개. #message 텍스트 출현으로 대기할 것`
+   날짜·파일명은 생략. 이미 같은 패턴이 있으면 추가하지 말 것.
 3. 재실행으로 통과 확인
 
 ## 핵심 패치 규칙

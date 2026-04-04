@@ -123,7 +123,7 @@ python parallel/99_merge.py --quick --group login myshop
 
 ```bash
 python agents/dashboard/serve.py
-# 브라우저에서 http://localhost:8765 자동 열림
+# 브라우저에서 http://localhost:8766 자동 열림
 ```
 
 **대시보드에서 할 수 있는 것:**
@@ -166,7 +166,7 @@ python agents/dashboard/serve.py
 **서버 재시작 방법 (코드 변경 후):**
 ```bash
 # 포트 확인 (macOS)
-lsof -i :8765
+lsof -i :8766
 # PID 종료
 kill -9 [PID]
 # 재시작
@@ -219,8 +219,8 @@ Claude Code가 실행 중인 상태에서 함께 구동해야 합니다.
   → Claude가 이 출력을 보고 사수/부사수 심의 진행
 
 02_generate.py
-  → plan 기반으로 tests/generated/test_generated.py 뼈대 생성
-  → Claude가 뼈대를 완성 코드로 채움
+  → plan 기반으로 tests/generated/{group}/ 디렉토리에 케이스별 scaffold 파일 생성
+  → Claude가 각 scaffold를 완성 코드로 채움 (tc_*.md 1개 = 테스트 파일 1개)
 
 03_lint.py
   → flake8으로 생성된 테스트 코드 품질 검사
