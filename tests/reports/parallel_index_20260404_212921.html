@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QA Report</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  :root {
+    --bg:#0f1117;--surface:#1a1d27;--surface2:#21242f;--border:#2e3140;
+    --text:#e8eaf0;--text2:#8b8fa8;--text3:#555870;
+    --pass:#22c55e;--pass-bg:rgba(34,197,94,.1);
+    --fail:#ef4444;--fail-bg:rgba(239,68,68,.1);
+    --warn:#f59e0b;--warn-bg:rgba(245,158,11,.1);
+    --accent:#6366f1;--radius:12px;--radius-sm:8px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+  .layout{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+  .sidebar{background:var(--surface);border-right:1px solid var(--border);padding:28px 0;position:sticky;top:0;height:100vh;overflow-y:auto}
+  .sidebar-logo{padding:0 20px 24px;border-bottom:1px solid var(--border);margin-bottom:16px}
+  .logo-text{font-size:15px;font-weight:700}
+  .logo-sub{font-size:11px;color:var(--text3);margin-top:3px}
+  .nav-section{padding:0 12px}
+  .nav-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:0 8px;margin-bottom:6px}
+  .nav-item{font-size:13px;color:var(--text2);padding:8px 10px;border-radius:var(--radius-sm);cursor:pointer;transition:all .15s;list-style:none;font-weight:500}
+  .nav-item:hover{background:var(--surface2);color:var(--text)}
+  .main{padding:36px 40px;max-width:900px}
+  .topbar{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:32px}
+  .topbar h1{font-size:24px;font-weight:700;letter-spacing:-.5px}
+  .meta{font-size:12px;color:var(--text3);margin-top:5px}
+  .overall-badge{display:flex;align-items:center;gap:8px;padding:10px 18px;border-radius:var(--radius);font-size:13px;font-weight:700;letter-spacing:.3px}
+  .overall-badge.pass{background:var(--pass-bg);color:var(--pass);border:1px solid rgba(34,197,94,.2)}
+  .overall-badge.fail{background:var(--fail-bg);color:var(--fail);border:1px solid rgba(239,68,68,.2)}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:32px}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;transition:border-color .2s}
+  .stat-card:hover{border-color:var(--accent)}
+  .stat-num{font-size:32px;font-weight:700;letter-spacing:-1px;line-height:1;margin-bottom:6px}
+  .stat-lbl{font-size:12px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px}
+  .group-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px;overflow:hidden;transition:border-color .2s}
+  .group-card:hover{border-color:#3a3d50}
+  .group-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+  .group-header.pass{border-left:3px solid var(--pass)}
+  .group-header.fail{border-left:3px solid var(--fail)}
+  .group-header.warn{border-left:3px solid var(--warn)}
+  .group-title-wrap{display:flex;align-items:center;gap:10px}
+  .group-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .group-dot.pass{background:var(--pass);box-shadow:0 0 6px var(--pass)}
+  .group-dot.fail{background:var(--fail);box-shadow:0 0 6px var(--fail)}
+  .group-dot.warn{background:var(--warn);box-shadow:0 0 6px var(--warn)}
+  .group-title{font-size:14px;font-weight:700;letter-spacing:.5px}
+  .group-sub{font-size:12px;color:var(--text3)}
+  .group-right{display:flex;align-items:center;gap:8px}
+  .badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.5px}
+  .badge.pass{background:var(--pass-bg);color:var(--pass);border:1px solid rgba(34,197,94,.25)}
+  .badge.fail{background:var(--fail-bg);color:var(--fail);border:1px solid rgba(239,68,68,.25)}
+  .badge.warn{background:var(--warn-bg);color:var(--warn);border:1px solid rgba(245,158,11,.25)}
+  .case-list{padding:8px 0}
+  .case-item{border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+  .case-item:last-child{border-bottom:none}
+  .case-item:hover{background:var(--surface2)}
+  .case-header{display:flex;align-items:center;gap:12px;padding:12px 20px}
+  .case-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+  .case-dot.pass{background:var(--pass)}.case-dot.fail{background:var(--fail)}
+  .case-title{flex:1;font-size:13px;font-weight:500;color:var(--text);line-height:1.4}
+  .case-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
+  .case-status-txt{font-size:11px;font-weight:700;letter-spacing:.5px}
+  .case-status-txt.pass{color:var(--pass)}
+  .case-status-txt.fail{color:var(--fail)}
+  .chevron{color:var(--text3);font-size:18px;transition:transform .2s;display:inline-block}
+  .chevron.open{transform:rotate(90deg)}
+  .case-detail{display:none;padding:0 20px 16px 38px;animation:fadeIn .15s ease}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+  .detail-row{display:flex;gap:16px;margin-top:10px;font-size:12px;line-height:1.6}
+  .detail-label{min-width:90px;font-weight:600;color:var(--text3);text-transform:uppercase;font-size:10px;letter-spacing:.5px;padding-top:2px;flex-shrink:0}
+  .detail-val{color:var(--text2)}
+  .steps-list{padding-left:16px;margin:0}
+  .steps-list li{margin:3px 0}
+  .empty-msg{padding:16px 20px;font-size:13px;color:var(--text3)}
+</style>
+<script>
+function toggle(uid){
+  var d=document.getElementById('detail_'+uid);
+  var c=document.getElementById('chv_'+uid);
+  if(d.style.display==='none'||!d.style.display){d.style.display='block';c.classList.add('open');}
+  else{d.style.display='none';c.classList.remove('open');}
+}
+function scrollTo(label){
+  var el=document.getElementById('group_'+label);
+  if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+}
+</script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-text">QA Native</div>
+      <div class="logo-sub">Parallel Test Report</div>
+    </div>
+    <nav class="nav-section">
+      <div class="nav-label">Groups</div>
+      <ul style="list-style:none;"><li class="nav-item" onclick="scrollTo('heroku')">HEROKU</li>
+</ul>
+    </nav>
+  </aside>
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1>Test Results</h1>
+        <div class="meta">2026-04-04 21:29:21 &middot; 1 groups &middot; 20 cases</div>
+      </div>
+      <div class="overall-badge pass">ALL PASS</div>
+    </div>
+    <div class="stats">
+      <div class="stat-card"><div class="stat-num" style="color:var(--text);">20</div><div class="stat-lbl">Total</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:var(--pass);">20</div><div class="stat-lbl">Passed</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:var(--fail);">0</div><div class="stat-lbl">Failed</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:var(--pass);">100.0%</div><div class="stat-lbl">Pass Rate</div></div>
+    </div>
+    
+<section class="group-card" id="group_heroku">
+  <div class="group-header pass">
+    <div class="group-title-wrap">
+      <span class="group-dot pass"></span>
+      <span class="group-title">HEROKU</span>
+      <span class="group-sub">20 / 20 passed</span>
+    </div>
+    <div class="group-right">
+      <span class="badge pass">PASS</span>
+    </div>
+  </div>
+  <div class="case-list"><div class="case-item" onclick="toggle('heroku_0')">
+  <div class="case-header">
+    <span class="case-dot pass"></span>
+    <span class="case-title">정상 로그인 성공</span>
+    <div class="case-right">
+      <span class="case-status-txt pass">PASS</span>
+      <span class="chevron" id="chv_heroku_0">&#8250;</span>
+    </div>
+  </div>
+  <div class="case-detail" id="detail_heroku_0">
+    <div class="detail-row"><span class="detail-label">Precondition</span><span class="detail-val">https://the-internet.herokuapp.com/login 접속 상태</span></div>
+    <div class="detail-row">
+      <span class="detail-label">Steps</span>
+      <span class="detail-val"><ol class="steps-list"><li>Username 필드에 test_data[valid_user].username 입력</li><li>Password 필드에 test_data[valid_user].password 입력</li><li>Login 버튼 클릭</li></ol></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expected</span>
+      <span class="detail-val">/secure 페이지로 이동한다<br>"You logged into a secure area!" 플래시 메시지가 표시된다</span>
+    </div>
+  </div>
+</div><div class="case-item" onclick="toggle('heroku_1')">
+  <div class="case-header">
+    <span class="case-dot pass"></span>
+    <span class="case-title">잘못된 계정 로그인 실패</span>
+    <div class="case-right">
+      <span class="case-status-txt pass">PASS</span>
+      <span class="chevron" id="chv_heroku_1">&#8250;</span>
+    </div>
+  </div>
+  <div class="case-detail" id="detail_heroku_1">
+    <div class="detail-row"><span class="detail-label">Precondition</span><span class="detail-val">https://the-internet.herokuapp.com/login 접속 상태</span></div>
+    <div class="detail-row">
+      <span class="detail-label">Steps</span>
+      <span class="detail-val"><ol class="steps-list"><li>Username 필드에 test_data[invalid_user].username 입력</li><li>Password 필드에 test_data[invalid_user].password 입력</li><li>Login 버튼 클릭</li></ol></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expected</span>
+      <span class="detail-val">/login 페이지에 머무른다<br>"Your username is invalid!" 에러 메시지가 표시된다</span>
+    </div>
+  </div>
+</div><div class="case-item" onclick="toggle('heroku_2')">
+  <div class="case-header">
+    <span class="case-dot pass"></span>
+    <span class="case-title">로그인 후 로그아웃</span>
+    <div class="case-right">
+      <span class="case-status-txt pass">PASS</span>
+      <span class="chevron" id="chv_heroku_2">&#8250;</span>
+    </div>
+  </div>
+  <div class="case-detail" id="detail_heroku_2">
+    <div class="detail-row"><span class="detail-label">Precondition</span><span class="detail-val">https://the-internet.herokuapp.com/login 접속 상태</span></div>
+    <div class="detail-row">
+      <span class="detail-label">Steps</span>
+      <span class="detail-val"><ol class="steps-list"><li>Username 필드에 test_data[valid_user].username 입력</li><li>Password 필드에 test_data[valid_user].password 입력</li><li>Login 버튼 클릭</li><li>/secure 페이지에서 Logout 버튼 클릭</li></ol></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expected</span>
+      <span class="detail-val">/login 페이지로 돌아간다<br>"You logged out of the secure area!" 플래시 메시지가 표시된다</span>
+    </div>
+  </div>
+</div><div class="case-item" onclick="toggle('heroku_3')">
+  <div class="case-header">
+    <span class="case-dot pass"></span>
+    <span class="case-title">체크박스 토글</span>
+    <div class="case-right">
+      <span class="case-status-txt pass">PASS</span>
+      <span class="chevron" id="chv_heroku_3">&#8250;</span>
+    </div>
+  </div>
+  <div class="case-detail" id="detail_heroku_3">
+    <div class="detail-row"><span class="detail-label">Precondition</span><span class="detail-val">https://the-internet.herokuapp.com/checkboxes 접속 상태</span></div>
+    <div class="detail-row">
+      <span class="detail-label">Steps</span>
+      <span class="detail-val"><ol class="steps-list"><li>첫 번째 체크박스 클릭 (체크)</li><li>두 번째 체크박스 클릭 (해제)</li></ol></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expected</span>
+      <span class="detail-val">첫 번째 체크박스가 체크 상태이다<br>두 번째 체크박스가 해제 상태이다</span>
+    </div>
+  </div>
+</div><div class="case-item" onclick="toggle('heroku_4')">
+  <div class="case-header">
+    <span class="case-dot pass"></span>
+    <span class="case-title">드롭다운 옵션 선택</span>
+    <div class="case-right">
+      <span class="case-status-txt pass">PASS</span>
+      <span class="chevron" id="chv_heroku_4">&#8250;</span>
+    </div>
+  </div>
+  <div class="case-detail" id="detail_heroku_4">
+    <div class="detail-row"><span class="detail-label">Precondition</span><span class="detail-val">https://the-internet.herokuapp.com/dropdown 접속 상태</span></div>
+    <div class="detail-row">
+      <span class="detail-label">Steps</span>
+      <span class="detail-val"><ol class="steps-list"><li>드롭다운에서 "Option 1" 선택</li><li>선택값 확인</li><li>드롭다운에서 "Option 2" 선택</li></ol></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expected</span>
+      <span class="detail-val">"Option 1" 선택 시 value가 "1"이다<br>"Option 2" 선택 시 value가 "2"이다</span>
+    </div>
+  </div>
+</div><div class="case-item" onclick="toggle('heroku_5')">
+  <div class="case-header">
+    <span class="case-dot pass"></span>
+    <span class="case-title">요소 추가 및 삭제</span>
+    <div class="case-right">
+      <span class="case-status-txt pass">PASS</span>
+      <span class="chevron" id="chv_heroku_5">&#8250;</span>
+    </div>
+  </div>
+  <div class="case-detail" id="detail_heroku_5">
+    <div class="detail-row"><span class="detail-label">Precondition</span><span class="detail-val">https://the-internet.herokuapp.com/add_remove_elements/ 접속 상태</span></div>
+    <div class="detail-row">
+      <span class="detail-label">Steps</span>
+      <span class="detail-val"><ol class="steps-list"><li>"Add Element" 버튼 클릭 3회</li><li>추가된 "Delete" 버튼 개수 확인</li><li>"Delete" 버튼 1개 클릭</li></ol></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expected</span>
+      <span class="detail-val">Add Element 3회 클릭 후 Delete 버튼이 3개 표시된다<br>Delete 1개 클릭 후 Delete 버튼이 2개 남는다</span>
+    </div>
+  </div>
+</div><div class="case-item" onclick="toggle('heroku_6')">
+  <div class="case-header">
+    <span class="case-dot pass"></span>
+    <span class="case-title">JS Alert 확인</span>
+    <div class="case-right">
+      <span class="case-status-txt pass">PASS</span>
+      <span class="chevron" id="chv_heroku_6">&#8250;</span>
+    </div>
+  </div>
+  <div class="case-detail" id="detail_heroku_6">
+    <div class="detail-row"><span class="detail-label">Precondition</span><span class="detail-val">https://the-internet.herokuapp.com/javascript_alerts 접속 상태</span></div>
+    <div class="detail-row">
+      <span class="detail-label">Steps</span>
+      <span class="detail-val"><ol class="steps-list"><li>"Click for JS Alert" 버튼 클릭</li><li>Alert 다이얼로그에서 OK 클릭</li></ol></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expected</span>
+      <span class="detail-val">Alert 다이얼로그가 표시된다<br>결과 텍스트에 "You successfully clicked an alert" 표시된다</span>
+    </div>
+  </div>
+</div><div class="case-item" onclick="toggle('heroku_7')">
+  <div class="case-header">
+    <span class="case-dot pass"></span>
+    <span class="case-title">JS Confirm 수락</span>
+    <div class="case-right">
+      <span class="case-status-txt pass">PASS</span>
+      <span class="chevron" id="chv_heroku_7">&#8250;</span>
+    </div>
+  </div>
+  <div class="case-detail" id="detail_heroku_7">
+    <div class="detail-row"><span class="detail-label">Precondition</span><span class="detail-val">https://the-internet.herokuapp.com/javascript_alerts 접속 상태</span></div>
+    <div class="detail-row">
+      <span class="detail-label">Steps</span>
+      <span class="detail-val"><ol class="steps-list"><li>"Click for JS Confirm" 버튼 클릭</li><li>Confirm 다이얼로그에서 OK 클릭</li></ol></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expected</span>
+      <span class="detail-val">Confirm 다이얼로그가 표시된다<br>결과 텍스트에 "You clicked: Ok" 표시된다</span>
+    </div>
+  </div>
+</div><div class="case-item" onclick="toggle('heroku_8')">
+  <div class="case-header">
+    <span class="case-dot pass"></span>
+    <span class="case-title">JS Confirm 취소</span>
+    <div class="case-right">
+      <span class="case-status-txt pass">PASS</span>
+      <span class="chevron" id="chv_heroku_8">&#8250;</span>
+    </div>
+  </div>
+  <div class="case-detail" id="detail_heroku_8">
+    <div class="detail-row"><span class="detail-label">Precondition</span><span class="detail-val">https://the-internet.herokuapp.com/javascript_alerts 접속 상태</span></div>
+    <div class="detail-row">
+      <span class="detail-label">Steps</span>
+      <span class="detail-val"><ol class="steps-list"><li>"Click for JS Confirm" 버튼 클릭</li><li>Confirm 다이얼로그에서 Cancel 클릭</li></ol></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expected</span>
+      <span class="detail-val">Confirm 다이얼로그가 표시된다<br>결과 텍스트에 "You clicked: Cancel" 표시된다</span>
+    </div>
+  </div>
+</div><div class="case-item" onclick="toggle('heroku_9')">
+  <div class="case-header">
+    <span class="case-dot pass"></span>
+    <span class="case-title">JS Prompt 입력</span>
+    <div class="case-right">
+      <span class="case-status-txt pass">PASS</span>
+      <span class="chevron" id="chv_heroku_9">&#8250;</span>
+    </div>
+  </div>
+  <div class="case-detail" id="detail_heroku_9">
+    <div class="detail-row"><span class="detail-label">Precondition</span><span class="detail-val">https://the-internet.herokuapp.com/javascript_alerts 접속 상태</span></div>
+    <div class="detail-row">
+      <span class="detail-label">Steps</span>
+      <span class="detail-val"><ol class="steps-list"><li>"Click for JS Prompt" 버튼 클릭</li><li>Prompt 다이얼로그에 test_data[js_prompt].text 입력 후 OK 클릭</li></ol></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expected</span>
+      <span class="detail-val">Prompt 다이얼로그가 표시된다<br>결과 텍스트에 "You entered: Hello Playwright" 표시된다</span>
+    </div>
+  </div>
+</div><div class="case-item" onclick="toggle('heroku_10')">
+  <div class="case-header">
+    <span class="case-dot pass"></span>
+    <span class="case-title">호버 시 사용자 정보 표시</span>
+    <div class="case-right">
+      <span class="case-status-txt pass">PASS</span>
+      <span class="chevron" id="chv_heroku_10">&#8250;</span>
+    </div>
+  </div>
+  <div class="case-detail" id="detail_heroku_10">
+    <div class="detail-row"><span class="detail-label">Precondition</span><span class="detail-val">https://the-internet.herokuapp.com/hovers 접속 상태</span></div>
+    <div class="detail-row">
+      <span class="detail-label">Steps</span>
+      <span class="detail-val"><ol class="steps-list"><li>첫 번째 사용자 이미지에 마우스 호버</li></ol></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expected</span>
+      <span class="detail-val">"name: user1" 텍스트가 표시된다<br>"View profile" 링크가 표시된다</span>
+    </div>
+  </div>
+</div><div class="case-item" onclick="toggle('heroku_11')">
+  <div class="case-header">
+    <span class="case-dot pass"></span>
+    <span class="case-title">Dynamic Controls 체크박스 제거/추가</span>
+    <div class="case-right">
+      <span class="case-status-txt pass">PASS</span>
+      <span class="chevron" id="chv_heroku_11">&#8250;</span>
+    </div>
+  </div>
+  <div class="case-detail" id="detail_heroku_11">
+    <div class="detail-row"><span class="detail-label">Precondition</span><span class="detail-val">https://the-internet.herokuapp.com/dynamic_controls 접속 상태</span></div>
+    <div class="detail-row">
+      <span class="detail-label">Steps</span>
+      <span class="detail-val"><ol class="steps-list"><li>"Remove" 버튼 클릭</li><li>로딩 완료 대기</li><li>체크박스가 사라졌는지 확인</li><li>"Add" 버튼 클릭</li><li>로딩 완료 대기</li></ol></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expected</span>
+      <span class="detail-val">Remove 후 체크박스가 사라지고 "It's gone!" 메시지가 표시된다<br>Add 후 체크박스가 다시 나타나고 "It's back!" 메시지가 표시된다</span>
+    </div>
+  </div>
+</div><div class="case-item" onclick="toggle('heroku_12')">
+  <div class="case-header">
+    <span class="case-dot pass"></span>
+    <span class="case-title">Dynamic Controls 입력 필드 활성화</span>
+    <div class="case-right">
+      <span class="case-status-txt pass">PASS</span>
+      <span class="chevron" id="chv_heroku_12">&#8250;</span>
+    </div>
+  </div>
+  <div class="case-detail" id="detail_heroku_12">
+    <div class="detail-row"><span class="detail-label">Precondition</span><span class="detail-val">https://the-internet.herokuapp.com/dynamic_controls 접속 상태</span></div>
+    <div class="detail-row">
+      <span class="detail-label">Steps</span>
+      <span class="detail-val"><ol class="steps-list"><li>입력 필드가 비활성화 상태인지 확인</li><li>"Enable" 버튼 클릭</li><li>로딩 완료 대기</li></ol></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expected</span>
+      <span class="detail-val">초기 상태에서 입력 필드가 disabled 이다<br>Enable 후 입력 필드가 활성화되고 "It's enabled!" 메시지가 표시된다</span>
+    </div>
+  </div>
+</div><div class="case-item" onclick="toggle('heroku_13')">
+  <div class="case-header">
+    <span class="case-dot pass"></span>
+    <span class="case-title">키 입력 감지</span>
+    <div class="case-right">
+      <span class="case-status-txt pass">PASS</span>
+      <span class="chevron" id="chv_heroku_13">&#8250;</span>
+    </div>
+  </div>
+  <div class="case-detail" id="detail_heroku_13">
+    <div class="detail-row"><span class="detail-label">Precondition</span><span class="detail-val">https://the-internet.herokuapp.com/key_presses 접속 상태</span></div>
+    <div class="detail-row">
+      <span class="detail-label">Steps</span>
+      <span class="detail-val"><ol class="steps-list"><li>입력 필드 클릭</li><li>"A" 키 입력</li></ol></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expected</span>
+      <span class="detail-val">결과 영역에 "You entered: A" 텍스트가 표시된다</span>
+    </div>
+  </div>
+</div><div class="case-item" onclick="toggle('heroku_14')">
+  <div class="case-header">
+    <span class="case-dot pass"></span>
+    <span class="case-title">파일 업로드</span>
+    <div class="case-right">
+      <span class="case-status-txt pass">PASS</span>
+      <span class="chevron" id="chv_heroku_14">&#8250;</span>
+    </div>
+  </div>
+  <div class="case-detail" id="detail_heroku_14">
+    <div class="detail-row"><span class="detail-label">Precondition</span><span class="detail-val">https://the-internet.herokuapp.com/upload 접속 상태</span></div>
+    <div class="detail-row">
+      <span class="detail-label">Steps</span>
+      <span class="detail-val"><ol class="steps-list"><li>임시 텍스트 파일 생성 (test_upload.txt)</li><li>파일 선택 input에 파일 설정</li><li>"Upload" 버튼 클릭</li></ol></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expected</span>
+      <span class="detail-val">업로드 완료 후 "File Uploaded!" 제목이 표시된다<br>업로드된 파일명 "test_upload.txt"가 표시된다</span>
+    </div>
+  </div>
+</div><div class="case-item" onclick="toggle('heroku_15')">
+  <div class="case-header">
+    <span class="case-dot pass"></span>
+    <span class="case-title">슬라이더 값 조작</span>
+    <div class="case-right">
+      <span class="case-status-txt pass">PASS</span>
+      <span class="chevron" id="chv_heroku_15">&#8250;</span>
+    </div>
+  </div>
+  <div class="case-detail" id="detail_heroku_15">
+    <div class="detail-row"><span class="detail-label">Precondition</span><span class="detail-val">https://the-internet.herokuapp.com/horizontal_slider 접속 상태</span></div>
+    <div class="detail-row">
+      <span class="detail-label">Steps</span>
+      <span class="detail-val"><ol class="steps-list"><li>슬라이더를 오른쪽 끝으로 이동 (ArrowRight 키 5회)</li></ol></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expected</span>
+      <span class="detail-val">슬라이더 값이 변경된다<br>표시된 값이 0보다 크다</span>
+    </div>
+  </div>
+</div><div class="case-item" onclick="toggle('heroku_16')">
+  <div class="case-header">
+    <span class="case-dot pass"></span>
+    <span class="case-title">정렬 가능한 데이터 테이블</span>
+    <div class="case-right">
+      <span class="case-status-txt pass">PASS</span>
+      <span class="chevron" id="chv_heroku_16">&#8250;</span>
+    </div>
+  </div>
+  <div class="case-detail" id="detail_heroku_16">
+    <div class="detail-row"><span class="detail-label">Precondition</span><span class="detail-val">https://the-internet.herokuapp.com/tables 접속 상태</span></div>
+    <div class="detail-row">
+      <span class="detail-label">Steps</span>
+      <span class="detail-val"><ol class="steps-list"><li>테이블 1의 "Last Name" 헤더 클릭 (정렬)</li></ol></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expected</span>
+      <span class="detail-val">테이블 1(#table1)이 존재하고 4개 이상의 행이 표시된다<br>"Last Name" 컬럼 클릭 후 데이터가 알파벳 순으로 정렬된다</span>
+    </div>
+  </div>
+</div><div class="case-item" onclick="toggle('heroku_17')">
+  <div class="case-header">
+    <span class="case-dot pass"></span>
+    <span class="case-title">Dynamic Loading 요소 대기</span>
+    <div class="case-right">
+      <span class="case-status-txt pass">PASS</span>
+      <span class="chevron" id="chv_heroku_17">&#8250;</span>
+    </div>
+  </div>
+  <div class="case-detail" id="detail_heroku_17">
+    <div class="detail-row"><span class="detail-label">Precondition</span><span class="detail-val">https://the-internet.herokuapp.com/dynamic_loading/1 접속 상태</span></div>
+    <div class="detail-row">
+      <span class="detail-label">Steps</span>
+      <span class="detail-val"><ol class="steps-list"><li>"Start" 버튼 클릭</li><li>로딩 완료 대기</li></ol></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expected</span>
+      <span class="detail-val">로딩 후 "Hello World!" 텍스트가 표시된다</span>
+    </div>
+  </div>
+</div><div class="case-item" onclick="toggle('heroku_18')">
+  <div class="case-header">
+    <span class="case-dot pass"></span>
+    <span class="case-title">비밀번호 찾기 이메일 제출</span>
+    <div class="case-right">
+      <span class="case-status-txt pass">PASS</span>
+      <span class="chevron" id="chv_heroku_18">&#8250;</span>
+    </div>
+  </div>
+  <div class="case-detail" id="detail_heroku_18">
+    <div class="detail-row"><span class="detail-label">Precondition</span><span class="detail-val">https://the-internet.herokuapp.com/forgot_password 접속 상태</span></div>
+    <div class="detail-row">
+      <span class="detail-label">Steps</span>
+      <span class="detail-val"><ol class="steps-list"><li>E-mail 필드에 test_data[forgot_email].email 입력</li><li>"Retrieve password" 버튼 클릭</li></ol></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expected</span>
+      <span class="detail-val">이메일 제출 후 페이지가 전환된다<br>결과 내용이 표시된다</span>
+    </div>
+  </div>
+</div><div class="case-item" onclick="toggle('heroku_19')">
+  <div class="case-header">
+    <span class="case-dot pass"></span>
+    <span class="case-title">숫자 입력 필드</span>
+    <div class="case-right">
+      <span class="case-status-txt pass">PASS</span>
+      <span class="chevron" id="chv_heroku_19">&#8250;</span>
+    </div>
+  </div>
+  <div class="case-detail" id="detail_heroku_19">
+    <div class="detail-row"><span class="detail-label">Precondition</span><span class="detail-val">https://the-internet.herokuapp.com/inputs 접속 상태</span></div>
+    <div class="detail-row">
+      <span class="detail-label">Steps</span>
+      <span class="detail-val"><ol class="steps-list"><li>숫자 입력 필드에 "42" 입력</li><li>입력값 확인</li></ol></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expected</span>
+      <span class="detail-val">입력 필드의 값이 "42"이다<br>입력 필드의 type이 "number"이다</span>
+    </div>
+  </div>
+</div></div>
+</section>
+  </div>
+</div>
+</body>
+</html>
