@@ -19,6 +19,7 @@ API 호출 없이 Claude Code 자체가 LLM 역할을 수행하는 QA 자동화 
 - **테스트 함수명**: 반드시 영문 snake_case `test_{english_snake_case}` (한글 제목도 영어로 번역)
 - **테스트 파일은 자체 완결**: 공유 헬퍼 파일 생성 금지. BASE_URL·import·상수를 각 파일에 직접 포함
 - **tc_*.md 1개 = 테스트 파일 1개 = 테스트 함수 1개**
+- **파일명 규칙 (단일/병렬 공통)**: `tc_{번호}_{english_snake_case}.py` (예: `tc_01_login_success.py`)
 
 ## 설정 파일
 
@@ -66,7 +67,10 @@ API 호출 없이 Claude Code 자체가 LLM 역할을 수행하는 QA 자동화 
 7. `python scripts/05_execute.py` — pytest 실행
 8. `python scripts/06_heal.py` — 종료코드 0: 완료 / 1: 힐링→재실행 반복 / 2: 초과→수동 수정
 
-> 05_execute.py는 매 실행 전 tests/screenshots/ 초기화. 힐링 중간은 `--no-report`. 최종 실행에서만 리포트 생성.
+> **⚠ 리포트/스크린샷 규칙 (필수)**:
+> - **첫 실행 포함 모든 실행은 `--no-report`로 실행**. 리포트·스크린샷은 전체 통과 확인 후 마지막 1회만 생성.
+> - 실행 순서: `05_execute.py --no-report` → `06_heal.py` → 패치 → `05_execute.py --no-report` → ... → 전체 통과 확인 → `05_execute.py` (리포트 생성)
+> - 05_execute.py는 매 실행 전 tests/screenshots/ 초기화.
 
 ## 병렬 파이프라인 (다중 URL)
 

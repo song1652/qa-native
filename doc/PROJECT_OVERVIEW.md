@@ -5,6 +5,46 @@
 
 ---
 
+## 아키텍처 정의: Agent-Augmented Self-Referential Test Harness
+
+전통적 테스트 하네스의 뼈대 위에 LLM 에이전트를 결합한 하이브리드 아키텍처.
+하네스가 테스트를 '실행'할 뿐 아니라 '생성-검증-치유'까지 수행하는 자율적 QA 시스템.
+
+### 하네스 엔지니어링 원칙 준수 (6개 중 5개)
+
+| 원칙 | 준수 | 구현 |
+|---|---|---|
+| 파이프라인 오케스트레이션 | ✅ | scripts/01~06 순차 실행 |
+| 중앙 상태 관리 | ✅ | state/pipeline.json |
+| 실행-결과 분리 | ✅ | scripts=실행, pytest assertion=판정 |
+| 환경 격리 | ✅ | conftest.py browser/context/page fixture |
+| 결과 수집 자동화 | ✅ | 스크린샷, JSON/HTML 리포트 |
+| 테스트 데이터 주입 분리 | 🔶 | 자체 완결 파일 원칙으로 대체 (힐링 격리성 우선) |
+
+### 에이전트 확장 기능 (전통적 하네스에 없는 4가지)
+
+1. **테스트 코드 자동 생성** — DOM 분석 → plan → 코드
+2. **심의 기반 ���질 게이트** — 사수/부사수 시뮬레이션 리뷰
+3. **자가 치유(self-healing)** — 실패 시 코드 패치 후 재실행 루프
+4. **DOM 기반 동적 전략 수립** — 정적 스크립트가 아닌 런타임 전략
+
+### 구조적 특징: 샌드위치 패턴
+
+결정론�� 하네스 레이어와 비결정론적 에이전트 레이어가 교대로 등장.
+Claude Code가 하네스의 두뇌이면서 자신의 산출물을 검증하는 자기참조(self-referential) 루프.
+
+```
+비결정론적: Plan 수립 (Claude)
+결정론적:   코드 파일 생성 → 고정
+결정론적:   Lint 검사 → 고정 규칙
+비결정론적: 코드 리뷰 (Claude 심의)
+결정론적:   pytest 실행 → 결정론적
+비결정론적: 힐링 패치 (Claude)
+결정론적:   재실행 → 결정론적
+```
+
+---
+
 ## 핵심 설계 원칙
 
 | 원칙 | 내용 |
@@ -44,7 +84,7 @@
 
 ```
 testcases/{group}/tc_*.md  (1파일 = 1케이스)
-      ↓                     예: myshop/ (N개)
+      ↓                     예: heroku/ (20개)
 run_qa_parallel.py
       ↓
 config/pages.json → URL 조회 + testcases/ 폴더 자동 스캔
@@ -60,7 +100,7 @@ PARALLEL_SUBAGENT_CONTEXTS 출력
   │plan→코드  │plan→코드  │plan→코드  │
   └──────────┴──────────┴──────────┘
       ↓
-  tests/generated/{group}/{label}.py  저장
+  tests/generated/{group}/tc_{번호}_{english_snake_case}.py  저장
       ↓
 parallel/99_merge.py
   pytest tests/generated/ 일괄 실행
@@ -119,7 +159,8 @@ Claude가 멀티라운드 티키타카 진행 (최소 3라운드)
 ## Healer (자가 치유)
 
 테스트 실패 시 `06_heal.py`가 traceback을 수집하고 Claude Code가 패치합니다. 최대 3회 자동 시도.
-스크린샷은 최종 실패 시에만 저장됩니다 (힐링 중간 실행에서는 매번 초기화).
+첫 실행 포함 모든 실행은 `--no-report`로 실행하며, 전체 통과 확인 후 마지막 1회만 리포트를 생성합니다.
+스크린샷은 최종 실패 시에만 저장됩니다 (매 실행 전 초기화).
 실패 스크린샷이 heal_context에 자동 연결되며, traceback만으로 원인 불명확 시 Playwright MCP 도구로 실제 페이지의 현재 DOM/텍스트를 확인할 수 있습니다.
 
 > 힐링 완료 체크리스트·MCP 시각 검증 절차는 [`doc/HEALING_GUIDE.md`](HEALING_GUIDE.md) 참조.

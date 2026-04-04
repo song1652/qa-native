@@ -69,16 +69,30 @@ def find_screenshot_for_test(test_name: str) -> dict | None:
 
 
 def append_lessons(failures: list[dict]) -> None:
-    """실패 케이스를 lessons_learned.md에 자동 추가."""
+    """실패 케이스를 lessons_learned.md에 자동 추가 (중복 검사 포함)."""
     if not failures:
         return
 
+    if not LESSONS_PATH.exists():
+        return
+
+    content = LESSONS_PATH.read_text(encoding="utf-8")
+
     new_entries: dict[str, list[str]] = {}
+    skipped = 0
 
     for f in failures:
         error_type = classify_error(f["traceback"])
         key_lines = extract_key_lines(f["traceback"])
         error_summary = key_lines[0] if key_lines else "(traceback 없음)"
+
+        # 중복 검사: error_summary의 핵심 부분이 이미 존재하면 건너뛰기
+        # backtick 안의 코드와 비교 (공백 정규화)
+        summary_normalized = error_summary.strip()
+        if summary_normalized in content or summary_normalized == "(traceback 없음)":
+            skipped += 1
+            continue
+
         fix_hint = ""
         if error_type == "Locator":
             fix_hint = "dom_info 셀렉터 재확인, #id 우선 사용"
@@ -92,10 +106,10 @@ def append_lessons(failures: list[dict]) -> None:
         entry = f"- **{error_type}**: `{error_summary}` — {fix_hint}\n"
         new_entries.setdefault(error_type, []).append(entry)
 
-    if not LESSONS_PATH.exists():
+    if not new_entries:
+        if skipped:
+            print(f"[heal_utils] lessons_learned.md: {skipped}건 중복 → 추가 없음")
         return
-
-    content = LESSONS_PATH.read_text(encoding="utf-8")
 
     for section, entries in new_entries.items():
         section_header = f"## {section} 오류" if section != "기타" else "## 기타"
@@ -107,8 +121,9 @@ def append_lessons(failures: list[dict]) -> None:
             content += f"\n{section_header}\n{insert_text}"
 
     LESSONS_PATH.write_text(content, encoding="utf-8")
+    added = sum(len(v) for v in new_entries.values())
     print(f"[heal_utils] lessons_learned.md 업데이트: "
-          f"{sum(len(v) for v in new_entries.values())}건 추가")
+          f"{added}건 추가, {skipped}건 중복 건너뜀")
 
 
 def update_heal_stats(failures: list[dict]) -> None:

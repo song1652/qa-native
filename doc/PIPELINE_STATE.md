@@ -4,7 +4,7 @@
 {
   "url": "",
   "test_cases": [],
-  "step": "init | analyzed | planned | generated | reviewed | approved | done | heal_needed | heal_failed",
+  "step": "init | analyzed | planned | generated | reviewed | approved | rejected | done | heal_needed | heal_failed",
   "dom_info": {},
   "dom_cache_key": "state/dom_cache/{url_md5_hash}.json",
   "plan": [],

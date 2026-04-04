@@ -7,6 +7,7 @@
 
 ## Locator 오류
 
+- **not_to_have_url 주의**: `expect(page).not_to_have_url()` 사용 시 서버가 URL을 변경하지 않는 경우 실패. 폼 제출 후 URL 변경 대신 DOM 변화(요소 소멸 등)로 검증
 - **중복 셀렉터 주의**: heroku dynamic_controls 페이지는 `#loading`이 2개 존재. `#message` 텍스트 출현으로 대기할 것
 - **DOM 구조 추측 금지**: heroku hovers의 캡션은 `<figcaption>` 태그가 아닌 `.figcaption` CSS 클래스. 반드시 `dom_info` 참조
 - **특정 ID 존재 가정 금지**: 외부 사이트에 `#content` 등 특정 요소가 있을 거라 가정하지 말 것. URL 검증 + `body` 가시성으로 충분

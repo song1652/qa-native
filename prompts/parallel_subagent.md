@@ -20,7 +20,9 @@ output_path: {ctx.output_path}
    - structured 케이스: precondition/steps/expected 직접 반영
    - natural 케이스: dom_info 기반 steps/assertion 자동 추론
 3. plan 기반으로 완전한 Playwright 테스트 코드 작성 (SKILL.md + lessons_learned 패턴 반영)
-4. output_path에 직접 저장
+4. **tc_*.md 1개 = 테스트 파일 1개 = 테스트 함수 1개** 규칙으로 output_path 디렉토리에 개별 파일 저장
+   - 파일명: `tc_{번호}_{english_snake_case}.py` (예: `tc_01_login_success.py`)
+   - 단일 파이프라인과 동일한 파일명 규칙
 
 ## MUST NOT (절대 금지 -- 위반 시 런타임 에러)
 - 공유 헬퍼 파일(helpers.py 등) **생성/import 금지** -> 각 파일이 자체 완결

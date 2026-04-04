@@ -48,8 +48,9 @@ def main():
 
     if auto_mode:
         # 대시보드 연동: approval_status를 "pending"으로 설정하고 대시보드에서 승인/반려 대기
+        # step은 "reviewed"로 유지해야 대시보드에서 승인 버튼이 표시됨
         state["approval_status"] = "pending"
-        state["step"] = "awaiting_approval"
+        state["step"] = "reviewed"
         write_state(state_path, state)
         print()
         print("  [대기] 대시보드에서 승인/반려를 기다립니다.")
@@ -65,8 +66,9 @@ def main():
                 print("  y 또는 n을 입력하세요.")
         except EOFError:
             # stdin 없음 (대시보드 등에서 실행) → pending 상태로 전환
+            # step은 "reviewed"로 유지해야 대시보드에서 승인 버튼이 표시됨
             state["approval_status"] = "pending"
-            state["step"] = "awaiting_approval"
+            state["step"] = "reviewed"
             write_state(state_path, state)
             print()
             print("  [대기] stdin 없음 — 대시보드에서 승인/반려를 기다립니다.")

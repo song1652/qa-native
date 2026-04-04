@@ -251,7 +251,7 @@ def main():
             "test_data": test_data.get(page_key, {}),
             "team_charter": team_charter,
             "lessons_learned": lessons_learned,
-            "output_path": f"tests/generated/{t['group_dir']}/{t['group_label']}.py",
+            "output_path": f"tests/generated/{t['group_dir']}/",
         }
         contexts.append(ctx)
         print(f"  [{t['group_label']}] {len(cases)}개 케이스 → {ctx['output_path']}")

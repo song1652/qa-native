@@ -62,11 +62,13 @@ parallel/           병렬 파이프라인 스크립트
 tests/generated/    Claude Code가 작성한 테스트 코드 (서브폴더별 __init__.py 필수)
 tests/reports/      HTML 리포트
 tests/screenshots/  실패 시 스크린샷
+tests/test_core_parsers.py  핵심 파서 유닛 테스트
 
 testcases/          케이스 파일 (tc_*.md) — 그룹별 서브폴더로 관리
+  heroku/           heroku 테스트케이스 (20개)
 config/
-  pages.json        페이지명 → URL 매핑 (중앙 URL 레지스트리)
-  test_data.json    테스트 입력값 (계정, 폼 데이터)
+  pages.json        페이지명 → URL 매핑 (login, secure, heroku)
+  test_data.json    테스트 입력값 (heroku: valid_user, invalid_user, js_prompt, forgot_email)
 
 .claude/skills/     스킬 프레임워크 (공식 SKILL.md 표준)
   playwright-best-practices/
@@ -84,8 +86,5 @@ templates/          문서 템플릿
   issue-template.md  이슈(버그) 리포트 템플릿
 
 reports/issues/     이슈 추적 파일 (ISSUE-{날짜}-{번호}.md)
-run_qa.py           단일 파이프라인 진입점
-run_qa_parallel.py  병렬 파이프라인 진입점
-run_team.py         팀 토론 진입점
-doc/                내부 문서 (PROJECT_OVERVIEW, SCRIPTS_GUIDE, TEST_CASE_GUIDE)
+ 
 ```

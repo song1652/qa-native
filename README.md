@@ -114,31 +114,18 @@ python parallel/99_merge.py
 
 ## 파일 구조
 
-| 파일/폴더 | 역할 |
+> 전체 디렉토리 트리: [`doc/DIRECTORY.md`](doc/DIRECTORY.md)
+
+| 폴더 | 역할 |
 |---|---|
-| `run_qa.py` | 파이프라인 진입점 (단일/병렬 자동 분기) |
-| `run_qa_parallel.py` | 병렬 파이프라인 직접 실행용 |
-| `run_team.py` | 팀 토론 진입점 |
-| `telegram_bot.py` | 텔레그램 봇 서버 |
-| `scripts/01~06_*.py` | 단계별 스크립트 (LLM 없음) |
-| `scripts/02a,03a,06a_dialog.py` | 심의 컨텍스트 수집·출력 |
-| `scripts/check_pending_*.py` | 훅 스크립트 (승인·토론·병렬·구현·파이프라인 트리거 감지) |
-| `scripts/_python.py` | .venv Python 경로 자동 감지 헬퍼 |
-| `scripts/_paths.py` | 중앙 경로 상수 (state/, logs/) |
-| `scripts/sync_test_data.py` | test_data.json 동기화 |
-| `parallel/99_merge.py` | pytest 일괄 실행 + 리포트 생성 |
-| `agents/` | 사수-부사수 역할 정의, 팀 토론 dialog 로그, lessons_learned |
+| `scripts/` | 파이프라인 단계별 스크립트 + 훅 + 라이브러리 (Claude가 자동 호출) |
+| `agents/` | 사수-부사수 역할, 팀 토론 로그, lessons_learned |
+| `prompts/` | 심의 Agent 프롬프트 템플릿 |
+| `state/` | 런타임 상태 파일 (pipeline.json, discuss.json 등) |
+| `config/` | 설정 (pages.json, test_data.json) |
 | `testcases/` | 테스트 케이스 `.md` 파일 (그룹별 서브폴더) |
-| `config/pages.json` | 페이지명 → URL 매핑 |
-| `config/test_data.json` | 테스트 입력값 중앙 관리 (계정, 폼 데이터 등) |
-| `state/pipeline.json` | 단일 파이프라인 상태 |
-| `state/discuss.json` | 팀 토론 상태 |
-| `state/parallel.json` | 병렬 파이프라인 실행 결과 |
-| `state/quick.json` | 빠른 실행 결과 (병렬 파이프라인과 분리) |
-| `state/heal_context.json` | 힐링 루프용 traceback (실패 시 생성) |
-| `prompts/` | 심의 Agent 프롬프트 템플릿 (CLAUDE.md에서 분리) |
-| `logs/` | 실행 로그 (run_qa.txt, run_parallel.txt, merge.txt, quick_run.txt) |
-| [`CLAUDE.md`](CLAUDE.md) | Claude Code 행동 지침 |
+| `tests/` | 생성된 테스트 코드, 리포트, 스크린샷 |
+| `.claude/skills/` | 스킬 프레임워크 (SKILL.md 표준) |
 
 ---
 
@@ -163,15 +150,9 @@ python agents/dashboard/serve.py
 # http://localhost:8766
 ```
 
-대시보드에서 할 수 있는 것:
-- **단일 파이프라인**: 페이지 선택 → 케이스 폴더 선택 → 실행 + 7단계 프로그레스 바 + 승인/반려
-- **병렬 파이프라인**: 전체 실행 버튼 → 워커 카드 그리드 → 99_merge 실행
-- **빠른 실행**: `tests/generated/` 폴더 선택 → pytest 바로 실행 (전체 파이프라인 불필요)
-- **팀 토론**: 주제 입력 → 사수/부사수 실시간 대화 → 항목별 승인/반려
-- **리포트**: HTML 리포트 열람
-- **실행 로그**: 실시간 로그 표시
+단일/병렬 파이프라인 실행, 빠른 실행, 팀 토론, 리포트 열람, 실행 로그 모니터링 지원.
 
-> QA 파이프라인 심의(Plan·코드리뷰·힐링) 결과는 `state/pipeline.json`에 저장되며, 터미널 로그에서도 확인 가능합니다.
+> 대시보드 기능 상세 · API 엔드포인트: [`doc/SCRIPTS_GUIDE.md`](doc/SCRIPTS_GUIDE.md) 참조
 
 ---
 

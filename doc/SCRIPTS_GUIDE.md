@@ -49,10 +49,10 @@ Claude가 자동으로 호출하는 파일 (직접 실행 불필요)
 
 ```bash
 # 케이스 폴더 지정 (권장) — 폴더 내 tc_*.md 파일 전체를 자동 읽음
-python run_qa.py --url https://example.com/ --cases testcases/myshop/
+python run_qa.py --url https://the-internet.herokuapp.com/ --cases testcases/heroku/
 
 # 단일 파일 지정
-python run_qa.py --url https://example.com/ --cases testcases/myshop/tc_01_login_success.md
+python run_qa.py --url https://the-internet.herokuapp.com/ --cases testcases/heroku/tc_01.md
 ```
 
 **동작 순서:**
@@ -75,8 +75,9 @@ python run_qa_parallel.py
 **`config/pages.json` 형식:**
 ```json
 {
-  "login": "https://example.com/login",
-  "myshop": "https://example.com/shop/"
+  "login": "https://the-internet.herokuapp.com/login",
+  "secure": "https://the-internet.herokuapp.com/secure",
+  "heroku": "https://the-internet.herokuapp.com/"
 }
 ```
 키 이름 = `testcases/` 하위 폴더명과 일치해야 합니다. 해당 폴더가 없는 키는 자동 건너뜁니다.
@@ -96,15 +97,15 @@ python run_qa_parallel.py
 ```bash
 python parallel/99_merge.py
 # 특정 그룹만 실행
-python parallel/99_merge.py --group myshop
+python parallel/99_merge.py --group heroku
 # 빠른 실행 모드 (state/quick.json에 결과 저장, parallel_state 미변경)
-python parallel/99_merge.py --quick --group login myshop
+python parallel/99_merge.py --quick --group heroku
 ```
 
 **옵션:**
 | 옵션 | 설명 |
 |---|---|
-| `--group`, `-g` | 실행할 폴더명 (예: `login myshop`). 생략 시 전체 실행 |
+| `--group`, `-g` | 실행할 폴더명 (예: `heroku`). 생략 시 전체 실행 |
 | `--quick` | 빠른 실행 모드. 결과를 `state/quick.json`에 저장 (`state/parallel.json` 미변경) |
 
 **동작:**
@@ -233,10 +234,13 @@ Claude Code가 실행 중인 상태에서 함께 구동해야 합니다.
 04_approve.py
   → 리뷰 요약을 출력하고 사용자에게 y/n 입력 대기
   → n이면 rejection_reason 저장 후 코드 재작성으로 돌아감
+  → stdin 없음(대시보드) 또는 --auto 시: step을 "reviewed"로 유지하고 exit code 3 반환 (대시보드 승인 버튼 표시)
 
 05_execute.py
   → pytest로 테스트 실행
   → state/pipeline.json에 execution_result 저장
+  → `--no-report` 플래그: 리포트·스크린샷 생성 건너뜀 (힐링 중간 실행용)
+  → 첫 실행 포함 모든 실행은 `--no-report`, 전체 통과 확인 후 마지막 1회만 리포트 생성
 
 06_heal.py
   → 실패한 테스트의 traceback을 수집하고 스크린샷 경로를 연결해 heal_context 저장
@@ -291,6 +295,7 @@ python scripts/05_execute.py
 | `scripts/_constants.py` | 파이프라인 종료 코드 상수 (`EXIT_SUCCESS`, `EXIT_HEAL_NEEDED`, `EXIT_HEAL_EXCEEDED`, `EXIT_REJECTED`, `EXIT_AWAITING_APPROVAL`) | ❌ (다른 스크립트가 import) |
 | `scripts/heal_utils.py` | 힐링 공용 유틸리티. `classify_error`, `extract_key_lines`, `find_screenshot_for_test`, `append_lessons`, `update_heal_stats` — `06_heal.py`와 `99_merge.py`에서 공유 | ❌ (다른 스크립트가 import) |
 | `scripts/parse_cases.py` | `.md`/`.json` 테스트케이스 파일 파서 (YAML frontmatter 지원) | ❌ (run_qa.py가 import해서 사용) |
+| `tests/test_core_parsers.py` | 핵심 파서 유닛 테스트 (parse_cases 등) | ❌ (pytest가 자동 실행) |
 | `scripts/sync_test_data.py` | `test_data.json` 동기화 유틸 | ❌ (필요 시 import) |
 | `tests/conftest.py` | pytest browser/page fixture + 실패 시 스크린샷 자동 캡처 | ❌ (pytest가 자동 로드) |
 
@@ -300,8 +305,8 @@ python scripts/05_execute.py
 
 | 파일 | 역할 | 예시 키 |
 |---|---|---|
-| `config/pages.json` | 페이지명 → URL 매핑. `run_qa_parallel.py`가 자동 참조 | `"login": "https://..."` |
-| `config/test_data.json` | 테스트 입력값 중앙 관리. 테스트 코드에서 하드코딩 금지, 이 파일에서 읽어 사용 | `"login": { "valid_user": {...} }` |
+| `config/pages.json` | 페이지명 → URL 매핑. `run_qa_parallel.py`가 자동 참조 | `"heroku": "https://the-internet.herokuapp.com/"` |
+| `config/test_data.json` | 테스트 입력값 중앙 관리. 테스트 코드에서 하드코딩 금지, 이 파일에서 읽어 사용 | `"heroku": { "valid_user": {...}, "invalid_user": {...}, "js_prompt": {...}, "forgot_email": {...} }` |
 
 `test_data.json` 형식: `{ "페이지명": { "data_key": { "username": "...", "password": "..." } } }`
 - 키는 `pages.json`의 페이지명과 일치
