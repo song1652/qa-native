@@ -547,8 +547,9 @@ def main():
     if SCREENSHOTS_DIR.exists():
         shutil.rmtree(SCREENSHOTS_DIR, ignore_errors=True)
 
-    # 빠른 실행 모드에서는 state/quick.json 사용, parallel_state 미변경
-    quick_mode = args.quick or bool(args.group)
+    # --quick 플래그만 quick mode (state/quick.json 사용)
+    # --group 단독 사용 시에는 parallel.json 업데이트
+    quick_mode = args.quick
     state_path = QUICK_STATE if quick_mode else PARALLEL_STATE
 
     if not quick_mode:
