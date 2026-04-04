@@ -383,10 +383,6 @@ def main():
 
     state = read_state(state_path)
 
-    if state.get("approval_status") != "approved":
-        print("[오류] 미승인 상태. 04_approve.py를 먼저 실행하세요.")
-        sys.exit(1)
-
     file_path = state.get("generated_file_path", "tests/generated/test_generated.py")
     if not Path(file_path).exists():
         print(f"[오류] 테스트 파일 없음: {file_path}")

@@ -22,10 +22,9 @@ Claude가 자동으로 호출하는 파일 (직접 실행 불필요)
     ├── 02_generate.py             파이프라인 3단계: 코드 뼈대 생성
     ├── 03_lint.py                 파이프라인 4단계: lint 검사
     ├── 03a_dialog.py              파이프라인 5단계: 코드 리뷰 심의 준비
-    ├── 04_approve.py              파이프라인 6단계: 사용자 승인 (터미널)
-    ├── 05_execute.py              파이프라인 7단계: pytest 실행
-    ├── 06_heal.py                 파이프라인 8단계: 실패 분석
-    ├── 06a_dialog.py              파이프라인 9단계: 힐링 심의 준비
+    ├── 05_execute.py              파이프라인 6단계: pytest 실행
+    ├── 06_heal.py                 파이프라인 7단계: 실패 분석
+    ├── 06a_dialog.py              파이프라인 8단계: 힐링 심의 준비
     ├── team_discuss.py            팀 토론: 심의 컨텍스트 준비
     ├── team_approve.py            팀 토론: 결론 승인 (터미널용, 대시보드 권장)
     ├── check_pending_approve.py   훅: 단일 파이프라인 승인 트리거 감지
@@ -134,7 +133,7 @@ python agents/dashboard/serve.py
 | **병렬 파이프라인 실행** | 병렬 파이프라인 탭 → "run_qa_parallel.py 실행" 버튼 (pages.json + testcases/ 자동 스캔) |
 | **빠른 실행** | 빠른 실행 탭 → tests/generated/ 폴더 체크박스 선택 → "테스트 실행" 버튼 (전체 파이프라인 불필요) |
 | **99_merge.py 실행** | 병렬 파이프라인 탭 → 워커 완료 후 "99_merge.py 실행" 버튼 |
-| 단일 파이프라인 승인/반려 | 리뷰 단계에서 승인/반려 버튼 |
+| 단일 파이프라인 진행 상태 | 리뷰 완료 후 자동 실행 (승인 단계 없음) |
 | 실행 로그 실시간 확인 | 실행 버튼 클릭 후 하단 로그 박스에 3초 간격 폴링 표시 |
 | 파이프라인 진행 상태 모니터링 | 단일: 7단계 프로그레스 바 / 병렬: 워커 카드 그리드 |
 | 팀 토론 실시간 모니터링 | 사수/부사수 티키타카 대화가 발언마다 실시간 표시 (SSE) |
@@ -155,8 +154,6 @@ python agents/dashboard/serve.py
 | `/api/run_merge` | POST | 99_merge.py 실행 |
 | `/api/run_quick` | POST | 빠른 실행 — 선택 그룹만 pytest 실행 (`groups` 배열 필요) |
 | `/api/run_log` | POST | 실행 로그 조회 (`log` 파일명 지정) |
-| `/api/pipeline/approve` | POST | 단일 파이프라인 승인 |
-| `/api/pipeline/reject` | POST | 단일 파이프라인 반려 (`reason` 필요) |
 | `/api/pipeline_state` | GET | 단일 파이프라인 state/pipeline.json 조회 |
 | `/api/batch_state` | GET | 병렬 파이프라인 상태 조회 |
 | `/api/quick_state` | GET | 빠른 실행 상태 조회 (`state/quick.json`) |
@@ -231,11 +228,6 @@ Claude Code가 실행 중인 상태에서 함께 구동해야 합니다.
   → 코드 리뷰 심의에 필요한 파일들을 병렬로 읽어 JSON으로 출력
   → Claude가 lint 결과 + 코드를 보고 리뷰 진행
 
-04_approve.py
-  → 리뷰 요약을 출력하고 사용자에게 y/n 입력 대기
-  → n이면 rejection_reason 저장 후 코드 재작성으로 돌아감
-  → stdin 없음(대시보드) 또는 --auto 시: step을 "reviewed"로 유지하고 exit code 3 반환 (대시보드 승인 버튼 표시)
-
 05_execute.py
   → pytest로 테스트 실행
   → state/pipeline.json에 execution_result 저장
@@ -278,7 +270,7 @@ python scripts/05_execute.py
 
 | 파일 | 감지 대상 | 동작 |
 |---|---|---|
-| `scripts/check_pending_approve.py` | `state/pipeline.json`의 승인 대기 상태 | Claude에게 승인/반려 처리 지시 |
+| `scripts/check_pending_approve.py` | `state/pipeline.json`의 리뷰 완료 상태 | Claude에게 테스트 실행 지시 |
 | `scripts/check_pending_discuss.py` | `state/discuss.json`의 토론 요청 | Claude에게 팀 토론 진행 지시 |
 | `scripts/check_pending_impl.py` | `pending_impl.json` 존재 여부 | Claude에게 승인 항목 자동 구현 지시 |
 | `scripts/check_pending_parallel.py` | `state/parallel.json`의 `status=ready` | Claude에게 병렬 subagent 실행 지시 |

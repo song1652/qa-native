@@ -55,7 +55,7 @@ API 호출 없이 Claude Code 자체가 LLM 역할을 수행하는 QA 자동화 
 ## 단일 파이프라인 (단일 URL)
 
 ```
-01_analyze → 02a_dialog → [심의] → 02_generate → 03_lint → 03a_dialog → [심의] → 04_approve → 05_execute → 06_heal → [힐링 루프]
+01_analyze → 02a_dialog → [심의] → 02_generate → 03_lint → 03a_dialog → [심의] → 05_execute → 06_heal → [힐링 루프]
 ```
 
 1. `python scripts/01_analyze.py` — DOM 추출
@@ -63,9 +63,8 @@ API 호출 없이 Claude Code 자체가 LLM 역할을 수행하는 QA 자동화 
 3. `python scripts/02_generate.py` — scaffold 생성 후 plan 기반 개별 완성
 4. `python scripts/03_lint.py` — flake8
 5. `python scripts/03a_dialog.py` → [심의] `prompts/review_deliberation.md` + ctx
-6. `python scripts/04_approve.py` → 반려 시 3번으로
-7. `python scripts/05_execute.py` — pytest 실행
-8. `python scripts/06_heal.py` — 종료코드 0: 완료 / 1: 힐링→재실행 반복 / 2: 초과→수동 수정
+6. `python scripts/05_execute.py` — pytest 실행
+7. `python scripts/06_heal.py` — 종료코드 0: 완료 / 1: 힐링→재실행 반복 / 2: 초과→수동 수정
 
 > **⚠ 리포트/스크린샷 규칙 (필수)**:
 > - **첫 실행 포함 모든 실행은 `--no-report`로 실행**. 리포트·스크린샷은 전체 통과 확인 후 마지막 1회만 생성.

@@ -42,8 +42,7 @@ lines = [
     "2. python scripts/02a_dialog.py 실행 → 심의 Agent → plan 확정",
     "3. python scripts/02_generate.py 실행 → 코드 완성",
     "4. python scripts/03_lint.py 실행 → 03a_dialog.py → 심의 Agent → 코드 리뷰",
-    "5. python scripts/04_approve.py 실행 → 사용자 승인 대기",
-    "6. 승인 시 05_execute.py → 06_heal.py → 힐링 루프",
+    "5. 05_execute.py → 06_heal.py → 힐링 루프",
 ]
 
 print("\n".join(lines))

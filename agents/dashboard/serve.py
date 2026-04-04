@@ -690,38 +690,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
             else:
                 self._serve_bytes(b'{"ok":false,"log":""}', "application/json; charset=utf-8")
 
-        # ── 단일 파이프라인 승인 ─────────────────────────────────────
-        elif path == "/api/pipeline/approve":
-            if not STATE_PATH.exists():
-                self._serve_bytes(b'{"ok":false,"error":"state/pipeline.json not found"}',
-                                  "application/json; charset=utf-8")
-                return
-            state = json.loads(STATE_PATH.read_text(encoding="utf-8"))
-            state["approval_status"] = "approved"
-            state["step"] = "approved"
-            STATE_PATH.write_text(
-                json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
-            self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
-
-        # ── 단일 파이프라인 반려 ─────────────────────────────────────
-        elif path == "/api/pipeline/reject":
-            length = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
-            reason = body.get("reason", "").strip()
-            if not STATE_PATH.exists():
-                self._serve_bytes(b'{"ok":false,"error":"state/pipeline.json not found"}',
-                                  "application/json; charset=utf-8")
-                return
-            state = json.loads(STATE_PATH.read_text(encoding="utf-8"))
-            state["approval_status"] = "rejected"
-            state["rejection_reason"] = reason
-            state["rejection_count"] = state.get("rejection_count", 0) + 1
-            STATE_PATH.write_text(
-                json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
-            self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
-
         # ── 파이프라인 state/pipeline.json 초기화 ──────────────────────────
         elif path == "/api/pipeline/reset":
             init_state = {

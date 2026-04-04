@@ -7,7 +7,7 @@ scripts/            단계별 실행 스크립트 (LLM 없음, 순수 Python)
   02a_dialog.py     Plan 대화 세션 초기화
   03_lint.py        flake8 검사
   03a_dialog.py     코드 리뷰 대화 세션 초기화
-  04_approve.py     승인/반려
+  04_approve.py     (사용 중단 — 승인 단계 제거됨)
   05_execute.py     pytest 실행
   06_heal.py        실패 분석
   06a_dialog.py     힐링 대화 세션 초기화

@@ -738,8 +738,8 @@ const MSG_STATUS_STYLE = {
   revision_needed: 'background:#2d1212;color:#f85149;border:1px solid #da3633',
 };
 
-const PIPELINE_STEPS = ['init','analyzed','planned','generated','reviewed','approved','done'];
-const STEP_LABELS = { init:'Init', analyzed:'분석', planned:'계획', generated:'생성', reviewed:'리뷰', approved:'승인', done:'완료', heal_needed:'힐링중', heal_failed:'힐링실패', scaffolded:'생성', linted:'생성' };
+const PIPELINE_STEPS = ['init','analyzed','planned','generated','reviewed','done'];
+const STEP_LABELS = { init:'Init', analyzed:'분석', planned:'계획', generated:'생성', reviewed:'리뷰', done:'완료', heal_needed:'힐링중', heal_failed:'힐링실패', scaffolded:'생성', linted:'생성', approved:'리뷰' };
 
 const PARALLEL_STEPS = ['init','analyzing','ready','generating','testing','done'];
 const PARALLEL_STEP_LABELS = { init:'초기화', analyzing:'DOM 분석', ready:'코드 생성 대기', generating:'코드 생성', testing:'테스트 실행', done:'완료', heal_needed:'힐링중', heal_failed:'힐링실패' };
@@ -1086,10 +1086,10 @@ function renderSinglePipeline(main) {
 
   const state = pipelineState || {};
   const currentStep = state.step || 'init';
-  // heal_needed/heal_failed는 approved 이후 단계이므로 approved 위치(5)에 active로 표시
+  // heal_needed/heal_failed는 reviewed 이후 단계이므로 done 위치(5)에 active로 표시
   const isHeal = currentStep === 'heal_needed' || currentStep === 'heal_failed';
-  const STEP_COMPAT = { scaffolded: 'generated', linted: 'generated' };
-  let stepIdx = isHeal ? 6 : PIPELINE_STEPS.indexOf(currentStep);
+  const STEP_COMPAT = { scaffolded: 'generated', linted: 'generated', approved: 'reviewed' };
+  let stepIdx = isHeal ? 5 : PIPELINE_STEPS.indexOf(currentStep);
   if (stepIdx === -1) stepIdx = PIPELINE_STEPS.indexOf(STEP_COMPAT[currentStep] || 'init');
 
   let stepsHtml = '';
@@ -1098,10 +1098,10 @@ function renderSinglePipeline(main) {
     if (i < stepIdx) cls = 'done';
     else if (i === stepIdx) cls = 'active';
     // heal 상태에서 done(마지막) 위치는 힐링 색상
-    if (isHeal && i === 6) cls = 'active';
+    if (isHeal && i === 5) cls = 'active';
     const labelCls = cls;
     const num = i + 1;
-    const label = (isHeal && i === 6) ? STEP_LABELS[currentStep] : STEP_LABELS[step];
+    const label = (isHeal && i === 5) ? STEP_LABELS[currentStep] : STEP_LABELS[step];
     stepsHtml += `<div class="step-node"><div class="step-circle ${cls}">${i < stepIdx ? '&#10003;' : num}</div><div class="step-label ${labelCls}">${label}</div></div>`;
     if (i < PIPELINE_STEPS.length - 1) {
       stepsHtml += `<div class="step-line ${i < stepIdx ? 'done' : ''}"></div>`;
@@ -1113,19 +1113,6 @@ function renderSinglePipeline(main) {
   const execResult = state.execution_result || {};
 
   let actionsHtml = '';
-  if (currentStep === 'reviewed') {
-    actionsHtml = '<div class="pipeline-actions">';
-    actionsHtml += `
-        <button class="action-btn action-btn-success" onclick="pipelineApprove()">승인</button>
-        <button class="action-btn action-btn-danger" onclick="pipelineRejectToggle()">반려</button>`;
-    actionsHtml += '</div>';
-    actionsHtml += `
-      <div id="pipeline-reject-wrap" style="display:none;margin-top:10px;">
-        <input type="text" id="pipeline-reject-reason" class="reject-reason-input" placeholder="반려 사유...">
-        <button class="btn-reject-confirm" onclick="pipelineReject()">반려 확정</button>
-        <button class="btn-reject-cancel" onclick="document.getElementById('pipeline-reject-wrap').style.display='none'">취소</button>
-      </div>`;
-  }
 
   const resetBtnHtml = `<div class="pipeline-actions" style="margin-top:16px;"><button class="action-btn action-btn-danger" onclick="pipelineReset()" style="margin-left:auto;">파이프라인 초기화</button></div>`;
 
@@ -1134,9 +1121,7 @@ function renderSinglePipeline(main) {
     <div class="pipeline-info-row"><span class="pipeline-info-label">현재 단계</span><span class="pipeline-info-val">${STEP_LABELS[currentStep] || currentStep}</span></div>
     <div class="pipeline-info-row"><span class="pipeline-info-label">힐링 횟수</span><span class="pipeline-info-val">${healCount}</span></div>`;
 
-  if (state.rejection_reason) {
-    infoRows += `<div class="pipeline-info-row"><span class="pipeline-info-label">반려 사유</span><span class="pipeline-info-val" style="color:var(--revision-color)">${esc(state.rejection_reason)}</span></div>`;
-  }
+  // 승인/반려 단계 제거됨 — 심의 완료 후 자동 실행
   // 실행 결과 카드 (병렬 파이프라인과 동일 구조)
   let singleExecResultHtml = '';
   if (execResult.total !== undefined && execResult.total > 0) {
@@ -1234,31 +1219,6 @@ async function pipelineReset() {
     if (data.ok) { showToast('파이프라인 초기화 완료', 'success'); await refreshAll(); }
     else showToast('초기화 실패: ' + (data.error || ''));
   } catch(e) { showToast('서버 연결 오류'); }
-}
-
-async function pipelineApprove() {
-  try {
-    await fetch('/api/pipeline/approve', { method: 'POST' });
-    await refreshAll();
-    const url = (pipelineState && pipelineState.url) || '';
-    showHookAlert('single_approved', url ? url + ' 테스트 승인됨' : '테스트 승인됨');
-  } catch(e) { showToast('오류: ' + e.message); }
-}
-
-function pipelineRejectToggle() {
-  document.getElementById('pipeline-reject-wrap').style.display = 'block';
-}
-
-async function pipelineReject() {
-  const reason = document.getElementById('pipeline-reject-reason').value.trim();
-  try {
-    await fetch('/api/pipeline/reject', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({reason}),
-    });
-    await refreshAll();
-  } catch(e) { showToast('오류: ' + e.message); }
 }
 
 // ── Parallel Pipeline ──
