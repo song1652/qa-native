@@ -27,7 +27,7 @@ Claude가 자동으로 호출하는 파일 (직접 실행 불필요)
     ├── 06a_dialog.py              파이프라인 8단계: 힐링 심의 준비
     ├── team_discuss.py            팀 토론: 심의 컨텍스트 준비
     ├── team_approve.py            팀 토론: 결론 승인 (터미널용, 대시보드 권장)
-    ├── check_pending_approve.py   훅: 단일 파이프라인 승인 트리거 감지
+    ├── check_pending_approve.py   훅: 단일 파이프라인 리뷰 완료 → 실행 트리거
     ├── check_pending_discuss.py   훅: 팀 토론 트리거 감지
     ├── check_pending_impl.py      훅: 승인 항목 자동 구현 트리거 감지
     ├── check_pending_parallel.py  훅: 병렬 파이프라인 트리거 감지
@@ -135,7 +135,8 @@ python agents/dashboard/serve.py
 | **99_merge.py 실행** | 병렬 파이프라인 탭 → 워커 완료 후 "99_merge.py 실행" 버튼 |
 | 단일 파이프라인 진행 상태 | 리뷰 완료 후 자동 실행 (승인 단계 없음) |
 | 실행 로그 실시간 확인 | 실행 버튼 클릭 후 하단 로그 박스에 3초 간격 폴링 표시 |
-| 파이프라인 진행 상태 모니터링 | 단일: 7단계 프로그레스 바 / 병렬: 워커 카드 그리드 |
+| 파이프라인 진행 상태 모니터링 | 단일: 6단계 프로그레스 바 / 병렬: 워커 카드 그리드 |
+| 테스트 결과 필터·페이지네이션 | All/Pass/Fail 필터 버튼 + 20개 단위 페이지 (단일·병렬·빠른 실행 공통) |
 | 팀 토론 실시간 모니터링 | 사수/부사수 티키타카 대화가 발언마다 실시간 표시 (SSE) |
 | 팀 토론 시작 | 팀 토론 섹션 주제 입력 → 토론 시작 버튼 |
 | 토론 결론 항목별 승인 | 각 항목 ✓/✗ 버튼 클릭 |
@@ -284,7 +285,7 @@ python scripts/05_execute.py
 |---|---|---|
 | `scripts/_python.py` | `.venv/bin/python` 경로 자동 감지 + `PYTHON_EXE` 상수 제공 | ❌ (다른 스크립트가 import) |
 | `scripts/_paths.py` | 중앙 경로 상수 (`STATE_DIR`, `LOGS_DIR`, `DOM_CACHE_DIR` 등) + `read_state()` (fcntl 공유 잠금) / `write_state()` (atomic rename) 유틸 | ❌ (다른 스크립트가 import) |
-| `scripts/_constants.py` | 파이프라인 종료 코드 상수 (`EXIT_SUCCESS`, `EXIT_HEAL_NEEDED`, `EXIT_HEAL_EXCEEDED`, `EXIT_REJECTED`, `EXIT_AWAITING_APPROVAL`) | ❌ (다른 스크립트가 import) |
+| `scripts/_constants.py` | 파이프라인 종료 코드 상수 (`EXIT_SUCCESS`, `EXIT_HEAL_NEEDED`, `EXIT_HEAL_EXCEEDED`, `EXIT_REJECTED`) | ❌ (다른 스크립트가 import) |
 | `scripts/heal_utils.py` | 힐링 공용 유틸리티. `classify_error`, `extract_key_lines`, `find_screenshot_for_test`, `append_lessons`, `update_heal_stats` — `06_heal.py`와 `99_merge.py`에서 공유 | ❌ (다른 스크립트가 import) |
 | `scripts/parse_cases.py` | `.md`/`.json` 테스트케이스 파일 파서 (YAML frontmatter 지원) | ❌ (run_qa.py가 import해서 사용) |
 | `tests/test_core_parsers.py` | 핵심 파서 유닛 테스트 (parse_cases 등) | ❌ (pytest가 자동 실행) |
