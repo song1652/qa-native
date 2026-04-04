@@ -5,7 +5,7 @@ stdout으로 출력해 Claude 컨텍스트에 주입한다.
 """
 import json
 import sys
-from _paths import PARALLEL_STATE, RUN_PARALLEL_LOG
+from _paths import PARALLEL_STATE, RUN_PARALLEL_LOG, read_state
 
 PARALLEL_STATE_PATH = PARALLEL_STATE
 
@@ -13,7 +13,7 @@ if not PARALLEL_STATE_PATH.exists():
     sys.exit(0)
 
 try:
-    data = json.loads(PARALLEL_STATE_PATH.read_text(encoding="utf-8"))
+    data = read_state(PARALLEL_STATE_PATH)
 except Exception:
     sys.exit(0)
 

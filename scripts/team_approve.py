@@ -7,7 +7,7 @@
 import json
 import sys
 from datetime import datetime
-from _paths import DISCUSS_STATE, PROJECT_ROOT
+from _paths import DISCUSS_STATE, PROJECT_ROOT, read_state
 
 DISCUSS_STATE_PATH = DISCUSS_STATE
 TEAM_NOTES_PATH = PROJECT_ROOT / "agents" / "team_notes.md"
@@ -29,7 +29,7 @@ def main():
         print("[오류] state/discuss.json 없음.")
         sys.exit(1)
 
-    discuss = json.loads(DISCUSS_STATE_PATH.read_text(encoding="utf-8"))
+    discuss = read_state(DISCUSS_STATE_PATH)
     topic = discuss.get("topic", "")
     conclusion = discuss.get("conclusion", "")
 

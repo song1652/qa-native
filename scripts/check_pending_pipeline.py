@@ -5,7 +5,7 @@ state/pipeline.json의 step=init이고 url이 있으면
 """
 import json
 import sys
-from _paths import PIPELINE_STATE
+from _paths import PIPELINE_STATE, read_state
 
 STATE_PATH = PIPELINE_STATE
 
@@ -13,7 +13,7 @@ if not STATE_PATH.exists():
     sys.exit(0)
 
 try:
-    state = json.loads(STATE_PATH.read_text(encoding="utf-8"))
+    state = read_state(STATE_PATH)
 except Exception:
     sys.exit(0)
 

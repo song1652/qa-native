@@ -5,7 +5,7 @@ Claude 컨텍스트에 주입한다.
 """
 import json
 import sys
-from _paths import DISCUSS_STATE
+from _paths import DISCUSS_STATE, read_state
 
 DISCUSS_PATH = DISCUSS_STATE
 
@@ -13,7 +13,7 @@ if not DISCUSS_PATH.exists():
     sys.exit(0)
 
 try:
-    data = json.loads(DISCUSS_PATH.read_text(encoding="utf-8"))
+    data = read_state(DISCUSS_PATH)
 except Exception:
     sys.exit(0)
 

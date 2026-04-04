@@ -1,13 +1,9 @@
-# 힐링 패치 기준
+# 힐링 가이드
 
-모든 파이프라인(단일/병렬)에서 힐링 시 동일 기준 적용:
+모든 파이프라인(단일/병렬)에서 힐링 시 동일 기준 적용.
 
-| 오류 유형 | 판별 키워드 | 패치 방법 |
-|-----------|------------|-----------|
-| Locator | `strict mode violation`, `Element not found` | dom_info 셀렉터와 대조해 수정 |
-| Assertion | `Expected ... to contain` | 실제 페이지 텍스트를 기댓값으로 수정 |
-| Timeout | `Timeout` | `page.wait_for_selector()` 추가 또는 `expect(..., timeout=10000)` 조정 |
-| URL | `goto`, `navigation` | BASE_URL 또는 goto 인자 수정 |
+> 오류 유형별 패치 전략 상세: `.claude/skills/heal-patterns/SKILL.md`
+> Playwright 코드 작성 베스트프랙티스: `.claude/skills/playwright-best-practices/SKILL.md`
 
 ## [필수] 힐링 완료 체크리스트
 
@@ -19,6 +15,12 @@
    - **{핵심 키워드}**: {상황 설명}. {해결법/교훈}
    ```
 3. 재실행으로 통과 확인
+
+## 빈도 데이터 활용
+
+- `06_heal.py`가 실패 시 `state/heal_stats.json`에 오류 패턴별 빈도 자동 기록
+- `06a_dialog.py`가 Top 5 빈출 패턴을 DELIBERATION_CONTEXT에 자동 주입
+- 빈출 패턴은 힐링 시 우선 점검 대상
 
 ## MCP 시각 검증 (힐링 시 선택 사용)
 

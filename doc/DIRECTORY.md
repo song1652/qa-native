@@ -15,6 +15,8 @@ scripts/            단계별 실행 스크립트 (LLM 없음, 순수 Python)
   parse_cases.py    tc_*.md 파싱
   _python.py        .venv 경로 자동 감지
   _paths.py         중앙 경로 상수 (state/, logs/)
+  _constants.py     파이프라인 종료 코드 상수
+  heal_utils.py     힐링 공용 유틸리티 (classify_error, extract_key_lines 등)
   team_approve.py   팀 토론 승인 (터미널용)
   sync_test_data.py test_data.json 동기화
   check_pending_*.py  훅 스크립트 (approve/discuss/impl/parallel/pipeline)
@@ -46,6 +48,7 @@ state/              상태 파일 (런타임 생성)
   parallel.json     병렬 파이프라인 상태
   quick.json        빠른 실행 상태
   heal_context.json 힐링 루프용 traceback (실패 시 생성)
+  heal_stats.json   힐링 오류 패턴별 빈도 카운터 (06_heal.py가 자동 업데이트)
 
 logs/               실행 로그 (런타임 생성)
   run_qa.txt        단일 파이프라인 로그
@@ -64,6 +67,12 @@ testcases/          케이스 파일 (tc_*.md) — 그룹별 서브폴더로 관
 config/
   pages.json        페이지명 → URL 매핑 (중앙 URL 레지스트리)
   test_data.json    테스트 입력값 (계정, 폼 데이터)
+
+.claude/skills/     스킬 프레임워크 (공식 SKILL.md 표준)
+  playwright-best-practices/
+    SKILL.md        Python Playwright 정적 베스트프랙티스
+  heal-patterns/
+    SKILL.md        힐링 오류 유형별 패치 전략 가이드라인
 
 knowledge/          QA 지식 베이스
   qa-checklist.md   스모크 항목 + Playwright 작성 체크리스트

@@ -8,7 +8,7 @@ import json
 import sys
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
-from _paths import PIPELINE_STATE
+from _paths import PIPELINE_STATE, read_state
 
 
 def read_file(path):
@@ -23,7 +23,7 @@ def main():
         print("[오류] state/pipeline.json 없음.")
         sys.exit(1)
 
-    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state = read_state(state_path)
 
     if not state.get("dom_info"):
         print("[오류] dom_info 없음. 01_analyze.py를 먼저 실행하세요.")

@@ -6,7 +6,7 @@ LLM 없음. state.json의 review_summary를 출력하고 y/n 입력 대기.
 import json
 import sys
 from pathlib import Path
-from _paths import PIPELINE_STATE
+from _paths import PIPELINE_STATE, read_state, write_state
 
 
 def main():
@@ -15,7 +15,7 @@ def main():
         print("[오류] state/pipeline.json 없음.")
         sys.exit(1)
 
-    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state = read_state(state_path)
 
     print()
     print("=" * 60)
@@ -50,7 +50,7 @@ def main():
         # 대시보드 연동: approval_status를 "pending"으로 설정하고 대시보드에서 승인/반려 대기
         state["approval_status"] = "pending"
         state["step"] = "awaiting_approval"
-        state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+        write_state(state_path, state)
         print()
         print("  [대기] 대시보드에서 승인/반려를 기다립니다.")
         print("  대시보드 URL: http://localhost:8766")
@@ -67,7 +67,7 @@ def main():
             # stdin 없음 (대시보드 등에서 실행) → pending 상태로 전환
             state["approval_status"] = "pending"
             state["step"] = "awaiting_approval"
-            state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+            write_state(state_path, state)
             print()
             print("  [대기] stdin 없음 — 대시보드에서 승인/반려를 기다립니다.")
             sys.exit(3)
@@ -94,7 +94,7 @@ def main():
             if state["rejection_count"] >= 3:
                 print("  [경고] 3회 반려. 파이프라인을 종료합니다.")
 
-        state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+        write_state(state_path, state)
 
         if not approved:
             print()

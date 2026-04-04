@@ -8,7 +8,7 @@ import json
 import sys
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
-from _paths import PIPELINE_STATE
+from _paths import PIPELINE_STATE, read_state
 
 
 def read_file(path):
@@ -29,7 +29,7 @@ def main():
         print("[오류] state/pipeline.json 없음.")
         sys.exit(1)
 
-    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state = read_state(state_path)
     generated_path = state.get("generated_file_path", "tests/generated/test_generated.py")
 
     if not state.get("lint_result"):

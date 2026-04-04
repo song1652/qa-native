@@ -8,11 +8,10 @@ Claude Code가 각 뼈대를 완성해 tests/generated/{group}/ 에 저장.
    tests/generated/{group}/ 아래 각 파일을 완성해줘.
    실제 셀렉터와 assertion을 plan의 내용대로 채워넣어."
 """
-import json
 import re
 import sys
 from pathlib import Path
-from _paths import PIPELINE_STATE
+from _paths import PIPELINE_STATE, read_state, write_state
 
 
 CONFTEST_TEMPLATE = '''import pytest
@@ -94,7 +93,7 @@ def main():
         print("[오류] state/pipeline.json 없음.")
         sys.exit(1)
 
-    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state = read_state(state_path)
 
     if not state.get("plan"):
         print("[오류] plan 없음. Claude Code가 전략 수립을 먼저 완료해야 합니다.")
@@ -172,9 +171,7 @@ def main():
     state["step"] = "generated"
     state["generated_file_path"] = str(out_dir) + "/"
     state["generated_files"] = generated_files
-    state_path.write_text(
-        json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    write_state(state_path, state)
 
     print(f"[02] 파일별 뼈대 생성 완료: {out_dir}/  ({len(plan)}개 파일)")
     for f in generated_files:

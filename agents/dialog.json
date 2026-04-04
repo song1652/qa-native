@@ -5,48 +5,47 @@
     {
       "stage": "team_discussion",
       "stage_label": "팀 토론",
-      "topic": "햔재 우리의 에이전트가 문제되는 부분이 있을까요?",
-      "started_at": "2026-04-02T07:17:35.337615",
-      "completed_at": null,
-      "status": "discussed",
-      "completed_at": "2026-04-02T07:24:00",
-      "round": 3,
+      "topic": "우리한테 필요한 스킬 프레임워크가 있을까요? 한번 인테넷 검색을 해보고 토론해보세요",
+      "started_at": "2026-04-04T10:38:19.244377",
+      "completed_at": "2026-04-04T10:50:00",
+      "status": "approved",
+      "round": 0,
       "messages": [
         {
           "from": "senior",
-          "timestamp": "2026-04-02T07:18:00",
-          "content": "[lessons_learned 확인]\nlessons_learned를 보면 벌써 12건 이상의 실수 패턴이 쌓여 있어요. 우리 에이전트 시스템의 문제점을 짚어볼게요.\n\n**1. DOM 분석 범위가 좁아요**\n01_analyze.py가 메인 URL만 분석하는데, 실제 테스트 케이스는 로그인 페이지(/member/login.html), 장바구니(/order/basket.html), 마이페이지(/myshop/) 등 서브페이지를 대상으로 해요. 메인 페이지 DOM에는 #member_id, #member_passwd 같은 셀렉터가 없으니 매번 lessons_learned에 의존하거나 추측하는 구조예요.\n\n**2. 스캐폴딩이 불필요한 import를 넣어요**\n02_generate.py가 모든 파일에 json, re, os, pytest, expect를 넣는데, 실제로 쓰지 않는 import가 매번 F401로 걸려요. lint 수정이 매번 반복되는 비효율이에요.\n\n**3. 대시보드에서 병렬 파이프라인 실행이 완전하지 않아요**\n병렬 파이프라인은 subagent 컨텍스트 생성까지만 되고, 실제 Agent tool 호출은 대시보드에서 트리거할 수 없어요. 이건 구조적 한계인데, 어떻게 생각해요?"
+          "timestamp": "2026-04-04T10:40:30",
+          "content": "좋아요, 이번에는 지난번 반려된 부분을 잘 반영해서 다시 논의해봐요. 인터넷 조사를 먼저 해봤는데, 꽤 흥미로운 흐름들이 보여요.\n\n**[조사 결과 요약]**\n\n1. **Claude Code 공식 SKILL.md 패턴**: Anthropic이 2025년 12월에 오픈 스탠다드로 공개. `.claude/skills/` 폴더에 SKILL.md 파일만 넣으면 자동 인식. YAML frontmatter로 트리거 조건 정의, 2000토큰 이하가 성능 최적.\n\n2. **Progressive Disclosure 패턴**: 수백 개 스킬을 등록해도 컨텍스트 윈도우는 가볍게 유지. 이름+설명만 로드 → 매칭 시 전체 지침 로드 → 실행. 이게 우리 파이프라인에 딱 맞는 구조예요.\n\n3. **Self-evolving Skill Library**: Voyager 패턴처럼, 작업 성공 시 자동으로 스킬로 증류해서 라이브러리에 추가하는 방식. 우리 힐링 성공 패턴을 자동 스킬화하는 것과 같은 맥락.\n\n4. **SkillsMP 마켓플레이스**: 70만 개 이상의 에이전트 스킬이 공유되고 있고, Playwright QA 관련 스킬도 있음.\n\n**[방향 제시]**\n\n지난번 토론에서 '하이브리드 방식으로 3종 스킬 도입'이 반려됐어요. 반려 이유가 명시되어 있진 않지만, 제 생각에는 **공식 SKILL.md 패턴을 직접 활용하는 게 더 나은 선택**이에요. 우리가 자체 구현할 필요 없이 Claude Code가 이미 지원하는 표준 구조를 쓰면 되거든요.\n\n다만 우려점도 있어요:\n- 우리 파이프라인은 API 없이 Claude Code 자체가 LLM 역할을 하는 특수한 구조\n- 기존 lessons_learned.md와 역할이 겹칠 수 있음\n- 스킬이 너무 많아지면 오히려 컨텍스트 부담\n\n이 부분에 대해 어떻게 생각해요?"
         },
         {
           "from": "junior",
-          "timestamp": "2026-04-02T07:19:00",
-          "content": "네, 세 가지 다 공감해요. 특히 1번 DOM 분석 범위는 저도 코드 작성할 때마다 느끼는 문제예요. 로그인 페이지 셀렉터를 매번 lessons_learned에서 가져오는데, 새로운 사이트면 첫 실행에서 거의 무조건 힐링이 필요하거든요.\n\n근데 저는 다른 관점에서 추가 문제도 있다고 생각해요.\n\n**4. 테스트 데이터 보안 문제**\ntest_data.json에 비밀번호가 평문으로 저장되어 있어요. ENV: 프리픽스 패턴을 만들어뒀지만 saintcore 데이터는 아직 평문이에요. git에 커밋되면 보안 이슈가 될 수 있어요.\n\n**5. 힐링 루프의 판단 기준이 단순해요**\n현재 힐링은 \"traceback 보고 패치\"인데, 같은 오류가 반복되면 3회 다 소진하고 실패해요. 예를 들어 사이트 자체가 다운되어 있으면 셀렉터를 아무리 고쳐도 의미 없잖아요. 힐링 시작 전에 사이트 접근 가능 여부를 먼저 체크하는 단계가 있으면 좋겠어요.\n\n1번 해결 방안으로는, 01_analyze.py에서 test_cases의 precondition URL들도 함께 분석하면 어떨까요? 로그인 페이지, 장바구니 페이지 각각의 DOM을 수집하는 거예요."
+          "timestamp": "2026-04-04T10:41:15",
+          "content": "조사 내용 잘 봤어요! 공식 SKILL.md 패턴이 이렇게 성숙해져 있는 줄 몰랐네요. 사수님 말씀대로 자체 구현보다 표준을 쓰는 게 맞다고 봐요.\n\n근데 저는 한 가지 다른 시각이 있어요. **우리한테 정말 '스킬 프레임워크'가 필요한가?** 라는 근본적인 질문이에요.\n\n현재 우리 구조를 보면:\n- `lessons_learned.md` → 실수 패턴 누적\n- `prompts/*.md` → 단계별 심의 프롬프트\n- `agents/roles/*.md` → 사수/부사수 페르소나\n- `CLAUDE.md` → 전체 파이프라인 지침\n\n이게 사실상 이미 스킬 프레임워크의 역할을 하고 있거든요. 공식 SKILL.md를 도입하면 **기존 prompts/ 구조와 이중 관리**가 될 수 있어요.\n\n**제가 생각하는 대안**은:\n1. 기존 구조를 유지하되, **힐링 자동학습 기능만 추가** — 힐링 성공 시 패턴을 lessons_learned.md에 자동 기록하는 건 지금도 하고 있으니까, 이걸 좀 더 구조화\n2. 외부 Playwright 베스트프랙티스 스킬은 마켓플레이스에서 가져와서 `.claude/skills/`에 넣되, **우리 파이프라인 내부 로직은 기존 prompts/ 체계 유지**\n\n즉, 외부 지식은 SKILL.md로, 내부 파이프라인 지침은 기존 방식으로 이원화하는 거예요.\n\n근데 이러면 관리 포인트가 늘어나는 문제가 있긴 해요... 어떻게 생각하세요?"
         },
         {
           "from": "senior",
-          "timestamp": "2026-04-02T07:20:00",
-          "content": "좋은 지적이에요. 4번 보안 문제는 심각해요. saintcore의 비밀번호가 실제로 평문인 건 맞고, 이건 빨리 ENV: 프리픽스로 바꿔야 해요.\n\n5번 힐링 판단도 맞는 말이에요. 힐링 전에 HTTP 200 체크를 넣으면 사이트 다운 시 불필요한 3회 루프를 피할 수 있어요.\n\n1번 DOM 분석 확장 제안도 괜찮은데, 한 가지 걱정이 있어요. precondition URL을 모두 크롤링하면 실행 시간이 꽤 늘어나요. 예를 들어 saintcore 케이스 10개에서 로그인 페이지가 6개 케이스에 걸리면 같은 URL을 6번 방문하는 건 아니겠지만, 고유 URL 수가 3~4개면 3~4번 headless 브라우저를 띄워야 해요. 현재 DOM 분석이 2~3초인데 10초 이상으로 늘어날 수 있어요.\n\n그리고 내가 놓친 문제를 하나 더 추가할게요.\n\n**6. 04_approve.py의 interactive input 문제**\n방금 파이프라인 실행할 때도 EOFError가 났어요. 대시보드에서 트리거하면 stdin이 없으니까요. `echo y |`로 우회하긴 했는데, 대시보드 API로 승인/반려를 처리하는 게 더 깔끔해요. 어떻게 생각해요?"
+          "timestamp": "2026-04-04T10:42:00",
+          "content": "오, 좋은 지적이에요. '이미 스킬 프레임워크를 하고 있는 거 아닌가'라는 질문은 꽤 핵심을 찔러요.\n\n맞아요, 우리 `prompts/`와 `agents/` 구조가 사실상 도메인 특화 스킬 시스템이에요. 근데 **두 가지 근본적인 차이**가 있어요:\n\n1. **동적 로딩 vs 정적 참조**: 우리 prompts는 스크립트가 하드코딩된 경로로 읽어요. SKILL.md는 Claude Code가 자동으로 매칭하고 필요할 때만 로드해요. 이건 단순 관리 편의가 아니라 **컨텍스트 효율성** 문제예요.\n\n2. **학습 루프의 부재**: lessons_learned.md에 수동으로 기록하고 있지만, '어떤 패턴이 몇 번 반복됐는지', '이 패턴이 정말 유효한지' 추적이 안 돼요. Self-evolving 패턴에서는 이걸 자동화해요.\n\n그래서 나는 부사수 의견을 반영해서 **절충안**을 제안하고 싶어요:\n\n**'기존 구조 강화 + 선별적 SKILL.md 도입'**\n\n- **유지**: `prompts/*.md`, `agents/roles/*.md`, `CLAUDE.md` — 파이프라인 코어 로직은 현행 유지\n- **강화**: `lessons_learned.md`에 **빈도 카운터** 추가. `count >= 3`인 패턴만 자동으로 프롬프트에 주입\n- **신규 SKILL.md 2개만 도입**:\n  - `.claude/skills/playwright-best-practices/SKILL.md` — 외부 Playwright 베스트프랙티스 (마켓플레이스 참조)\n  - `.claude/skills/heal-patterns/SKILL.md` — 힐링 성공 패턴 자동학습용 (힐링 완료 시 자동 업데이트)\n\n이러면 이중 관리 문제를 최소화하면서도 스킬의 이점을 가져갈 수 있어요. 어떻게 봐요?"
         },
         {
           "from": "junior",
-          "timestamp": "2026-04-02T07:21:00",
-          "content": "6번 승인 문제는 맞아요. 대시보드에 이미 /api/approve, /api/reject 엔드포인트가 있는 것 같은데, 04_approve.py가 stdin을 쓰는 건 CLI 전용 설계의 잔재인 것 같아요. 대시보드 경로에서는 state/pipeline.json의 approval_status를 직접 폴링하는 방식으로 바꾸면 되겠어요.\n\n1번 DOM 분석 확장 시간 걱정은 이해하는데, 다른 방법도 있어요. 전체 서브페이지를 크롤링하지 않고, precondition URL을 중복 제거한 후 **캐시**하는 거예요. pages.json에 이미 URL이 있으니까, URL별로 한 번만 분석하고 `state/dom_cache/{url_hash}.json`에 저장하면 같은 URL 재방문이 필요 없어요. 두 번째 실행부터는 캐시에서 가져오니까요.\n\n근데 한 가지 더 우려되는 게 있어요.\n\n**7. 02_generate.py 스캐폴드 함수명 중복 접두사**\n스캐폴드가 `test_test_login_success` 같은 중복 접두사를 생성해요. plan의 case_name이 이미 `test_`로 시작하는데 스캐폴드가 또 `test_` 를 붙여서요. 이번에는 코드 완성할 때 수정했지만, 자동으로 해결되면 좋겠어요."
+          "timestamp": "2026-04-04T10:42:45",
+          "content": "절충안이 훨씬 현실적이에요. 2개만 도입하면 관리 부담도 적고요.\n\n근데 **실행 가능성** 측면에서 몇 가지 짚어볼게요:\n\n1. **heal-patterns SKILL.md 자동 업데이트 문제**: 힐링 성공 시 자동으로 SKILL.md를 수정한다는 건, 06_heal.py에서 파일을 직접 편집해야 한다는 뜻이에요. 근데 우리 원칙이 '외부 LLM SDK import 금지'니까, 패턴 추출 로직을 어떻게 구현할지가 관건이에요. Claude Code가 힐링 성공 후 직접 SKILL.md에 패턴을 append하는 건 가능한데, **패턴 중복 판별이나 카운팅은 단순 텍스트 매칭으로는 한계**가 있어요.\n\n2. **playwright-best-practices 스킬 내용**: 마켓플레이스에서 가져온다고 했는데, 우리 프로젝트가 Playwright Python이잖아요. 대부분의 마켓플레이스 스킬이 TypeScript/JavaScript 기준인데, Python 특화 내용을 직접 큐레이션해야 할 수 있어요.\n\n3. **빈도 카운터 구조**: lessons_learned.md의 현재 포맷을 보면 `- **제목**: 설명` 형식이에요. 여기에 카운터를 넣으면 포맷이 복잡해지는데, 차라리 **별도 JSON 파일** (`state/heal_stats.json` 같은)로 카운팅하고, lessons_learned.md는 사람이 읽기 좋은 형태를 유지하는 건 어떨까요?\n\n정리하면:\n- SKILL.md 2개 도입에 동의하되, heal-patterns는 **수동 큐레이션 시작 → 차후 자동화 검토**\n- 빈도 카운터는 **별도 JSON으로 분리**\n- playwright 스킬은 **Python 특화로 직접 작성**\n\n이렇게 단계적으로 가는 게 안전하지 않을까요?"
         },
         {
           "from": "senior",
-          "timestamp": "2026-04-02T07:22:00",
-          "content": "DOM 캐시 아이디어 좋아요. 그렇게 하면 시간 증가 문제를 해결하면서도 서브페이지 셀렉터 정보를 확보할 수 있어요.\n\n7번 함수명 중복 접두사도 맞아요. 02_generate.py에서 case_name에 이미 `test_`가 있으면 안 붙이도록 수정하면 간단해요.\n\n정리해볼게요. 지금까지 7가지 문제를 찾았는데, 우선순위를 매겨봐요.\n\n**긴급 (바로 수정)**\n- 4번: test_data.json 비밀번호 평문 → ENV: 프리픽스 전환\n- 2번: 스캐폴드 불필요 import → 02_generate.py 수정\n- 7번: 함수명 중복 test_ 접두사 → 02_generate.py 수정\n\n**중요 (다음 스프린트)**\n- 1번: DOM 분석 서브페이지 확장 + 캐시\n- 6번: 04_approve.py 대시보드 연동 (stdin → API 폴링)\n- 5번: 힐링 전 사이트 접근 가능 체크\n\n**개선 (장기)**\n- 3번: 병렬 파이프라인 대시보드 완전 통합\n\n이 우선순위에 대해 어떻게 생각해요?"
+          "timestamp": "2026-04-04T10:43:30",
+          "content": "실행 가능성 측면 분석이 정확해요. 특히 세 번째 포인트, 빈도 카운터를 별도 JSON으로 분리하자는 건 정말 좋은 아이디어예요. lessons_learned.md는 사람+심의용으로 깔끔하게 두고, 기계가 읽는 통계는 JSON으로 분리하면 양쪽 다 최적이에요.\n\n**[쟁점 정리]**\n\n합의된 부분:\n1. ✅ 파이프라인 코어(prompts/, agents/, CLAUDE.md)는 현행 유지\n2. ✅ SKILL.md는 최소한으로 도입 (2개)\n3. ✅ 빈도 카운터는 `state/heal_stats.json`으로 분리\n4. ✅ playwright 스킬은 Python Playwright 특화로 직접 작성\n\n남은 결정 사항:\n- **heal-patterns 스킬의 업데이트 방식**: 부사수 말대로 '수동 시작 → 차후 자동화'가 현실적이에요. 구체적으로, 06_heal.py 실행 후 Claude Code가 직접 heal_stats.json에 카운트를 올리고, lessons_learned.md에도 기록하는 건 **지금도 하는 행위**예요. 여기서 한 단계만 더: heal_stats.json에서 count >= 3인 패턴을 heal-patterns/SKILL.md에 자동 반영하는 **간단한 Python 스크립트**(sync_heal_skill.py)를 하나 만들면 돼요. LLM SDK 없이 순수 텍스트 처리로 가능해요.\n\n- **도입 시점과 우선순위**: 지금 당장 두 개 다 만들 필요는 없어요. 제안은:\n  1. **1단계** (이번 주): `state/heal_stats.json` 구조 정의 + 06_heal.py에서 기록 로직 추가\n  2. **2단계** (다음 주): `.claude/skills/playwright-best-practices/SKILL.md` 작성 (Python 특화)\n  3. **3단계** (데이터 축적 후): `sync_heal_skill.py` + `.claude/skills/heal-patterns/SKILL.md` 자동 동기화\n\n이 로드맵으로 가면 리스크도 낮고 점진적으로 검증할 수 있어요. 최종 의견 있어요?"
         },
         {
           "from": "junior",
-          "timestamp": "2026-04-02T07:23:00",
-          "content": "우선순위 대체로 동의하는데, 한 가지 순서를 바꾸고 싶어요.\n\n6번(04_approve.py 대시보드 연동)을 '긴급'으로 올리고 싶어요. 이유는 대시보드에서 파이프라인을 실행할 때마다 승인 단계에서 멈추는 게 사용자 경험상 큰 문제거든요. `echo y |`로 우회하면 승인 절차가 사실상 무의미해지고, 그렇다고 stdin 에러를 내면 파이프라인이 중단돼요. 대시보드 check_pending_approve.py 훅이 이미 있으니까 이걸 제대로 활용하면 금방 고칠 수 있다고 생각해요.\n\n그리고 2번, 7번은 한꺼번에 수정 가능하니까 하나의 작업으로 묶는 게 좋겠어요. 02_generate.py만 고치면 되니까요.\n\n정리하면 제 의견은:\n- **긴급**: 4번(보안) > 6번(승인 UX) > 2+7번(스캐폴드)\n- **중요**: 1번(DOM 캐시) > 5번(힐링 전 체크)\n- **장기**: 3번(병렬 통합)\n\n이렇게 하면 어떨까요?"
+          "timestamp": "2026-04-04T10:44:15",
+          "content": "로드맵 좋아요! 단계적 접근이 맞다고 봐요. 마지막으로 한 가지만 더 짚을게요.\n\n**sync_heal_skill.py 대신 더 단순한 방법이 있지 않을까요?**\n\nheal_stats.json에 카운트가 쌓이면, 06_heal.py의 DELIBERATION_CONTEXT에 '빈번한 패턴 Top 5'를 자동 포함하는 방식이에요. 이러면 별도 스크립트 없이 **기존 파이프라인 흐름 안에서** 고빈도 패턴이 자연스럽게 심의에 반영돼요. SKILL.md 파일을 동기화하는 것보다 관리 포인트가 줄어들어요.\n\n즉, heal-patterns SKILL.md는 **정적 베스트프랙티스**만 담고(예: 'Timeout 오류 시 wait_for_load_state 먼저 확인', 'Locator 오류 시 dom_info 재확인' 등), **동적 빈도 데이터**는 heal_stats.json → DELIBERATION_CONTEXT 주입으로 처리하는 거예요.\n\n이러면:\n- sync_heal_skill.py 불필요\n- SKILL.md는 안정적인 정적 파일로 유지\n- 빈도 데이터는 실시간으로 심의에 반영\n\n**최종 정리:**\n1. `state/heal_stats.json` — 힐링 빈도 카운터 (06_heal.py가 기록)\n2. `.claude/skills/playwright-best-practices/SKILL.md` — Python Playwright 정적 베스트프랙티스\n3. `.claude/skills/heal-patterns/SKILL.md` — 힐링 정적 가이드라인\n4. 06_heal.py/06a_dialog.py — heal_stats.json Top 5를 DELIBERATION_CONTEXT에 자동 주입\n5. `lessons_learned.md` — 사람+심의용 요약 (현행 유지)\n\n이 구조면 지난번 반려 이유였을 수 있는 '과도한 자체 구현' 문제도 해결돼요. 공식 표준(SKILL.md)은 있는 그대로 쓰고, 우리만의 확장은 기존 파이프라인 안에서 최소한으로 하는 거니까요."
         },
         {
           "from": "deliberation",
-          "timestamp": "2026-04-02T07:24:00",
+          "timestamp": "2026-04-04T10:45:00",
           "status": "discussed",
-          "content": "## 결론: 에이전트 시스템 문제점 7가지 및 개선 우선순위\n\n### 발견된 문제점\n\n| # | 문제 | 영향도 | 수정 범위 |\n|---|------|--------|----------|\n| 1 | DOM 분석이 메인 URL만 대상 → 서브페이지 셀렉터 누락 | 높음 | 01_analyze.py + 캐시 구조 추가 |\n| 2 | 스캐폴드가 불필요 import 생성 (매번 F401) | 중간 | 02_generate.py |\n| 3 | 병렬 파이프라인 대시보드 통합 미완 | 낮음 | 대시보드 + run_qa_parallel.py |\n| 4 | test_data.json 비밀번호 평문 노출 | 높음 | config/test_data.json |\n| 5 | 힐링 전 사이트 접근 가능 체크 없음 | 중간 | 06_heal.py |\n| 6 | 04_approve.py stdin 의존 → 대시보드 비호환 | 높음 | 04_approve.py + check_pending_approve.py |\n| 7 | 스캐폴드 함수명 test_test_ 중복 접두사 | 낮음 | 02_generate.py |\n\n### 합의된 우선순위\n\n**긴급 (즉시 수정)**\n1. test_data.json 비밀번호 → ENV: 프리픽스 전환 (보안)\n2. 04_approve.py 대시보드 연동 → API 폴링 방식 (UX)\n3. 02_generate.py 스캐폴드 개선 → 불필요 import 제거 + test_ 중복 방지\n\n**중요 (다음 스프린트)**\n4. 01_analyze.py 서브페이지 DOM 분석 + URL별 캐시\n5. 06_heal.py 힐링 전 HTTP 접근 가능 체크\n\n**장기 개선**\n6. 병렬 파이프라인 대시보드 완전 통합"
+          "content": "## 스킬 프레임워크 도입 합의 (재토론)\n\n### 인터넷 조사 결과\n- Claude Code 공식 SKILL.md 패턴이 오픈 스탠다드로 성숙 (2025.12~)\n- Progressive Disclosure로 컨텍스트 효율적 관리 가능\n- SkillsMP 등 마켓플레이스에 70만+ 스킬 존재\n- Self-evolving Skill Library 패턴 (Voyager 등) 학술적으로도 검증됨\n\n### 핵심 결론: '기존 구조 유지 + 최소 SKILL.md + 빈도 데이터 파이프라인 주입'\n\n**유지 (변경 없음):**\n- `prompts/*.md`, `agents/roles/*.md`, `CLAUDE.md` — 파이프라인 코어 로직\n- `lessons_learned.md` — 사람+심의용 요약본\n\n**신규 도입:**\n1. `state/heal_stats.json` — 힐링 빈도 카운터. 06_heal.py가 힐링 성공/실패 시 오류 유형별 카운트 기록\n2. `.claude/skills/playwright-best-practices/SKILL.md` — Python Playwright 정적 베스트프랙티스 (직접 작성, 2000토큰 이내)\n3. `.claude/skills/heal-patterns/SKILL.md` — 힐링 정적 가이드라인 (Timeout/Locator/Assertion 유형별 대응 패턴)\n4. 06_heal.py 또는 06a_dialog.py에서 heal_stats.json의 고빈도 패턴 Top 5를 DELIBERATION_CONTEXT에 자동 주입\n\n### 이전 토론 대비 변경점\n- 자체 스킬 로더/자동학습 엔진 구현 제거 → 공식 SKILL.md 표준 그대로 활용\n- 3종 → 2종 SKILL.md로 축소 (내부 파이프라인 지침은 기존 prompts/ 유지)\n- 동적 패턴은 SKILL.md 수정이 아닌 DELIBERATION_CONTEXT 주입 방식으로 처리\n- sync_heal_skill.py 같은 추가 스크립트 불필요\n\n### 실행 로드맵\n- 1단계: `state/heal_stats.json` 구조 정의 + 06_heal.py 기록 로직\n- 2단계: `.claude/skills/playwright-best-practices/SKILL.md` 작성\n- 3단계: `.claude/skills/heal-patterns/SKILL.md` 작성 + DELIBERATION_CONTEXT 주입"
         }
       ]
     }

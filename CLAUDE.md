@@ -35,10 +35,21 @@ API 호출 없이 Claude Code 자체가 LLM 역할을 수행하는 QA 자동화 
 - **심의 Agent 1회 호출**: 사수/부사수를 단일 agent가 내부 시뮬레이션
 - **컨텍스트 주입**: `*_dialog.py`가 출력하는 `DELIBERATION_CONTEXT` JSON을 심의 agent 프롬프트에 직접 포함
 
+## 스킬 프레임워크
+
+`.claude/skills/`에 정적 베스트프랙티스를 SKILL.md 표준으로 관리. 자체 로더/엔진 없이 공식 표준 그대로 활용.
+
+| 스킬 | 경로 | 용도 |
+|------|------|------|
+| Playwright Best Practices | `.claude/skills/playwright-best-practices/SKILL.md` | 테스트 코드 작성 시 참조 |
+| Heal Patterns | `.claude/skills/heal-patterns/SKILL.md` | 힐링 패치 전략 참조 |
+
+동적 빈도 데이터는 `state/heal_stats.json`에 기록되며, `06a_dialog.py`가 Top 5 빈출 패턴을 DELIBERATION_CONTEXT에 자동 주입.
+
 ## 힐링
 
 힐링 완료 필수: (1) 코드 패치 (2) lessons_learned.md에 한 줄 패턴 기록 (중복 시 생략) (3) 재실행 통과 확인.
-상세 패치 기준·체크리스트·MCP 시각 검증 → [HEALING_GUIDE](doc/HEALING_GUIDE.md)
+오류 유형별 패치 전략 → `.claude/skills/heal-patterns/SKILL.md`. MCP 시각 검증 → [HEALING_GUIDE](doc/HEALING_GUIDE.md)
 
 ## 단일 파이프라인 (단일 URL)
 

@@ -24,10 +24,10 @@
 
 ```
 ┌────────────────────────────────────────────────┐
-│               Claude Code (두뇌)               │
-│  DOM 분석 해석 → 테스트 전략 수립              │
-│  테스트 코드 직접 작성                          │
-│  실패 트레이스백 분석 → 코드 자동 패치          │
+│               Claude Code (두뇌)                │
+│  DOM 분석 해석 → 테스트 전략 수립                    │
+│  테스트 코드 직접 작성                              │
+│  실패 트레이스백 분석 → 코드 자동 패치                 │
 └──────────────────┬─────────────────────────────┘
                    │  읽기 / 쓰기
                    ▼
@@ -57,7 +57,7 @@ PARALLEL_SUBAGENT_CONTEXTS 출력
   ┌──────────┬──────────┬──────────┐
   │Subagent 1│Subagent 2│Subagent N│  ← 동시 실행
   │ tc_01    │ tc_02    │ tc_N     │
-  │plan→코드 │plan→코드 │plan→코드 │
+  │plan→코드  │plan→코드  │plan→코드  │
   └──────────┴──────────┴──────────┘
       ↓
   tests/generated/{group}/{label}.py  저장
@@ -101,13 +101,29 @@ Claude가 멀티라운드 티키타카 진행 (최소 3라운드)
 
 ---
 
+## 스킬 프레임워크
+
+`.claude/skills/`에 정적 가이드라인을 공식 SKILL.md 표준으로 관리. 자체 로더/엔진 없이 Claude Code가 자동 인식.
+
+| 스킬 | 용도 |
+|---|---|
+| `playwright-best-practices/SKILL.md` | Playwright 테스트 코드 작성 베스트프랙티스 |
+| `heal-patterns/SKILL.md` | 힐링 오류 유형별 패치 전략 |
+
+동적 빈도 데이터는 `state/heal_stats.json`에 기록. `06_heal.py`가 실패 시 자동 업데이트하고, `06a_dialog.py`가 Top 5 빈출 패턴을 DELIBERATION_CONTEXT에 주입.
+
+> 파이프라인 코어(prompts/, agents/, CLAUDE.md, lessons_learned.md)는 기존 구조 유지.
+
+---
+
 ## Healer (자가 치유)
 
 테스트 실패 시 `06_heal.py`가 traceback을 수집하고 Claude Code가 패치합니다. 최대 3회 자동 시도.
 스크린샷은 최종 실패 시에만 저장됩니다 (힐링 중간 실행에서는 매번 초기화).
 실패 스크린샷이 heal_context에 자동 연결되며, traceback만으로 원인 불명확 시 Playwright MCP 도구로 실제 페이지의 현재 DOM/텍스트를 확인할 수 있습니다.
 
-> 패치 기준표·힐링 완료 체크리스트·MCP 시각 검증 절차는 [`doc/HEALING_GUIDE.md`](HEALING_GUIDE.md) 참조.
+> 힐링 완료 체크리스트·MCP 시각 검증 절차는 [`doc/HEALING_GUIDE.md`](HEALING_GUIDE.md) 참조.
+> 오류 유형별 패치 전략은 `.claude/skills/heal-patterns/SKILL.md` 참조.
 
 ---
 

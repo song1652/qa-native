@@ -18,21 +18,26 @@ from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
 
-PROJECT_ROOT = Path(__file__).parent.parent
-GENERATED_DIR = PROJECT_ROOT / "tests" / "generated"
-TESTCASES_DIR = PROJECT_ROOT / "testcases"
-HEAL_CONTEXT_PATH = PROJECT_ROOT / "state" / "heal_context.json"
-PARALLEL_STATE_PATH = PROJECT_ROOT / "state" / "parallel.json"
-LESSONS_PATH = PROJECT_ROOT / "agents" / "lessons_learned.md"
-SCREENSHOTS_DIR = PROJECT_ROOT / "tests" / "screenshots"
-MAX_HEAL = 3
-
-sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+from _paths import (
+    PROJECT_ROOT, PARALLEL_STATE, HEAL_CONTEXT_STATE, QUICK_STATE,
+    read_state, write_state,
+)
 from _python import PYTHON_EXE
+from heal_utils import (
+    classify_error, extract_key_lines,
+    find_screenshot_for_test, append_lessons,
+    LESSONS_PATH,
+)
 try:
     from parse_cases import load_cases as _load_cases
 except ImportError:
     _load_cases = None
+
+GENERATED_DIR = PROJECT_ROOT / "tests" / "generated"
+TESTCASES_DIR = PROJECT_ROOT / "testcases"
+SCREENSHOTS_DIR = PROJECT_ROOT / "tests" / "screenshots"
+MAX_HEAL = 3
 
 
 # ── 상태 업데이트 헬퍼 ──────────────────────────────────────────
@@ -40,123 +45,11 @@ except ImportError:
 
 def _update_parallel_status(status: str, extra: dict | None = None) -> None:
     """state/parallel.json의 status 필드를 업데이트 (기존 데이터 보존)."""
-    state = {}
-    if PARALLEL_STATE_PATH.exists():
-        try:
-            state = json.loads(
-                PARALLEL_STATE_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            pass
+    state = read_state(PARALLEL_STATE)
     state["status"] = status
     if extra:
         state.update(extra)
-    PARALLEL_STATE_PATH.write_text(
-        json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-# ── lessons_learned 자동 기록 ────────────────────────────────────
-
-
-def classify_error(traceback: str) -> str:
-    """traceback에서 오류 유형 분류."""
-    tb = traceback.lower()
-    if any(k in tb for k in ["strict mode violation", "element not found",
-                              "locator", "no element", "getby"]):
-        return "Locator"
-    if any(k in tb for k in ["expected", "to contain", "assertionerror",
-                              "to have text", "to have url"]):
-        return "Assertion"
-    if "timeout" in tb:
-        return "Timeout"
-    if any(k in tb for k in ["url", "goto", "navigation"]):
-        return "URL"
-    return "기타"
-
-
-def extract_key_lines(traceback: str) -> list[str]:
-    """트레이스백에서 핵심 오류 라인 최대 3개 추출."""
-    lines = traceback.splitlines()
-    key = [l.strip() for l in lines
-           if any(k in l for k in ["Error", "Expected", "assert",
-                                    "expect", "Locator"])]
-    return key[:3]
-
-
-def append_lessons(failures: list[dict]) -> None:
-    """실패 케이스를 lessons_learned.md에 자동 추가 (병렬 파이프라인용)."""
-    if not failures or not LESSONS_PATH.exists():
-        return
-
-    today = datetime.now().strftime("%Y-%m-%d")
-    new_entries: dict[str, list[str]] = {}
-
-    for f in failures:
-        error_type = classify_error(f["traceback"])
-        key_lines = extract_key_lines(f["traceback"])
-        error_summary = key_lines[0] if key_lines else "(traceback 없음)"
-        file_name = f.get("file", "unknown")
-
-        fix_hint = ""
-        if error_type == "Locator":
-            fix_hint = "→ dom_info 셀렉터 재확인, #id 우선 사용"
-        elif error_type == "Assertion":
-            fix_hint = "→ 실제 페이지 텍스트/상태로 기댓값 수정"
-        elif error_type == "Timeout":
-            fix_hint = "→ expect(..., timeout=10000) 또는 wait_for_selector 추가"
-        elif error_type == "URL":
-            fix_hint = "→ BASE_URL 또는 goto 인자 재확인"
-
-        entry = (
-            f"\n### [힐링 대기] {today} — {file_name}\n"
-            f"- **문제**: `{error_summary}`\n"
-            f"- **수정**: (힐링 후 Claude Code가 자동 기입)\n"
-            f"- **재발 방지**: {fix_hint}\n"
-        )
-        new_entries.setdefault(error_type, []).append(entry)
-
-    content = LESSONS_PATH.read_text(encoding="utf-8")
-
-    for section, entries in new_entries.items():
-        section_header = (f"## {section} 오류"
-                          if section != "기타" else "## 기타")
-        insert_text = "\n" + "".join(entries)
-        pattern = rf"({re.escape(section_header)}[^\n]*\n(?:<!--[^>]*-->\n)?)"
-        if re.search(pattern, content):
-            content = re.sub(
-                pattern, r"\1" + insert_text, content, count=1)
-        else:
-            content += f"\n{section_header}\n{insert_text}"
-
-    LESSONS_PATH.write_text(content, encoding="utf-8")
-    print(f"[99] lessons_learned.md 업데이트: "
-          f"{sum(len(v) for v in new_entries.values())}건 추가")
-
-
-# ── 스크린샷 검색 ────────────────────────────────────────────────
-
-
-def find_screenshot_for_test(test_name: str) -> dict | None:
-    """tests/screenshots/ 에서 테스트명에 매칭되는 스크린샷과 메타데이터를 찾는다."""
-    if not SCREENSHOTS_DIR.exists():
-        return None
-    # 그룹 접두사 패턴 우선 검색 (group__test_name.png)
-    candidates = list(SCREENSHOTS_DIR.glob(f"*__{test_name}.png"))
-    if not candidates:
-        # 이전 형식 fallback (test_name.png)
-        candidates = list(SCREENSHOTS_DIR.glob(f"{test_name}.png"))
-    if not candidates:
-        return None
-    shot_path = candidates[0]
-    result = {"path": str(shot_path)}
-    meta_path = shot_path.with_suffix("").with_suffix(".meta.json")
-    if meta_path.exists():
-        try:
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
-            result["url"] = meta.get("url")
-            result["timestamp"] = meta.get("timestamp")
-        except Exception:
-            pass
-    return result
+    write_state(PARALLEL_STATE, state)
 
 
 # ── pytest 실행 ──────────────────────────────────────────────────
@@ -211,8 +104,8 @@ def build_heal_context(report: dict, heal_count: int) -> dict | None:
         "urls": urls,
         "analyzed_at": datetime.now().isoformat(),
     }
-    HEAL_CONTEXT_PATH.write_text(json.dumps(ctx, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"\n[99] heal_context 저장됨: {HEAL_CONTEXT_PATH}  ({len(failures)}건 실패)")
+    write_state(HEAL_CONTEXT_STATE, ctx)
+    print(f"\n[99] heal_context 저장됨: {HEAL_CONTEXT_STATE}  ({len(failures)}건 실패)")
 
     # 실수 패턴 자동 기록
     append_lessons(failures)
@@ -234,7 +127,7 @@ def print_heal_instructions(heal_context: dict) -> None:
         for line in lines:
             print(f"    {line}")
         print()
-    print(f"  heal_context 저장: {HEAL_CONTEXT_PATH}")
+    print(f"  heal_context 저장: {HEAL_CONTEXT_STATE}")
     print()
     # MCP 시각 검증 안내
     screenshots = [f for f in heal_context["failures"] if f.get("screenshot")]
@@ -635,13 +528,10 @@ def main():
     # 기존 heal_context 읽기 (재실행 시 heal_count 이어받기)
     heal_count = 0
     heal_analyzed_at = None
-    if HEAL_CONTEXT_PATH.exists():
-        try:
-            prev = json.loads(HEAL_CONTEXT_PATH.read_text(encoding="utf-8"))
-            heal_count = prev.get("heal_count", 0)
-            heal_analyzed_at = prev.get("analyzed_at")
-        except Exception:
-            pass
+    prev = read_state(HEAL_CONTEXT_STATE)
+    if prev:
+        heal_count = prev.get("heal_count", 0)
+        heal_analyzed_at = prev.get("analyzed_at")
 
     # 힐링 재실행 시 lessons_learned 기록 검증
     if heal_count > 0 and heal_analyzed_at:
@@ -659,8 +549,7 @@ def main():
 
     # 빠른 실행 모드에서는 state/quick.json 사용, parallel_state 미변경
     quick_mode = args.quick or bool(args.group)
-    QUICK_STATE_PATH = PROJECT_ROOT / "state" / "quick.json"
-    state_path = QUICK_STATE_PATH if quick_mode else PARALLEL_STATE_PATH
+    state_path = QUICK_STATE if quick_mode else PARALLEL_STATE
 
     if not quick_mode:
         _update_parallel_status("testing")
@@ -696,14 +585,14 @@ def main():
     if has_issues:
         if heal_count >= MAX_HEAL:
             print(f"\n[99] 최대 힐링 횟수({MAX_HEAL}회) 초과 — 수동 수정이 필요합니다.")
-            HEAL_CONTEXT_PATH.unlink(missing_ok=True)
+            HEAL_CONTEXT_STATE.unlink(missing_ok=True)
         else:
             heal_count += 1
             heal_ctx = build_heal_context(report, heal_count)
             if heal_ctx:
                 print_heal_instructions(heal_ctx)
     else:
-        HEAL_CONTEXT_PATH.unlink(missing_ok=True)
+        HEAL_CONTEXT_STATE.unlink(missing_ok=True)
 
     # 4. HTML 리포트 (힐링 완료 후에만 생성: 전체 통과 또는 최대 힐링 초과)
     is_final_run = (not has_issues) or heal_count >= MAX_HEAL
@@ -747,12 +636,7 @@ def main():
             "passed": is_passed,
         })
 
-    run_state = {}
-    if state_path.exists():
-        try:
-            run_state = json.loads(state_path.read_text(encoding="utf-8"))
-        except Exception:
-            pass
+    run_state = read_state(state_path)
 
     run_state["execution_result"] = {
         "passed": passed,
@@ -771,9 +655,7 @@ def main():
         run_state["status"] = "heal_failed"
     else:
         run_state["status"] = "heal_needed"
-    state_path.write_text(
-        json.dumps(run_state, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    write_state(state_path, run_state)
 
     # 6. 요약 출력
     print()

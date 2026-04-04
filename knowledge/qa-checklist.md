@@ -50,7 +50,7 @@
 
 ### 코드 구조
 
-> 상세: [`CLAUDE.md`](../CLAUDE.md) "절대 규칙" + [`prompts/parallel_subagent.md`](../prompts/parallel_subagent.md) 참조
+> 상세: [`CLAUDE.md`](../CLAUDE.md) "절대 규칙" + [`.claude/skills/playwright-best-practices/SKILL.md`](../.claude/skills/playwright-best-practices/SKILL.md) + [`prompts/parallel_subagent.md`](../prompts/parallel_subagent.md) 참조
 
 ### 안정성
 

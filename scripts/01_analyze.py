@@ -12,9 +12,7 @@ import hashlib
 import sys
 from pathlib import Path
 from playwright.async_api import async_playwright
-from _paths import PIPELINE_STATE, PROJECT_ROOT
-
-DOM_CACHE_DIR = PROJECT_ROOT / "state" / "dom_cache"
+from _paths import PIPELINE_STATE, DOM_CACHE_DIR, read_state, write_state
 
 
 async def analyze(url: str) -> dict:
@@ -126,7 +124,7 @@ def main():
         print("[오류] state/pipeline.json 없음. 먼저 run_qa.py를 실행하세요.")
         sys.exit(1)
 
-    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state = read_state(state_path)
     url = state["url"]
 
     # 메인 URL 분석
@@ -141,7 +139,9 @@ def main():
             sys.exit(1)
         save_dom_cache(url, dom)
 
+    # dom_info는 캐시에 저장되므로, pipeline.json에는 경량 참조만 저장
     state["dom_info"] = dom
+    state["dom_cache_key"] = url_cache_key(url)
     state["step"] = "analyzed"
 
     # 서브페이지 DOM 분석 (precondition URL)
@@ -166,7 +166,7 @@ def main():
             state["sub_dom_info"] = sub_doms
             print(f"[01] 서브페이지 {len(sub_doms)}개 분석 완료")
 
-    state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_state(state_path, state)
 
     print(f"[01] 완료 ─ 제목: {dom.get('title','')}")
     print(f"       입력 필드: {len(dom.get('inputs', []))}개")

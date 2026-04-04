@@ -240,11 +240,13 @@ Claude Code가 실행 중인 상태에서 함께 구동해야 합니다.
 
 06_heal.py
   → 실패한 테스트의 traceback을 수집하고 스크린샷 경로를 연결해 heal_context 저장
+  → state/heal_stats.json에 오류 패턴별 빈도 자동 업데이트
   → 종료코드 0=전체 통과, 1=실패 있음, 2=힐링 횟수 초과
 
 06a_dialog.py
-  → 힐링 심의에 필요한 파일들을 병렬로 읽어 JSON으로 출력 (스크린샷 경로 + MCP 시각 검증 지침 포함)
-  → Claude가 traceback + 스크린샷을 분석해 코드 패치 후 05_execute.py 재실행
+  → 힐링 심의에 필요한 파일들을 병렬로 읽어 JSON으로 출력
+  → heal_stats.json에서 Top 5 빈출 패턴을 DELIBERATION_CONTEXT에 자동 주입
+  → Claude가 traceback + 스크린샷 + 빈출 패턴을 분석해 코드 패치 후 05_execute.py 재실행
 ```
 
 **개별 실행이 필요한 경우 (cwd = 프로젝트 루트):**
@@ -285,7 +287,9 @@ python scripts/05_execute.py
 | 파일 | 역할 | 직접 실행 |
 |---|---|---|
 | `scripts/_python.py` | `.venv/bin/python` 경로 자동 감지 + `PYTHON_EXE` 상수 제공 | ❌ (다른 스크립트가 import) |
-| `scripts/_paths.py` | 중앙 경로 상수 (`STATE_DIR`, `LOGS_DIR` 등) | ❌ (다른 스크립트가 import) |
+| `scripts/_paths.py` | 중앙 경로 상수 (`STATE_DIR`, `LOGS_DIR`, `DOM_CACHE_DIR` 등) + `read_state()` (fcntl 공유 잠금) / `write_state()` (atomic rename) 유틸 | ❌ (다른 스크립트가 import) |
+| `scripts/_constants.py` | 파이프라인 종료 코드 상수 (`EXIT_SUCCESS`, `EXIT_HEAL_NEEDED`, `EXIT_HEAL_EXCEEDED`, `EXIT_REJECTED`, `EXIT_AWAITING_APPROVAL`) | ❌ (다른 스크립트가 import) |
+| `scripts/heal_utils.py` | 힐링 공용 유틸리티. `classify_error`, `extract_key_lines`, `find_screenshot_for_test`, `append_lessons`, `update_heal_stats` — `06_heal.py`와 `99_merge.py`에서 공유 | ❌ (다른 스크립트가 import) |
 | `scripts/parse_cases.py` | `.md`/`.json` 테스트케이스 파일 파서 (YAML frontmatter 지원) | ❌ (run_qa.py가 import해서 사용) |
 | `scripts/sync_test_data.py` | `test_data.json` 동기화 유틸 | ❌ (필요 시 import) |
 | `tests/conftest.py` | pytest browser/page fixture + 실패 시 스크린샷 자동 캡처 | ❌ (pytest가 자동 로드) |
@@ -319,6 +323,7 @@ python scripts/05_execute.py
 | `state/parallel.json` | 병렬 파이프라인 실행 결과 (targets, 통계) | `99_merge.py` 완료 시 |
 | `state/quick.json` | 빠른 실행 결과 (병렬 상태와 분리) | `99_merge.py --quick` 완료 시 |
 | `state/heal_context.json` | 병렬 파이프라인 실패 traceback (힐링 루프용) | `99_merge.py` 실패 시 |
+| `state/heal_stats.json` | 힐링 오류 패턴별 빈도 카운터 (Top 5를 심의 컨텍스트에 주입) | `06_heal.py` 실패 분석 시 |
 | `logs/merge.txt` | 99_merge.py 실행 로그 | `99_merge.py` 실행 시 |
 | `logs/quick_run.txt` | 빠른 실행 로그 | 대시보드 빠른 실행 시 |
 | `logs/run_parallel.txt` | 병렬 파이프라인 실행 로그 | 대시보드에서 병렬 실행 시 |

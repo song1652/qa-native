@@ -8,7 +8,9 @@ import json
 import sys
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
-from _paths import PIPELINE_STATE
+from _paths import PIPELINE_STATE, PROJECT_ROOT, read_state
+
+HEAL_STATS_PATH = PROJECT_ROOT / "state" / "heal_stats.json"
 
 
 def read_file(path):
@@ -29,7 +31,7 @@ def main():
         print("[오류] state/pipeline.json 없음.")
         sys.exit(1)
 
-    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state = read_state(state_path)
     heal_context = state.get("heal_context")
 
     if not heal_context:
@@ -65,6 +67,19 @@ def main():
         if shot and shot.get("path"):
             screenshots[f["test_name"]] = shot
 
+    # heal_stats.json에서 Top 5 빈출 패턴 로드
+    top_heal_patterns = []
+    try:
+        if HEAL_STATS_PATH.exists():
+            stats = read_state(HEAL_STATS_PATH)
+            patterns = stats.get("patterns", {})
+            sorted_patterns = sorted(
+                patterns.values(), key=lambda p: p["count"], reverse=True
+            )
+            top_heal_patterns = sorted_patterns[:5]
+    except Exception:
+        pass
+
     context_payload = {
         "stage": "healing",
         "url": state["url"],
@@ -77,6 +92,7 @@ def main():
         "junior_role": ctx["junior_role"],
         "lessons_learned": ctx["lessons_learned"],
         "screenshots": screenshots,
+        "top_heal_patterns": top_heal_patterns,
         "mcp_instructions": {
             "when": "traceback만으로 원인 불명확한 Locator/Assertion/Timeout 오류 시",
             "steps": [
@@ -95,6 +111,8 @@ def main():
     print(f"  실패 케이스: {len(failures)}건")
     if screenshots:
         print(f"  스크린샷: {len(screenshots)}개 (시각 검증 가능)")
+    if top_heal_patterns:
+        print(f"  빈출 패턴: {len(top_heal_patterns)}개 (Top 5 주입)")
     for i, f in enumerate(failures[:3], 1):
         print(f"    [{i}] {f.get('test_name', 'unknown')}")
     print()

@@ -4,111 +4,24 @@ LLM 없음. pytest를 상세 모드로 재실행해 실패 정보를 수집, sta
 Claude Code가 heal_context를 읽고 test_generated.py를 직접 패치한 뒤 05_execute.py를 재실행한다.
 
 종료 코드:
-  0 = 모든 테스트 통과 (힐링 불필요)
-  1 = 실패 정보 저장 완료 → Claude Code가 패치 필요
-  2 = 최대 힐링 횟수 초과 (기본 3회) → 파이프라인 중단
+  EXIT_SUCCESS (0) = 모든 테스트 통과 (힐링 불필요)
+  EXIT_HEAL_NEEDED (1) = 실패 정보 저장 완료 → Claude Code가 패치 필요
+  EXIT_HEAL_EXCEEDED (2) = 최대 힐링 횟수 초과 (기본 3회) → 파이프라인 중단
 """
-import json
 import re
 import subprocess
 import sys
 from pathlib import Path
-from _python import PYTHON_EXE
-from _paths import PIPELINE_STATE
 from datetime import datetime
+from _python import PYTHON_EXE
+from _paths import PIPELINE_STATE, read_state, write_state
+from _constants import EXIT_SUCCESS, EXIT_HEAL_NEEDED, EXIT_HEAL_EXCEEDED
+from heal_utils import (
+    classify_error, extract_key_lines,  # noqa: F401 (re-export for tests)
+    find_screenshot_for_test, append_lessons, update_heal_stats,
+)
 
 MAX_HEAL = 3
-from _paths import PROJECT_ROOT
-LESSONS_PATH = PROJECT_ROOT / "agents" / "lessons_learned.md"
-SCREENSHOTS_DIR = PROJECT_ROOT / "tests" / "screenshots"
-
-
-def find_screenshot_for_test(test_name: str) -> dict | None:
-    """tests/screenshots/ 에서 테스트명에 매칭되는 스크린샷과 메타데이터를 찾는다."""
-    if not SCREENSHOTS_DIR.exists():
-        return None
-    # 그룹 접두사 패턴 우선 검색 (group__test_name.png)
-    candidates = list(SCREENSHOTS_DIR.glob(f"*__{test_name}.png"))
-    if not candidates:
-        # 이전 형식 fallback (test_name.png)
-        candidates = list(SCREENSHOTS_DIR.glob(f"{test_name}.png"))
-    if not candidates:
-        return None
-    shot_path = candidates[0]
-    result = {"path": str(shot_path)}
-    meta_path = shot_path.with_suffix("").with_suffix(".meta.json")
-    if meta_path.exists():
-        try:
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
-            result["url"] = meta.get("url")
-            result["timestamp"] = meta.get("timestamp")
-        except Exception:
-            pass
-    return result
-
-
-def classify_error(traceback: str) -> str:
-    tb = traceback.lower()
-    if any(k in tb for k in ["strict mode violation", "element not found", "locator", "no element", "getby"]):
-        return "Locator"
-    if any(k in tb for k in ["expected", "to contain", "assertionerror", "to have text", "to have url"]):
-        return "Assertion"
-    if "timeout" in tb:
-        return "Timeout"
-    if any(k in tb for k in ["url", "goto", "navigation"]):
-        return "URL"
-    return "기타"
-
-
-def extract_key_lines(traceback: str) -> list[str]:
-    """트레이스백에서 핵심 오류 라인 최대 3개 추출."""
-    lines = traceback.splitlines()
-    key = [l.strip() for l in lines
-           if any(k in l for k in ["Error", "Expected", "assert", "expect", "Locator"])]
-    return key[:3]
-
-
-def append_lessons(failures: list[dict]):
-    """실패 케이스를 lessons_learned.md에 자동 추가."""
-    if not failures:
-        return
-
-    new_entries: dict[str, list[str]] = {}  # 섹션 → 항목들
-
-    for f in failures:
-        error_type = classify_error(f["traceback"])
-        key_lines = extract_key_lines(f["traceback"])
-        error_summary = key_lines[0] if key_lines else "(traceback 없음)"
-        fix_hint = ""
-        if error_type == "Locator":
-            fix_hint = "dom_info 셀렉터 재확인, #id 우선 사용"
-        elif error_type == "Assertion":
-            fix_hint = "실제 페이지 텍스트/상태로 기댓값 수정"
-        elif error_type == "Timeout":
-            fix_hint = "expect(..., timeout=10000) 또는 wait_for_selector 추가"
-        elif error_type == "URL":
-            fix_hint = "BASE_URL 또는 goto 인자 재확인"
-
-        entry = f"- **{error_type}**: `{error_summary}` — {fix_hint}\n"
-        new_entries.setdefault(error_type, []).append(entry)
-
-    if not LESSONS_PATH.exists():
-        return
-
-    content = LESSONS_PATH.read_text(encoding="utf-8")
-
-    for section, entries in new_entries.items():
-        section_header = f"## {section} 오류" if section != "기타" else "## 기타"
-        insert_text = "\n" + "".join(entries)
-        # 섹션 헤더 바로 아래 주석 다음에 삽입
-        pattern = rf"({re.escape(section_header)}[^\n]*\n(?:<!--[^>]*-->\n)?)"
-        if re.search(pattern, content):
-            content = re.sub(pattern, r"\1" + insert_text, content, count=1)
-        else:
-            content += f"\n{section_header}\n{insert_text}"
-
-    LESSONS_PATH.write_text(content, encoding="utf-8")
-    print(f"[06] lessons_learned.md 업데이트: {sum(len(v) for v in new_entries.values())}건 추가")
 
 
 def parse_failures(output: str, file_path: str) -> list[dict]:
@@ -168,18 +81,23 @@ def parse_failures(output: str, file_path: str) -> list[dict]:
 
 def collect_failure_details(file_path: str) -> tuple[list[dict], str]:
     """pytest를 상세 모드로 실행해 실패 정보를 수집한다."""
-    result = subprocess.run(
-        [PYTHON_EXE, "-m", "pytest", file_path, "--tb=long", "-v", "--no-header"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    failures = parse_failures(result.stdout + result.stderr, file_path)
+    try:
+        result = subprocess.run(
+            [PYTHON_EXE, "-m", "pytest", file_path, "--tb=long", "-v", "--no-header"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=300,  # 5분 타임아웃 (무한 행 방지)
+        )
+        output = result.stdout + result.stderr
+    except subprocess.TimeoutExpired:
+        output = "[06] pytest 실행 타임아웃 (300초 초과)"
+    failures = parse_failures(output, file_path)
 
     # 실패 케이스별 DOM 스냅샷 수집 (selector 힌트용)
     # 스크린샷은 conftest.py의 pytest_runtest_makereport 훅이 처리
-    return failures, result.stdout + result.stderr
+    return failures, output
 
 
 def main():
@@ -188,20 +106,20 @@ def main():
         print("[오류] state/pipeline.json 없음.")
         sys.exit(1)
 
-    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state = read_state(state_path)
 
     execution_result = state.get("execution_result", {})
-    if execution_result.get("passed"):
+    if execution_result.get("failed", 0) == 0 and execution_result.get("exit_code", 1) == 0:
         print("[06] 모든 테스트 통과 - 힐링 불필요.")
-        sys.exit(0)
+        sys.exit(EXIT_SUCCESS)
 
     # 힐링 횟수 확인
     heal_count = state.get("heal_count", 0)
     if heal_count >= MAX_HEAL:
         print(f"[06] 최대 힐링 횟수({MAX_HEAL}회) 초과. 파이프라인을 중단합니다.")
         state["step"] = "heal_failed"
-        state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-        sys.exit(2)
+        write_state(state_path, state)
+        sys.exit(EXIT_HEAL_EXCEEDED)
 
     # 힐링 전 사이트 접근 가능 체크
     url = state.get("url", "")
@@ -217,15 +135,15 @@ def main():
                 print("     사이트가 다운되었거나 접근이 차단되었습니다. 힐링을 건너뜁니다.")
                 state["step"] = "heal_failed"
                 state["heal_context"] = {"error": f"사이트 접근 불가 HTTP {status}", "url": url}
-                state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-                sys.exit(2)
+                write_state(state_path, state)
+                sys.exit(EXIT_HEAL_EXCEEDED)
         except (urllib.error.URLError, OSError) as e:
             print(f"[06] 사이트 접근 불가: {url} ({e})")
             print("     사이트가 다운되었거나 네트워크 문제입니다. 힐링을 건너뜁니다.")
             state["step"] = "heal_failed"
             state["heal_context"] = {"error": f"사이트 접근 불가: {e}", "url": url}
-            state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-            sys.exit(2)
+            write_state(state_path, state)
+            sys.exit(EXIT_HEAL_EXCEEDED)
 
     file_path = state.get("generated_file_path", "tests/generated/test_generated.py")
     if not Path(file_path).exists():
@@ -257,10 +175,13 @@ def main():
     state["heal_context"] = heal_context
     state["heal_count"] = heal_count + 1
     state["step"] = "heal_needed"
-    state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_state(state_path, state)
 
     # 실수 패턴 자동 기록
     append_lessons(failures)
+
+    # heal_stats.json 빈도 카운터 업데이트
+    update_heal_stats(failures)
 
     print(f"[06] 실패 케이스: {len(failures)}건")
     print()
@@ -298,7 +219,7 @@ def main():
     print()
     print("  수정 후: python scripts/05_execute.py → python scripts/06_heal.py 순으로 재실행")
     print("=" * 60)
-    sys.exit(1)
+    sys.exit(EXIT_HEAL_NEEDED)
 
 
 if __name__ == "__main__":

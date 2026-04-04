@@ -88,7 +88,8 @@ def load_json(path: Path):
     if path.exists():
         try:
             return json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as e:
+            print(f"[Dashboard] JSON 파싱 실패: {path} — {e}")
             return None
     return None
 
@@ -104,13 +105,28 @@ def parse_conclusion_items(conclusion: str) -> list:
         items.append({"id": len(items), "title": title, "text": body, "status": "pending"})
 
     # 2) 번호 목록 파싱 (1. **title**: body)
-    for m in re.finditer(r'^\d+\.\s+(.+)$', conclusion, re.MULTILINE):
-        text = m.group(1).strip()
-        bold = re.match(r'\*\*(.+?)\*\*[:\s]*(.*)', text)
-        title = bold.group(1).strip() if bold else text[:70]
-        items.append({"id": len(items), "title": title, "text": text, "status": "pending"})
+    if not items:
+        for m in re.finditer(r'^\d+\.\s+(.+)$', conclusion, re.MULTILINE):
+            text = m.group(1).strip()
+            bold = re.match(r'\*\*(.+?)\*\*[:\s]*(.*)', text)
+            title = bold.group(1).strip() if bold else text[:70]
+            items.append({"id": len(items), "title": title, "text": text, "status": "pending"})
 
-    # 3) fallback
+    # 3) 괄호 번호 패턴 파싱: (1) ... (2) ... 또는 인라인 구분
+    if not items:
+        parts = re.split(r'\s*\((\d+)\)\s*', conclusion)
+        # parts: ['앞부분', '1', '내용1', '2', '내용2', ...]
+        if len(parts) >= 3:
+            for i in range(1, len(parts) - 1, 2):
+                text = parts[i + 1].strip().rstrip('.')
+                if not text:
+                    continue
+                # 첫 문장이나 키워드를 제목으로 추출
+                title_match = re.match(r'^(.+?)[.:\-—]', text)
+                title = title_match.group(1).strip() if title_match else text[:70]
+                items.append({"id": len(items), "title": title, "text": text, "status": "pending"})
+
+    # 4) fallback
     if not items:
         items.append({"id": 0, "title": "전체 결론", "text": conclusion, "status": "pending"})
 
@@ -243,6 +259,16 @@ def build_dialogs() -> dict:
 
     all_sessions = full_dialog.get("sessions", [])
     team_sessions = [s for s in all_sessions if s.get("stage") == "team_discussion"]
+
+    # discuss_state의 conclusion_items와 status를 topic이 일치하는 세션에 주입
+    if discuss_state.get("topic"):
+        for ts in team_sessions:
+            if ts.get("topic") == discuss_state["topic"]:
+                if discuss_state.get("conclusion_items"):
+                    ts["conclusion_items"] = discuss_state["conclusion_items"]
+                if discuss_state.get("step"):
+                    ts["status"] = discuss_state["step"]
+                break
 
     return {
         "team_sessions": team_sessions,
@@ -588,6 +614,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
             url = body.get("url", "").strip()
             cases_dir = body.get("cases_dir", "").strip()  # e.g. "login"
+            # 입력 검증: URL은 http(s)로 시작, cases_dir은 영숫자/언더스코어/하이픈만
+            if url and not url.startswith(("http://", "https://")):
+                self._serve_bytes(
+                    b'{"ok":false,"error":"url must start with http:// or https://"}',
+                    "application/json; charset=utf-8")
+                return
+            if cases_dir and not re.match(r'^[\w\-]+$', cases_dir):
+                self._serve_bytes(
+                    b'{"ok":false,"error":"invalid cases_dir format"}',
+                    "application/json; charset=utf-8")
+                return
             if not url or not cases_dir:
                 self._serve_bytes(
                     b'{"ok":false,"error":"url and cases_dir required"}',
@@ -768,6 +805,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     b'{"ok":false,"error":"groups required"}',
                     "application/json; charset=utf-8")
                 return
+            # 그룹명 형식 검증 (경로 탈출 방지)
+            invalid = [g for g in groups if not re.match(r'^[\w\-]+$', g)]
+            if invalid:
+                self._serve_bytes(
+                    json.dumps({"ok": False, "error": f"잘못된 그룹명: {', '.join(invalid)}"},
+                               ensure_ascii=False).encode("utf-8"),
+                    "application/json; charset=utf-8")
+                return
             # 폴더 존재 검증
             missing = [g for g in groups if not (GENERATED_DIR / g).is_dir()]
             if missing:
@@ -925,8 +970,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
         print(f"[{self.log_date_time_string()}] {format % args}")
 
 
+class ReusableHTTPServer(ThreadingHTTPServer):
+    allow_reuse_address = True
+    allow_reuse_port = True
+
+
 def main():
-    server = ThreadingHTTPServer(("localhost", PORT), DashboardHandler)
+    server = ReusableHTTPServer(("localhost", PORT), DashboardHandler)
     url = f"http://localhost:{PORT}"
     print(f"[Dashboard] 서버 시작: {url}")
     print(f"[Dashboard] 종료: Ctrl+C")

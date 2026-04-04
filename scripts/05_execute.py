@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 from datetime import datetime
 from _python import PYTHON_EXE
-from _paths import PIPELINE_STATE, PROJECT_ROOT
+from _paths import PIPELINE_STATE, PROJECT_ROOT, read_state, write_state
 
 TESTCASES_DIR = PROJECT_ROOT / "testcases"
 SCREENSHOTS_DIR = PROJECT_ROOT / "tests" / "screenshots"
@@ -381,7 +381,7 @@ def main():
         print("[오류] state/pipeline.json 없음.")
         sys.exit(1)
 
-    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state = read_state(state_path)
 
     if state.get("approval_status") != "approved":
         print("[오류] 미승인 상태. 04_approve.py를 먼저 실행하세요.")
@@ -427,6 +427,7 @@ def main():
         ] + parallel_opts,
         capture_output=False,   # 실시간 출력
         text=True,
+        timeout=300,            # 5분 타임아웃 (무한 행 방지)
     )
 
     # JSON 리포트 파싱
@@ -506,7 +507,7 @@ def main():
 
     state["execution_result"] = execution_result
     state["step"] = "done"
-    state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_state(state_path, state)
 
     print()
     print("=" * 55)

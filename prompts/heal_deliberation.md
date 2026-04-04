@@ -1,17 +1,24 @@
 # 힐링 심의 프롬프트 (06a_dialog.py 후 사용)
 
+> 이 파일은 심의 Agent에 대한 행동 지침이다.
+> `{ctx.*}` 참조는 DELIBERATION_CONTEXT JSON의 해당 키를 의미한다.
+> 오류 유형별 패치 전략: `.claude/skills/heal-patterns/SKILL.md` 참조.
+
 아래 컨텍스트를 바탕으로 실패를 진단하고 코드를 직접 패치하라.
 
 generated_code: {ctx.generated_code}
 heal_context: {ctx.heal_context}
 dom_info: {ctx.dom_info}
+top_heal_patterns: {ctx.top_heal_patterns}
+screenshots: {ctx.screenshots}
 
 수행할 작업:
-1. 각 failure의 traceback 분석 → 오류 유형 분류 (Locator/Assertion/Timeout/URL)
-2. 실패한 테스트 파일(tests/generated/{group}/*.py)을 직접 패치 (공통 힐링 패치 기준 참조)
-3. **[필수]** agents/lessons_learned.md에 힐링 기록 (누락 시 99_merge.py가 경고)
-4. heal_context에 screenshot 경로가 있으면 Read tool로 시각 확인
-5. traceback만으로 원인 불명확 시 MCP 시각 검증 절차 참조
+1. top_heal_patterns(빈출 패턴)를 먼저 확인 → 동일 유형이면 우선 적용
+2. 각 failure의 traceback 분석 → `.claude/skills/heal-patterns/SKILL.md` 기준으로 패치
+3. 실패한 테스트 파일(tests/generated/{group}/*.py)을 직접 패치
+4. **[필수]** agents/lessons_learned.md에 힐링 기록 (누락 시 99_merge.py가 경고)
+5. heal_context에 screenshot 경로가 있으면 Read tool로 시각 확인
+6. traceback만으로 원인 불명확 시 MCP 시각 검증 (HEALING_GUIDE.md 참조)
 
 ## 힐링 완료 체크리스트 (하나라도 빠지면 미완료)
 1. 코드 패치 적용
@@ -19,13 +26,5 @@ dom_info: {ctx.dom_info}
    ```
    - **{핵심 키워드}**: {상황 설명}. {해결법/교훈}
    ```
-   예: `- **중복 셀렉터 주의**: heroku dynamic_controls 페이지는 #loading이 2개. #message 텍스트 출현으로 대기할 것`
-   날짜·파일명은 생략. 이미 같은 패턴이 있으면 추가하지 말 것.
+   이미 같은 패턴이 있으면 추가하지 말 것.
 3. 재실행으로 통과 확인
-
-## 핵심 패치 규칙
-- Locator 오류: dom_info 셀렉터와 대조해 수정
-- Assertion 오류: 실제 페이지 텍스트를 기댓값으로 수정
-- Timeout 오류: `page.wait_for_selector()` 추가 또는 `expect(..., timeout=10000)` 조정
-- URL 오류: BASE_URL 또는 goto 인자 수정
-- lambda/callable → `re.compile()` 교체 (Playwright matcher에 lambda 전달 금지)
