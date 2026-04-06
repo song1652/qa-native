@@ -1,33 +1,22 @@
-"""
-자동 생성된 Playwright 테스트 코드
-URL: https://the-internet.herokuapp.com/
-케이스: tc_27_challenging_dom_button_click (tc_27)
-
-Claude Code가 plan 기반으로 완성한 파일.
-수동 편집 가능.
-"""
 from pathlib import Path
-from playwright.sync_api import expect
+from playwright.sync_api import Page, expect
 
 BASE_URL = "https://the-internet.herokuapp.com/"
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-TEST_DATA_PATH = PROJECT_ROOT / "config" / "test_data.json"
+TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
 
 
-def test_tc_27_challenging_dom_button_click(page):
-    """Challenging DOM 버튼 클릭"""
-    page.goto(BASE_URL + "challenging_dom")
-    expect(page.locator("body")).to_be_visible()
+def test_challenging_dom_button_click(page: Page):
+    page.goto("https://the-internet.herokuapp.com/challenging_dom")
+    page.wait_for_load_state("domcontentloaded")
 
-    # Buttons are anchor tags with class "button"
-    buttons = page.locator("a.button")
+    buttons = page.locator("div.example .button")
+    expect(buttons.first).to_be_visible(timeout=10000)
+
     button_count = buttons.count()
-    assert button_count >= 3, f"Expected >= 3 buttons, got {button_count}"
+    assert button_count == 3, f"Expected 3 buttons, found {button_count}"
 
-    # Click the first button (non-alert one)
     buttons.first.click()
-    page.wait_for_load_state("networkidle", timeout=10000)
+    page.wait_for_load_state("domcontentloaded")
 
-    # Table should still exist after click
-    expect(page.locator("table")).to_be_visible(timeout=10000)
+    table = page.locator("table")
+    expect(table).to_be_visible(timeout=10000)

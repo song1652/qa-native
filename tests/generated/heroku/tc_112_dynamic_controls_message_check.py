@@ -1,25 +1,19 @@
-"""
-자동 생성된 Playwright 테스트 코드
-URL: https://the-internet.herokuapp.com/dynamic_controls
-케이스: tc_112_dynamic_controls_message_check (tc_112)
+from pathlib import Path
+from playwright.sync_api import Page, expect
 
-Claude Code가 plan 기반으로 완성한 파일.
-수동 편집 가능.
-"""
-from playwright.sync_api import expect
-
-BASE_URL = "https://the-internet.herokuapp.com"
+BASE_URL = "https://the-internet.herokuapp.com/"
+TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
 
 
-def test_tc_112_dynamic_controls_message_check(page):
-    """Dynamic Controls 메시지 확인"""
-    page.goto(f"{BASE_URL}/dynamic_controls")
-    page.wait_for_load_state("networkidle")
+def test_dynamic_controls_message_check(page: Page):
+    # Dynamic Controls: Remove 후 "It's gone!" 메시지 확인
+    page.goto("https://the-internet.herokuapp.com/dynamic_controls")
+    page.wait_for_load_state("domcontentloaded")
 
-    # Click Remove button in checkbox-example
+    # Remove 버튼 클릭
     page.locator("#checkbox-example button").click()
 
-    # Wait for #message to show "It's gone!"
+    # 완료 메시지 대기 (#message 텍스트 출현으로 대기 - #loading 중복 문제 회피)
     message = page.locator("#message")
-    expect(message).to_contain_text("It's gone!", timeout=10000)
-    expect(message).to_be_visible()
+    expect(message).to_be_visible(timeout=10000)
+    expect(message).to_contain_text("It's gone!", timeout=5000)

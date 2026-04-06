@@ -1,32 +1,30 @@
-"""
-자동 생성된 Playwright 테스트 코드
-URL: https://the-internet.herokuapp.com/
-케이스: tc_48_nested_frames_bottom_text (tc_48)
+from pathlib import Path
+from playwright.sync_api import Page
 
-Claude Code가 plan 기반으로 완성한 파일.
-수동 편집 가능.
-"""
 BASE_URL = "https://the-internet.herokuapp.com/"
+TEST_DATA_PATH = (
+    Path(__file__).resolve().parent.parent.parent.parent
+    / "config" / "test_data.json"
+)
 
 
-def test_nested_frames_bottom_text(page):
-    """중첩 프레임 하단 프레임 텍스트 확인"""
-    page.goto(BASE_URL + "nested_frames")
-    page.wait_for_load_state("load")
+def test_nested_frames_bottom_text(page: Page) -> None:
+    page.goto("https://the-internet.herokuapp.com/nested_frames")
+    page.wait_for_load_state("domcontentloaded")
 
-    # 모든 프레임에서 BOTTOM 텍스트 찾기
-    bottom_found = False
-    for frame in page.frames:
+    page.wait_for_timeout(1000)
+
+    all_frames = page.frames
+    bottom_frame = None
+    for frame in all_frames:
         try:
-            content = frame.evaluate(
-                "document.body ? document.body.innerText : ''"
-            )
+            content = frame.content()
             if "BOTTOM" in content:
-                bottom_found = True
+                bottom_frame = frame
                 break
         except Exception:
             continue
 
-    assert bottom_found, (
-        "BOTTOM text not found in any frame"
+    assert bottom_frame is not None, (
+        "BOTTOM text should be present in one of the nested frames"
     )

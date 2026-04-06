@@ -31,7 +31,7 @@
 
 ### 힐링 시
 1. **[lessons_learned](../lessons_learned.md) 확인** — 동일 유형 오류가 과거에도 있었는지 확인
-2. 트레이스백에서 오류 유형 분류 (Locator/Assertion/Timeout/URL)
+2. 트레이스백에서 오류 유형 분류 (Locator/Assertion/Timeout/URL/JS평가/Python런타임/Playwright일반)
 3. 근본 원인 진단 (단순 셀렉터 오타 vs 구조적 문제)
 4. 수정 방향 명시 + 재발 방지책 제안
 

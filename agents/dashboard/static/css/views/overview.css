@@ -466,3 +466,26 @@
       transition: all 0.2s; font-family: inherit; line-height: 1;
     }
     .ov-log-refresh:hover { color: var(--text); border-color: rgba(255,255,255,0.2); transform: rotate(90deg); }
+
+    /* ── Heal Stats Widget ── */
+    .hs-grid { display: flex; align-items: center; gap: 20px; margin-bottom: 16px; }
+    .hs-donut-wrap { position: relative; width: 90px; height: 90px; flex-shrink: 0; }
+    .hs-donut { width: 90px; height: 90px; transform: rotate(-90deg); }
+    .hs-donut-center {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      text-align: center; font-family: 'Outfit', sans-serif; font-size: 18px; font-weight: 800; line-height: 1.2;
+    }
+    .hs-donut-center span { font-size: 9px; font-weight: 600; color: var(--text-dim); letter-spacing: 0.5px; }
+    .hs-legend { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+    .hs-legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); }
+    .hs-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .hs-legend-count { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+    .hs-top-title { font-size: 11px; font-weight: 700; color: var(--text-dim); margin-bottom: 8px; letter-spacing: 0.5px; }
+    .hs-top-list { display: flex; flex-direction: column; gap: 6px; }
+    .hs-top-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+    .hs-top-badge {
+      width: 22px; height: 18px; border-radius: 6px; display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 800; color: #fff; flex-shrink: 0;
+    }
+    .hs-top-type { font-weight: 600; color: var(--text-dim); width: 70px; flex-shrink: 0; font-size: 10px; }
+    .hs-top-summary { color: var(--text-dim); opacity: 0.7; font-family: 'JetBrains Mono', monospace; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }

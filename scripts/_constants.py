@@ -34,5 +34,7 @@ def assert_valid_transition(current: str, next_step: str) -> None:
     if next_step not in allowed:
         raise ValueError(
             f"잘못된 step 전이: '{current}' → '{next_step}'. "
-            f"허용: {allowed}"
+            f"허용: {allowed}. "
+            f"파이프라인 단계가 건너뛰어졌을 수 있습니다. "
+            f"state/pipeline.json을 확인하세요."
         )

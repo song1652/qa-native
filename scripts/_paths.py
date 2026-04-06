@@ -116,7 +116,15 @@ def read_state(path: Path) -> dict:
 
 
 def write_state(path: Path, data: dict):
-    """원자적 쓰기로 안전하게 JSON 상태 파일을 쓴다."""
+    """원자적 쓰기로 안전하게 JSON 상태 파일을 쓴다.
+
+    pipeline.json 기록 시 step 전이 규칙을 자동 검증한다.
+    잘못된 전이 시 ValueError 발생.
+    """
+    # pipeline.json인 경우 step 전이 검증
+    if path == PIPELINE_STATE and "step" in data:
+        _validate_step_transition(path, data)
+
     path.parent.mkdir(parents=True, exist_ok=True)
     content = json.dumps(data, ensure_ascii=False, indent=2)
     fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
@@ -127,3 +135,26 @@ def write_state(path: Path, data: dict):
     except Exception:
         Path(tmp_path).unlink(missing_ok=True)
         raise
+
+
+def _validate_step_transition(path: Path, new_data: dict):
+    """pipeline.json의 step 전이가 유효한지 검증."""
+    from _constants import assert_valid_transition
+
+    new_step = new_data.get("step", "")
+    if not new_step:
+        return
+
+    # 현재 상태 읽기
+    current_data = read_state(path)
+    current_step = current_data.get("step", "")
+
+    # 초기 상태(파일 없음 or step 없음)에서는 검증 건너뜀
+    if not current_step:
+        return
+
+    # 같은 step으로 재기록은 허용 (상태 업데이트)
+    if current_step == new_step:
+        return
+
+    assert_valid_transition(current_step, new_step)

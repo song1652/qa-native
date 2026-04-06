@@ -1,4 +1,16 @@
 {
-  "heroku": "https://the-internet.herokuapp.com/",
-  "demoqa": "https://demoqa.com"
+  "heroku": {
+    "url": "https://the-internet.herokuapp.com/",
+    "auth": null,
+    "spa": false,
+    "preconditions": [],
+    "notes": "다양한 UI 패턴 테스트용 (login, drag, shadow DOM 등)"
+  },
+  "demoqa": {
+    "url": "https://demoqa.com",
+    "auth": null,
+    "spa": true,
+    "preconditions": [],
+    "notes": "React SPA 기반 QA 연습 사이트"
+  }
 }

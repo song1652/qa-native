@@ -1,23 +1,17 @@
-"""
-자동 생성된 Playwright 테스트 코드
-URL: https://the-internet.herokuapp.com/key_presses
-케이스: tc_107_escape_key_detection (tc_107)
+from pathlib import Path
+from playwright.sync_api import Page, expect
 
-Claude Code가 plan 기반으로 완성한 파일.
-수동 편집 가능.
-"""
-from playwright.sync_api import expect
-
-BASE_URL = "https://the-internet.herokuapp.com"
+BASE_URL = "https://the-internet.herokuapp.com/"
+TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
 
 
-def test_tc_107_escape_key_detection(page):
-    """Escape 키 입력 감지"""
-    page.goto(f"{BASE_URL}/key_presses")
-    page.wait_for_load_state("networkidle")
+def test_escape_key_detection(page: Page):
+    # key_presses 페이지에서 Escape 키 입력 시 감지 확인
+    page.goto("https://the-internet.herokuapp.com/key_presses")
+    page.wait_for_load_state("domcontentloaded")
 
-    page.locator("#target").click()
+    input_field = page.locator("#target")
+    input_field.click()
     page.keyboard.press("Escape")
 
-    result = page.locator("#result")
-    expect(result).to_contain_text("You entered: ESCAPE", timeout=5000)
+    expect(page.locator("#result")).to_contain_text("You entered: ESCAPE", timeout=5000)

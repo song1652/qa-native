@@ -127,7 +127,8 @@ TC/코드 리뷰 시 반드시 확인:
 | 생성된 테스트 코드 | `tests/generated/{서비스}/` | `tc_{번호}_{설명}.py` (1파일 = 1테스트) |
 | 테스트 리포트 | `tests/reports/` | `parallel_index_{timestamp}.html` |
 | 이슈 | `reports/issues/` | `ISSUE-{YYYY-MM-DD}-{번호}.md` |
-| 실수 패턴 | [`agents/lessons_learned.md`](../agents/lessons_learned.md) | (단일 파일) |
+| 실수 패턴 (큐레이션) | [`agents/lessons_learned.md`](../agents/lessons_learned.md) | 수동 관리 |
+| 실수 패턴 (자동 로그) | [`agents/lessons_learned_auto.md`](../agents/lessons_learned_auto.md) | 자동 기록 |
 | 팀 결정사항 | [`agents/team_notes.md`](../agents/team_notes.md) | (단일 파일) |
 | 토론 로그 | [`agents/dialog.json`](../agents/dialog.json) | (단일 파일) |
 

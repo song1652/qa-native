@@ -1,34 +1,24 @@
-"""
-자동 생성된 Playwright 테스트 코드
-URL: https://the-internet.herokuapp.com/
-케이스: tc_01_login_success (tc_01)
-
-Claude Code가 plan 기반으로 완성한 파일.
-수동 편집 가능.
-"""
 import json
 from pathlib import Path
-
-from playwright.sync_api import expect
+from playwright.sync_api import Page, expect
 
 BASE_URL = "https://the-internet.herokuapp.com/"
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-TEST_DATA_PATH = PROJECT_ROOT / "config" / "test_data.json"
+TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
 
 
-def test_login_success(page):
-    """정상 로그인 성공"""
+def test_login_success(page: Page) -> None:
     with open(TEST_DATA_PATH) as f:
         test_data = json.load(f)
-    valid_user = test_data["heroku"]["valid_user"]
 
-    page.goto(BASE_URL + "login")
-    page.locator("#username").fill(valid_user["username"])
-    page.locator("#password").fill(valid_user["password"])
-    page.locator("button.radius").click()
+    username = test_data["heroku"]["valid_user"]["username"]
+    password = test_data["heroku"]["valid_user"]["password"]
 
-    expect(page).to_have_url(BASE_URL + "secure")
-    expect(page.locator("#flash-messages")).to_contain_text(
-        "You logged into a secure area!", timeout=10000
-    )
+    page.goto("https://the-internet.herokuapp.com/login")
+    page.wait_for_load_state("domcontentloaded")
+
+    page.get_by_label("Username").fill(username)
+    page.get_by_label("Password").fill(password)
+    page.get_by_role("button", name="Login").click()
+
+    expect(page).to_have_url("https://the-internet.herokuapp.com/secure")
+    expect(page.locator("#flash")).to_contain_text("You logged into a secure area!")

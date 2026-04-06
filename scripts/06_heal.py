@@ -19,9 +19,44 @@ from _constants import EXIT_SUCCESS, EXIT_HEAL_NEEDED, EXIT_HEAL_EXCEEDED
 from heal_utils import (
     classify_error, extract_key_lines,  # noqa: F401 (re-export for tests)
     find_screenshot_for_test, append_lessons, update_heal_stats,
+    build_heal_batches, print_heal_batches,
 )
+from structured_log import slog
 
 MAX_HEAL = 3
+
+
+def _detect_repeated_failures(
+    current_failures: list[dict], prev_failures: list[dict]
+) -> tuple[list[dict], list[dict]]:
+    """이전 힐링과 동일한 테스트+에러 패턴이 반복되는 케이스를 분리한다.
+
+    Returns:
+        (healable, skipped): 힐링 대상과 스킵 대상 분리
+    """
+    if not prev_failures:
+        return current_failures, []
+
+    # 이전 실패의 (test_name, error_type) 집합
+    # 이전 포맷에 error_type이 없으면 traceback에서 재분류
+    prev_signatures = set()
+    for f in prev_failures:
+        etype = f.get("error_type") or classify_error(f.get("traceback", ""))
+        sig = (f.get("test_name", ""), etype)
+        prev_signatures.add(sig)
+
+    healable = []
+    skipped = []
+    for f in current_failures:
+        error_type = classify_error(f["traceback"])
+        f["error_type"] = error_type
+        sig = (f.get("test_name", ""), error_type)
+        if sig in prev_signatures:
+            skipped.append(f)
+        else:
+            healable.append(f)
+
+    return healable, skipped
 
 
 def parse_failures(output: str, file_path: str) -> list[dict]:
@@ -160,6 +195,7 @@ def main():
     execution_result = state.get("execution_result", {})
     if execution_result.get("failed", 0) == 0 and execution_result.get("exit_code", 1) == 0:
         print("[06] 모든 테스트 통과 - 힐링 불필요.")
+        slog("heal_skip_all_pass", step="06_heal")
         sys.exit(EXIT_SUCCESS)
 
     # 힐링 횟수 확인
@@ -199,6 +235,7 @@ def main():
         print(f"[오류] 테스트 파일 없음: {file_path}")
         sys.exit(1)
 
+    slog("step_start", step="06_heal", heal_round=heal_count + 1, max_heal=MAX_HEAL)
     print(f"[06] 실패 분석 중 (힐링 {heal_count + 1}/{MAX_HEAL}회차)...")
     print()
 
@@ -212,19 +249,47 @@ def main():
     for f in failures:
         f["screenshot"] = find_screenshot_for_test(f["test_name"])
 
+    # 동일 오류 2회 연속 반복 감지 → 해당 테스트 스킵
+    prev_heal_context = state.get("heal_context", {})
+    prev_failures = prev_heal_context.get("failures", [])
+    healable, skipped = _detect_repeated_failures(failures, prev_failures)
+
+    if skipped:
+        skipped_names = [f["test_name"] for f in skipped]
+        for s in skipped:
+            slog("heal_skip_repeated", test_name=s["test_name"], error_type=s.get("error_type", ""))
+        print(f"[06] 동일 오류 2회 연속 반복 → {len(skipped)}건 스킵:")
+        for name in skipped_names:
+            print(f"     - {name}")
+        print()
+
+    # 스킵 후 힐링 대상이 없으면 heal_failed로 종료
+    if not healable and skipped:
+        print("[06] 모든 실패가 반복 패턴 — 수동 수정이 필요합니다.")
+        state["step"] = "heal_failed"
+        state["heal_context"] = {
+            "heal_count": heal_count + 1,
+            "skipped_repeated": [f["test_name"] for f in skipped],
+            "error": "모든 실패가 동일 오류 2회 반복. 수동 수정 필요.",
+            "analyzed_at": datetime.now().isoformat(),
+        }
+        write_state(state_path, state)
+        sys.exit(EXIT_HEAL_EXCEEDED)
+
     # 에러 타입별 그룹핑 (Agent가 같은 유형 일괄 처리 가능)
     from collections import defaultdict
     failure_groups = defaultdict(list)
-    for f in failures:
-        error_type = classify_error(f["traceback"])
-        f["error_type"] = error_type
-        failure_groups[error_type].append(f["test_name"])
+    for f in healable:
+        if "error_type" not in f:
+            f["error_type"] = classify_error(f["traceback"])
+        failure_groups[f["error_type"]].append(f["test_name"])
 
     heal_context = {
         "heal_count": heal_count + 1,
-        "failure_count": len(failures),
-        "failures": failures,
+        "failure_count": len(healable),
+        "failures": healable,
         "failure_groups": dict(failure_groups),
+        "skipped_repeated": [f["test_name"] for f in skipped],
         "url": state.get("url", ""),
         "raw_tail": raw_output[-2000:],
         "analyzed_at": datetime.now().isoformat(),
@@ -235,48 +300,20 @@ def main():
     state["step"] = "heal_needed"
     write_state(state_path, state)
 
-    # 실수 패턴 자동 기록
-    append_lessons(failures)
+    # 실수 패턴 자동 기록 (healable + skipped 모두 기록)
+    append_lessons(healable + skipped)
 
     # heal_stats.json 빈도 카운터 업데이트
-    update_heal_stats(failures)
+    update_heal_stats(healable + skipped)
 
-    print(f"[06] 실패 케이스: {len(failures)}건")
-    print()
-    for i, f in enumerate(failures, 1):
-        print(f"  [{i}] {f['test_name']}")
-        # 트레이스백에서 핵심 에러 라인만 출력
-        tb_lines = f["traceback"].splitlines()
-        error_lines = [l for l in tb_lines if "Error" in l or "assert" in l.lower() or "expect" in l.lower()]
-        for el in error_lines[:3]:
-            print(f"       {el.strip()}")
-        print()
+    print(f"[06] 힐링 대상: {len(healable)}건" +
+          (f", 반복 스킵: {len(skipped)}건" if skipped else ""))
 
-    print("=" * 60)
-    print("  [Healer] Claude Code에 전달할 지시")
-    print("=" * 60)
-    print(f"  heal_context의 failures를 읽고")
-    if Path(file_path).is_dir():
-        print(f"  각 실패 파일을 직접 수정하세요:")
-        seen = set()
-        for f in failures:
-            tid = f.get("test_id", "")
-            if "::" in tid:
-                fpath = tid.split("::")[0]
-                if fpath not in seen:
-                    seen.add(fpath)
-                    print(f"    - {fpath}")
-    else:
-        print(f"  {file_path} 를 직접 수정하세요.")
-    print()
-    print("  수정 기준:")
-    print("  1. Locator 오류 → dom_info의 셀렉터와 대조해 수정")
-    print("  2. Assertion 오류 → 실제 페이지 텍스트/상태로 기댓값 수정")
-    print("  3. Timeout → wait_for_selector 또는 expect timeout 조정")
-    print("  4. MCP 시각 검증 → 원인 불명확 시 Playwright MCP로 실제 페이지 확인")
-    print()
-    print("  수정 후: python scripts/05_execute.py → python scripts/06_heal.py 순으로 재실행")
-    print("=" * 60)
+    # 배치 분할 + 병렬 힐링 지시 출력
+    batches = build_heal_batches(healable)
+    print_heal_batches(batches, url=state.get("url", ""), pipeline="single")
+    slog("step_end", step="06_heal", healable=len(healable),
+         skipped=len(skipped), heal_round=heal_count + 1)
     sys.exit(EXIT_HEAL_NEEDED)
 
 

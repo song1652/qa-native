@@ -1,25 +1,22 @@
-"""
-자동 생성된 Playwright 테스트 코드
-URL: https://the-internet.herokuapp.com/
-케이스: tc_56_large_dom_page_load (tc_56)
-
-Claude Code가 plan 기반으로 완성한 파일.
-수동 편집 가능.
-"""
 from pathlib import Path
-
-from playwright.sync_api import expect
+from playwright.sync_api import Page, expect
 
 BASE_URL = "https://the-internet.herokuapp.com/"
+TEST_DATA_PATH = (
+    Path(__file__).resolve()
+    .parent.parent.parent.parent
+    / "config" / "test_data.json"
+)
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-TEST_DATA_PATH = PROJECT_ROOT / "config" / "test_data.json"
 
-
-def test_tc_56_large_dom_page_load(page):
+def test_large_dom_page_load(page: Page):
     """대규모 DOM 페이지 로드"""
-    page.goto(BASE_URL + "large", timeout=30000)
+    page.goto("https://the-internet.herokuapp.com/large")
+    page.wait_for_load_state("domcontentloaded")
 
-    heading = page.locator("h3")
-    expect(heading).to_be_visible(timeout=15000)
-    expect(heading).to_contain_text("Large & Deep DOM", ignore_case=True)
+    expect(
+        page.get_by_role("heading", name="Large & Deep DOM")
+    ).to_be_visible(timeout=10000)
+
+    table = page.locator("table")
+    expect(table.first).to_be_visible(timeout=10000)

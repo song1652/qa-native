@@ -101,6 +101,70 @@ async function renderDashboardOverview(main) {
           </div>`;
   }
 
+  // ── Heal Stats 위젯 ──
+  let healStatsHtml = '';
+  const patternEntries = Object.values(patterns);
+  if (patternEntries.length > 0) {
+    // error_type별 집계
+    const byType = {};
+    let totalHealCount = 0;
+    patternEntries.forEach(p => {
+      const t = p.error_type || '기타';
+      byType[t] = (byType[t] || 0) + (p.count || 0);
+      totalHealCount += (p.count || 0);
+    });
+    const typeColors = {
+      'Locator': '#f472b6', 'Assertion': '#fb923c', 'Timeout': '#facc15',
+      'URL': '#60a5fa', 'JS평가': '#a78bfa', 'Python런타임': '#34d399',
+      'Playwright일반': '#94a3b8', '기타': '#64748b',
+    };
+    // 도넛 차트 데이터
+    const typeEntries = Object.entries(byType).sort((a, b) => b[1] - a[1]);
+    let donutSegments = '';
+    let offset = 0;
+    typeEntries.forEach(([type, count]) => {
+      const pct = totalHealCount > 0 ? (count / totalHealCount * 100) : 0;
+      const color = typeColors[type] || '#64748b';
+      donutSegments += `<circle cx="50" cy="50" r="36" fill="none" stroke="${color}" stroke-width="12"
+        stroke-dasharray="${pct * 2.26} ${226 - pct * 2.26}"
+        stroke-dashoffset="${-offset * 2.26}" style="transition:all 0.5s"/>`;
+      offset += pct;
+    });
+    const legendItems = typeEntries.slice(0, 6).map(([type, count]) => {
+      const color = typeColors[type] || '#64748b';
+      const pct = Math.round(count / totalHealCount * 100);
+      return `<div class="hs-legend-item"><span class="hs-dot" style="background:${color}"></span>${esc(type)} <span class="hs-legend-count">${count}건 (${pct}%)</span></div>`;
+    }).join('');
+
+    // Top 5 빈출 패턴
+    const topPatterns = patternEntries
+      .filter(p => (p.summary || '') !== 'unknown' && !(p.summary || '').includes('legacy'))
+      .sort((a, b) => (b.count || 0) - (a.count || 0))
+      .slice(0, 5);
+    const topRows = topPatterns.map(p => {
+      const color = typeColors[p.error_type] || '#64748b';
+      const summary = (p.summary || '').length > 50 ? p.summary.substring(0, 50) + '...' : p.summary;
+      return `<div class="hs-top-row">
+        <span class="hs-top-badge" style="background:${color}">${p.count}</span>
+        <span class="hs-top-type">${esc(p.error_type)}</span>
+        <span class="hs-top-summary">${esc(summary)}</span>
+      </div>`;
+    }).join('');
+
+    healStatsHtml = `
+          <div class="ov-section">
+            <div class="ov-section-title">Heal Stats</div>
+            <div class="hs-grid">
+              <div class="hs-donut-wrap">
+                <svg viewBox="0 0 100 100" class="hs-donut">${donutSegments}</svg>
+                <div class="hs-donut-center">${totalHealCount}<br><span>총 힐링</span></div>
+              </div>
+              <div class="hs-legend">${legendItems}</div>
+            </div>
+            ${topRows ? `<div class="hs-top-title">Top 빈출 패턴</div><div class="hs-top-list">${topRows}</div>` : ''}
+          </div>`;
+  }
+
   // Quick Actions
   const hasFailures = totalFailed > 0;
   const hasReports = rptCount > 0;
@@ -166,9 +230,10 @@ async function renderDashboardOverview(main) {
             <div class="ov-stat"><div class="ov-stat-num" style="color:${totalFailed === 0 ? 'var(--approved-color)' : 'var(--pending-color)'}">${passRate}%</div><div class="ov-stat-label">Pass Rate</div></div>
           </div>
         </div>` : ''}
-        ${coverageHtml}`;
+        ${coverageHtml}
+        ${quickHtml}`;
 
-  const rightCol = `${historyHtml}${quickHtml}`;
+  const rightCol = `${historyHtml}${healStatsHtml}`;
 
   // 로그 뷰어
   const logHtml = `

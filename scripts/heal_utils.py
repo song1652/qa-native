@@ -15,33 +15,94 @@ from pathlib import Path
 from _paths import PROJECT_ROOT, read_state, write_state
 
 LESSONS_PATH = PROJECT_ROOT / "agents" / "lessons_learned.md"
+LESSONS_AUTO_PATH = PROJECT_ROOT / "agents" / "lessons_learned_auto.md"
 SCREENSHOTS_DIR = PROJECT_ROOT / "tests" / "screenshots"
 HEAL_STATS_PATH = PROJECT_ROOT / "state" / "heal_stats.json"
 
+HEAL_BATCH_SIZE = 6  # 힐링 배치당 실패 테스트 수
+
 
 def classify_error(traceback: str) -> str:
-    """traceback에서 오류 유형 분류."""
+    """traceback에서 오류 유형 분류.
+
+    분류 우선순위: Locator > Assertion > Timeout > URL > JS평가
+                  > Python런타임 > Playwright일반 > 기타
+    """
     tb = traceback.lower()
-    if any(k in tb for k in ["strict mode violation", "element not found",
-                              "locator", "no element", "getby"]):
+
+    # 1. Locator 오류 (셀렉터/요소 관련)
+    if any(k in tb for k in [
+        "strict mode violation", "element not found", "locator",
+        "no element", "getby", "waiting for selector",
+        "not visible", "not attached", "intercepted",
+        "element is not", "detached from", "frame was detached",
+    ]):
         return "Locator"
-    if any(k in tb for k in ["expected", "to contain", "assertionerror",
-                              "to have text", "to have url"]):
+
+    # 2. Assertion 오류 (기대값 불일치)
+    if any(k in tb for k in [
+        "expected", "to contain", "assertionerror", "to have text",
+        "to have url", "to be visible", "to have count", "to have class",
+        "assert ", "not equal", "mismatch",
+    ]):
         return "Assertion"
-    if "timeout" in tb:
+
+    # 3. Timeout 오류
+    if any(k in tb for k in ["timeout", "timed out"]):
         return "Timeout"
-    if any(k in tb for k in ["url", "goto", "navigation"]):
+
+    # 4. URL/Navigation 오류
+    if any(k in tb for k in [
+        "goto", "navigation", "net::err_", "name_not_resolved",
+        "connection refused", "page.goto",
+    ]):
         return "URL"
+
+    # 5. JS evaluate 오류
+    if any(k in tb for k in [
+        "syntaxerror", "referenceerror", "typeerror: cannot read",
+        "page.evaluate", "illegal return",
+    ]):
+        return "JS평가"
+
+    # 6. Python 런타임 오류 (KeyError, ImportError 등)
+    if any(k in tb for k in [
+        "keyerror", "importerror", "modulenotfounderror", "nameerror",
+        "attributeerror", "indexerror", "valueerror", "filenotfounderror",
+    ]):
+        return "Python런타임"
+
+    # 7. Playwright 일반 오류 (raise Error 등)
+    if any(k in tb for k in [
+        "playwright._impl", "raise error(", "browser has been closed",
+        "target page, context or browser has been closed",
+        "protocol error", "channel closed",
+    ]):
+        return "Playwright일반"
+
     return "기타"
 
 
 def extract_key_lines(traceback: str) -> list[str]:
-    """트레이스백에서 핵심 오류 라인 최대 3개 추출."""
+    """트레이스백에서 핵심 오류 라인 최대 3개 추출.
+
+    키워드 매칭 실패 시 traceback의 마지막 비공백 줄을 fallback으로 사용.
+    """
     lines = traceback.splitlines()
     key = [line.strip() for line in lines
-           if any(k in line for k in ["Error", "Expected", "assert",
-                                       "expect", "Locator"])]
-    return key[:3]
+           if any(k in line for k in [
+               "Error", "Expected", "assert", "expect", "Locator",
+               "raise ", "failed", "FAILED", "KeyError", "TypeError",
+               "ValueError", "ImportError", "SyntaxError", "timeout",
+               "not visible", "not attached", "strict mode",
+           ])]
+    if key:
+        return key[:3]
+    # fallback: traceback의 마지막 비공백 줄 (unknown 방지)
+    non_empty = [line.strip() for line in lines if line.strip()]
+    if non_empty:
+        return [non_empty[-1]]
+    return []
 
 
 def find_screenshot_for_test(test_name: str) -> dict | None:
@@ -69,16 +130,40 @@ def find_screenshot_for_test(test_name: str) -> dict | None:
 
 
 def append_lessons(failures: list[dict]) -> None:
-    """실패 케이스를 lessons_learned.md에 자동 추가 (중복 검사 포함)."""
+    """실패 케이스를 lessons_learned_auto.md에 자동 추가 (중복 검사 포함).
+
+    자동 기록은 _auto.md에만 추가. 큐레이션된 lessons_learned.md는 수동 관리.
+    중복 검사는 양쪽 파일 모두 대상.
+    """
     if not failures:
         return
 
-    if not LESSONS_PATH.exists():
-        return
+    target_path = LESSONS_AUTO_PATH
+    if not target_path.exists():
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(
+            "# Lessons Learned (Auto) — 자동 기록 힐링 패턴\n\n"
+            "> 자동 생성 파일: heal_utils.py의 append_lessons()가 힐링 시 자동 기록.\n\n---\n\n"
+            "## Locator 오류\n\n## Assertion 오류\n\n## Timeout 오류\n\n"
+            "## URL 오류\n\n## JS평가 오류\n\n## Python런타임 오류\n\n"
+            "## Playwright일반 오류\n\n## 기타\n",
+            encoding="utf-8",
+        )
 
-    content = LESSONS_PATH.read_text(encoding="utf-8")
+    auto_content = target_path.read_text(encoding="utf-8")
+    # 큐레이션 파일도 중복 검사 대상에 포함
+    curated_content = ""
+    if LESSONS_PATH.exists():
+        curated_content = LESSONS_PATH.read_text(encoding="utf-8")
+
+    # 기존 파일에서 백틱(`) 안의 summary를 정확히 추출하여 set 구성
+    existing_summaries: set[str] = set()
+    for content in (auto_content, curated_content):
+        for m in re.finditer(r'`([^`]+)`', content):
+            existing_summaries.add(m.group(1).strip())
 
     new_entries: dict[str, list[str]] = {}
+    seen_summaries: set[str] = set()  # 같은 배치 내 중복 방지
     skipped = 0
 
     for f in failures:
@@ -86,43 +171,45 @@ def append_lessons(failures: list[dict]) -> None:
         key_lines = extract_key_lines(f["traceback"])
         error_summary = key_lines[0] if key_lines else "(traceback 없음)"
 
-        # 중복 검사: error_summary의 핵심 부분이 이미 존재하면 건너뛰기
-        # backtick 안의 코드와 비교 (공백 정규화)
         summary_normalized = error_summary.strip()
-        if summary_normalized in content or summary_normalized == "(traceback 없음)":
+        # 중복 판정: (1) traceback 없음 (2) 기존 파일에 이미 존재 (3) 같은 배치 내 중복
+        if (summary_normalized == "(traceback 없음)"
+                or summary_normalized in existing_summaries
+                or summary_normalized in seen_summaries):
             skipped += 1
             continue
+        seen_summaries.add(summary_normalized)
 
-        fix_hint = ""
-        if error_type == "Locator":
-            fix_hint = "dom_info 셀렉터 재확인, #id 우선 사용"
-        elif error_type == "Assertion":
-            fix_hint = "실제 페이지 텍스트/상태로 기댓값 수정"
-        elif error_type == "Timeout":
-            fix_hint = "expect(..., timeout=10000) 또는 wait_for_selector 추가"
-        elif error_type == "URL":
-            fix_hint = "BASE_URL 또는 goto 인자 재확인"
+        fix_hint = {
+            "Locator": "dom_info 셀렉터 재확인, #id 우선 사용",
+            "Assertion": "실제 페이지 텍스트/상태로 기댓값 수정",
+            "Timeout": "expect(..., timeout=10000) 또는 wait_for_selector 추가",
+            "URL": "BASE_URL 또는 goto 인자 재확인",
+            "JS평가": "page.evaluate() 내 JS 문법 확인, arrow function 래핑",
+            "Python런타임": "test_data 키/import/변수명 확인",
+            "Playwright일반": "브라우저 상태 확인, 페이지 닫힘/크래시 대응",
+        }.get(error_type, "")
 
         entry = f"- **{error_type}**: `{error_summary}` — {fix_hint}\n"
         new_entries.setdefault(error_type, []).append(entry)
 
     if not new_entries:
         if skipped:
-            print(f"[heal_utils] lessons_learned.md: {skipped}건 중복 → 추가 없음")
+            print(f"[heal_utils] lessons_learned_auto.md: {skipped}건 중복 → 추가 없음")
         return
 
     for section, entries in new_entries.items():
         section_header = f"## {section} 오류" if section != "기타" else "## 기타"
         insert_text = "\n" + "".join(entries)
         pattern = rf"({re.escape(section_header)}[^\n]*\n(?:<!--[^>]*-->\n)?)"
-        if re.search(pattern, content):
-            content = re.sub(pattern, r"\1" + insert_text, content, count=1)
+        if re.search(pattern, auto_content):
+            auto_content = re.sub(pattern, r"\1" + insert_text, auto_content, count=1)
         else:
-            content += f"\n{section_header}\n{insert_text}"
+            auto_content += f"\n{section_header}\n{insert_text}"
 
-    LESSONS_PATH.write_text(content, encoding="utf-8")
+    target_path.write_text(auto_content, encoding="utf-8")
     added = sum(len(v) for v in new_entries.values())
-    print(f"[heal_utils] lessons_learned.md 업데이트: "
+    print(f"[heal_utils] lessons_learned_auto.md 업데이트: "
           f"{added}건 추가, {skipped}건 중복 건너뜀")
 
 
@@ -139,7 +226,12 @@ def update_heal_stats(failures: list[dict]) -> None:
         for f in failures:
             error_type = classify_error(f["traceback"])
             key_lines = extract_key_lines(f["traceback"])
-            summary = key_lines[0].strip()[:120] if key_lines else "unknown"
+            if key_lines:
+                summary = key_lines[0].strip()[:120]
+            else:
+                # traceback 자체의 마지막 줄을 fallback으로 사용
+                tb_lines = [l.strip() for l in f["traceback"].splitlines() if l.strip()]
+                summary = tb_lines[-1][:120] if tb_lines else f"no_traceback::{f.get('test_name', 'unknown')}"
             pattern_key = f"{error_type}::{summary}"
             if pattern_key in patterns:
                 patterns[pattern_key]["count"] += 1
@@ -156,3 +248,84 @@ def update_heal_stats(failures: list[dict]) -> None:
         print(f"[heal_utils] heal_stats.json 업데이트: {len(failures)}건 기록")
     except Exception as e:
         print(f"[heal_utils] heal_stats.json 업데이트 실패 (무시): {e}")
+
+
+def build_heal_batches(failures: list[dict], batch_size: int = HEAL_BATCH_SIZE) -> list[list[dict]]:
+    """실패 목록을 배치로 분할. 각 배치는 독립적으로 병렬 힐링 가능."""
+    if not failures:
+        return []
+    return [failures[i:i + batch_size] for i in range(0, len(failures), batch_size)]
+
+
+def print_heal_batches(batches: list[list[dict]], url: str = "",
+                       pipeline: str = "single") -> None:
+    """배치 분할된 힐링 지시를 HEAL_SUBAGENT_CONTEXTS 형식으로 출력.
+
+    Claude Code가 이 출력을 읽고 Agent tool로 각 배치를 동시 실행한다.
+    단일/병렬/빠른 실행 모두 동일한 출력 형식을 사용.
+    """
+    if not batches:
+        return
+
+    total_failures = sum(len(b) for b in batches)
+    print()
+    print("=" * 60)
+    print(f"  [힐링 배치 병렬화] {total_failures}건 실패 → {len(batches)}개 배치")
+    print("=" * 60)
+
+    # 각 배치 요약 출력
+    for i, batch in enumerate(batches, 1):
+        names = [f["test_name"] for f in batch]
+        print(f"  배치 {i}/{len(batches)}: {len(batch)}건 — {', '.join(names[:3])}"
+              + (f" 외 {len(names) - 3}개" if len(names) > 3 else ""))
+
+    # lessons_learned 스냅샷
+    lessons_text = ""
+    for lpath in [LESSONS_PATH, LESSONS_AUTO_PATH]:
+        if lpath.exists():
+            try:
+                lessons_text += lpath.read_text(encoding="utf-8") + "\n"
+            except Exception:
+                pass
+
+    # JSON 컨텍스트 출력
+    contexts = []
+    for i, batch in enumerate(batches):
+        # 배치 내 파일 경로 수집
+        files = set()
+        for f in batch:
+            tid = f.get("test_id", "")
+            if "::" in tid:
+                files.add(tid.split("::")[0])
+
+        ctx = {
+            "batch_index": i + 1,
+            "batch_total": len(batches),
+            "pipeline": pipeline,
+            "url": url,
+            "failure_count": len(batch),
+            "failures": batch,
+            "files": sorted(files),
+            "lessons_learned": lessons_text[-2000:] if lessons_text else "",
+        }
+        contexts.append(ctx)
+
+    print()
+    print("=== HEAL_SUBAGENT_CONTEXTS_START ===")
+    print(json.dumps(contexts, ensure_ascii=False, indent=2))
+    print("=== HEAL_SUBAGENT_CONTEXTS_END ===")
+    print()
+    print("=" * 60)
+    print(f"  위 HEAL_SUBAGENT_CONTEXTS의 {len(batches)}개 배치를 Agent tool로 동시에 실행해주세요.")
+    print(f"  (배치당 최대 {HEAL_BATCH_SIZE}건, 총 {total_failures}건)")
+    print()
+    print("  각 subagent는:")
+    print("  1. 배치 내 실패 파일을 읽고 traceback 분석")
+    print("  2. lessons_learned 패턴 참조하여 패치")
+    print("  3. 패치 후 개별 테스트 실행으로 통과 확인")
+    print()
+    if pipeline == "single":
+        print("  완료 후: python scripts/05_execute.py --no-report → python scripts/06_heal.py")
+    else:
+        print("  완료 후: python parallel/99_merge.py")
+    print("=" * 60)

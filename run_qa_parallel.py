@@ -54,7 +54,23 @@ def load_test_data() -> dict:
 
 
 def resolve_url(folder_name: str, pages: dict) -> str | None:
-    return pages.get(folder_name) or None
+    """pages.json에서 URL을 조회. string/object 형식 모두 지원."""
+    entry = pages.get(folder_name)
+    if entry is None:
+        return None
+    if isinstance(entry, str):
+        return entry
+    if isinstance(entry, dict):
+        return entry.get("url")
+    return None
+
+
+def resolve_page_meta(folder_name: str, pages: dict) -> dict:
+    """pages.json에서 메타데이터 조회. string 형식은 빈 메타 반환."""
+    entry = pages.get(folder_name)
+    if isinstance(entry, dict):
+        return {k: v for k, v in entry.items() if k != "url"}
+    return {}
 
 
 def read_file_safe(path: Path) -> str:
@@ -82,11 +98,12 @@ def analyze_url(url: str) -> dict:
         import importlib.util
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
-    return asyncio.run(mod.analyze(url))
+    main_dom, _sub_doms = asyncio.run(mod.analyze_all(url, []))
+    return main_dom
 
 
 def resolve_targets(args, pages: dict) -> list[dict]:
-    """실행 대상 목록 생성. 각 항목: {url, cases_path, group_dir, group_label}"""
+    """실행 대상 목록 생성. 각 항목: {url, cases_paths, group_dir, group_label, batch_info, batch_files}"""
     targets = []
 
     if args.targets:
@@ -137,8 +154,15 @@ def resolve_targets(args, pages: dict) -> list[dict]:
     return _expand_targets(targets)
 
 
+BATCH_SIZE = 8  # 폴더 내 배치 크기 (1 배치 = 1 subagent)
+
+
 def _expand_targets(targets: list[dict]) -> list[dict]:
-    """폴더 내 tc_*.md 파일을 개별 타겟으로 확장."""
+    """폴더 내 tc_*.md 파일을 배치 단위 타겟으로 확장.
+
+    각 배치는 최대 BATCH_SIZE개의 tc 파일을 포함하며,
+    하나의 subagent가 배치 내 파일들을 동시에 처리한다.
+    """
     expanded = []
     for target in targets:
         cases_path = Path(target["cases"])
@@ -157,19 +181,28 @@ def _expand_targets(targets: list[dict]) -> list[dict]:
             if not md_files:
                 print(f"[경고] 폴더에 .md 파일 없음: {cases_path}")
                 continue
-            for j, md in enumerate(md_files):
+
+            # 배치로 묶기
+            for batch_idx in range(0, len(md_files), BATCH_SIZE):
+                batch = md_files[batch_idx:batch_idx + BATCH_SIZE]
+                batch_num = batch_idx // BATCH_SIZE + 1
+                total_batches = (len(md_files) + BATCH_SIZE - 1) // BATCH_SIZE
                 expanded.append({
                     "url": target["url"],
-                    "cases_path": md,
+                    "cases_paths": [md for md in batch],
                     "group_dir": base_group,
-                    "group_label": md.stem,  # tc_01_login_success
+                    "group_label": f"{base_group}_batch{batch_num}",
+                    "batch_info": f"{batch_num}/{total_batches}",
+                    "batch_files": [md.stem for md in batch],
                 })
         else:
             expanded.append({
                 "url": target["url"],
-                "cases_path": cases_path,
+                "cases_paths": [cases_path],
                 "group_dir": base_group,
                 "group_label": cases_path.stem,
+                "batch_info": "1/1",
+                "batch_files": [cases_path.stem],
             })
 
     return expanded
@@ -199,8 +232,10 @@ def main():
     # 등록된 페이지 표시
     active = {k: v for k, v in pages.items() if v}
     print(f"  config/pages.json — {len(active)}개 페이지 등록")
-    for name, url in active.items():
-        print(f"    [{name}] {url}")
+    for name, entry in active.items():
+        url = entry.get("url") if isinstance(entry, dict) else entry
+        spa = " (SPA)" if isinstance(entry, dict) and entry.get("spa") else ""
+        print(f"    [{name}] {url}{spa}")
     print()
 
     # 1. 대상 목록 생성
@@ -214,50 +249,68 @@ def main():
     unique_urls = list(dict.fromkeys(t["url"] for t in targets))
     dom_cache: dict[str, dict] = {}
 
-    for url in unique_urls:
-        print(f"[DOM] 분석 중: {url}")
-        dom_cache[url] = analyze_url(url)
-        dom = dom_cache[url]
-        if "error" in dom:
-            print(f"  [경고] DOM 분석 실패: {dom['error']}")
-        else:
-            print(f"  완료 — 입력:{len(dom.get('inputs',[]))} 버튼:{len(dom.get('buttons',[]))}")
+    try:
+        for url in unique_urls:
+            print(f"[DOM] 분석 중: {url}")
+            dom_cache[url] = analyze_url(url)
+            dom = dom_cache[url]
+            if "error" in dom:
+                print(f"  [경고] DOM 분석 실패: {dom['error']}")
+            else:
+                print(f"  완료 — 입력:{len(dom.get('inputs',[]))} 버튼:{len(dom.get('buttons',[]))}")
+    except Exception as e:
+        _save_state({"status": "error", "error": str(e)})
+        print(f"[오류] DOM 분석 중 실패: {e}")
+        raise
 
     # 3. 컨텍스트 파일 1회 읽기
     team_charter = read_file_safe(PROJECT_ROOT / "agents" / "team_charter.md")
     lessons_learned = read_file_safe(PROJECT_ROOT / "agents" / "lessons_learned.md")
 
-    # 4. subagent 컨텍스트 빌드
+    # 4. subagent 컨텍스트 빌드 (배치 단위)
     contexts = []
     for t in targets:
-        cases = load_cases(str(t["cases_path"]))
+        all_cases = []
+        for cp in t["cases_paths"]:
+            all_cases.extend(load_cases(str(cp)))
+
         page_key = t["group_dir"]
         output_dir = PROJECT_ROOT / "tests" / "generated" / t["group_dir"]
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        page_meta = resolve_page_meta(page_key, pages)
         ctx = {
             "group_dir": t["group_dir"],
             "group_label": t["group_label"],
+            "batch_info": t.get("batch_info", ""),
+            "batch_files": t.get("batch_files", []),
             "url": t["url"],
+            "page_meta": page_meta,
             "dom_info": dom_cache.get(t["url"], {}),
-            "test_cases": cases,
+            "test_cases": all_cases,
             "test_data": test_data.get(page_key, {}),
             "team_charter": team_charter,
             "lessons_learned": lessons_learned,
             "output_path": f"tests/generated/{t['group_dir']}/",
         }
         contexts.append(ctx)
-        print(f"  [{t['group_label']}] {len(cases)}개 케이스 → {ctx['output_path']}")
+        files_str = ", ".join(t.get("batch_files", [])[:3])
+        if len(t.get("batch_files", [])) > 3:
+            files_str += f" 외 {len(t['batch_files']) - 3}개"
+        print(f"  [{t['group_label']}] {len(all_cases)}개 케이스 ({files_str}) → {ctx['output_path']}")
 
     # 5. 상태 파일 저장 (ready = subagent 대기)
+    total_cases = sum(len(c["test_cases"]) for c in contexts)
     _save_state({
         "status": "ready",
         "total_count": len(contexts),
+        "total_cases": total_cases,
         "completed_count": 0,
         "targets": [
             {
                 "group_dir": c["group_dir"],
                 "group_label": c["group_label"],
+                "batch_info": c.get("batch_info", ""),
                 "url": c["url"],
                 "output_path": c["output_path"],
                 "case_count": len(c["test_cases"]),
@@ -277,11 +330,12 @@ def main():
     print("  Claude Code에 아래 지시를 전달하세요:")
     print("=" * 60)
     print()
-    print("  위 PARALLEL_SUBAGENT_CONTEXTS의 각 항목을 Agent tool로 동시에 실행해줘.")
+    print(f"  위 PARALLEL_SUBAGENT_CONTEXTS의 {len(contexts)}개 배치를 Agent tool로 동시에 실행해줘.")
+    print(f"  (총 {total_cases}개 케이스, 배치당 최대 {BATCH_SIZE}개)")
     print()
     print("  각 subagent는:")
-    print("  1. 컨텍스트의 dom_info와 test_cases를 바탕으로 plan 수립")
-    print("  2. plan 기반으로 Playwright 테스트 코드 작성")
+    print("  1. 배치 내 모든 test_cases에 대해 dom_info 바탕으로 plan 수립")
+    print("  2. plan 기반으로 Playwright 테스트 코드 작성 (tc_*.md 1개 = 파일 1개)")
     print("  3. output_path에 직접 저장")
     print()
     print("  완료 후: python parallel/99_merge.py 실행")

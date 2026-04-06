@@ -27,11 +27,13 @@ from _paths import (
 from _python import PYTHON_EXE
 from heal_utils import (
     classify_error, extract_key_lines,
-    find_screenshot_for_test, append_lessons,
-    LESSONS_PATH,
+    find_screenshot_for_test, append_lessons, update_heal_stats,
+    build_heal_batches, print_heal_batches,
+    LESSONS_PATH, LESSONS_AUTO_PATH,
 )
 from report_html import case_row as _case_row, build_report
 from result_parser import parse_results
+from structured_log import slog
 try:
     from parse_cases import load_cases as _load_cases
 except ImportError:
@@ -58,8 +60,60 @@ def _update_parallel_status(status: str, extra: dict | None = None) -> None:
 # ── pytest 실행 ──────────────────────────────────────────────────
 
 
+def _check_urls_accessible(urls: dict) -> dict | None:
+    """힐링 전 사이트 접근 가능 여부를 사전 체크. 접근 불가 시 에러 dict 반환."""
+    import urllib.request
+    import urllib.error
+    for group, url in urls.items():
+        if not url:
+            continue
+        try:
+            req = urllib.request.Request(url, method="HEAD")
+            resp = urllib.request.urlopen(req, timeout=10)
+            if resp.getcode() >= 400:
+                return {"error": f"사이트 접근 불가 HTTP {resp.getcode()}", "url": url, "group": group}
+        except (urllib.error.URLError, OSError) as e:
+            return {"error": f"사이트 접근 불가: {e}", "url": url, "group": group}
+    return None
+
+
+def _detect_repeated_failures_parallel(
+    current_failures: list[dict], prev_ctx: dict
+) -> tuple[list[dict], list[dict]]:
+    """이전 heal_context와 비교하여 동일 (test_name, error_type) 반복 감지.
+
+    Returns:
+        (healable, skipped)
+    """
+    prev_failures = prev_ctx.get("failures", [])
+    if not prev_failures:
+        return current_failures, []
+
+    prev_signatures = set()
+    for f in prev_failures:
+        etype = f.get("error_type") or classify_error(f.get("traceback", ""))
+        prev_signatures.add((f.get("test_name", ""), etype))
+
+    healable, skipped = [], []
+    for f in current_failures:
+        sig = (f.get("test_name", ""), f.get("error_type", ""))
+        if sig in prev_signatures:
+            skipped.append(f)
+        else:
+            healable.append(f)
+    return healable, skipped
+
+
 def build_heal_context(report: dict, heal_count: int) -> dict | None:
-    """실패 테스트의 traceback을 모아 heal_context.json 생성. 실패 없으면 None 반환."""
+    """실패 테스트의 traceback을 모아 heal_context.json 생성. 실패 없으면 None 반환.
+
+    단일 파이프라인(06_heal.py)과 동일한 플로우:
+    1. 실패 수집 + 스크린샷 연결
+    2. classify_error로 에러 분류 + failure_groups 구성
+    3. 사이트 사전 접근 체크
+    4. 반복 실패 감지 (_detect_repeated_failures_parallel)
+    5. append_lessons + update_heal_stats
+    """
     failures = []
     for t in report.get("tests", []):
         if t.get("outcome") in ("failed", "error"):
@@ -68,11 +122,13 @@ def build_heal_context(report: dict, heal_count: int) -> dict | None:
             if isinstance(longrepr, dict):
                 longrepr = longrepr.get("reprcrash", {}).get("message", str(longrepr))
             test_name = t.get("nodeid", "").split("::")[-1]
+            traceback_str = str(longrepr)
             failures.append({
                 "test_id": t.get("nodeid", ""),
                 "test_name": test_name,
                 "file": t.get("nodeid", "").split("::")[0],
-                "traceback": str(longrepr),
+                "traceback": traceback_str,
+                "error_type": classify_error(traceback_str),
                 "screenshot": find_screenshot_for_test(test_name),
             })
     if not failures:
@@ -87,57 +143,126 @@ def build_heal_context(report: dict, heal_count: int) -> dict | None:
             for f in failures:
                 group = f["file"].split("/")[-2] if "/" in f["file"] else None
                 if group and group in pages_data and group not in urls:
-                    urls[group] = pages_data[group]
+                    entry = pages_data[group]
+                    urls[group] = entry.get("url") if isinstance(entry, dict) else entry
         except Exception:
             pass
 
+    # 사이트 접근 가능성 사전 체크
+    if urls:
+        site_err = _check_urls_accessible(urls)
+        if site_err:
+            print(f"\n[99] 사이트 접근 불가: {site_err['url']} ({site_err['error']})")
+            print("     사이트가 다운되었거나 네트워크 문제입니다. 힐링을 건너뜁니다.")
+            ctx = {
+                "heal_count": heal_count,
+                "error": site_err["error"],
+                "url": site_err["url"],
+                "analyzed_at": datetime.now().isoformat(),
+            }
+            write_state(HEAL_CONTEXT_STATE, ctx)
+            return None  # 힐링 불가 → 호출부에서 heal_failed 처리
+
+    # 에러 타입별 그룹핑
+    failure_groups = defaultdict(list)
+    for f in failures:
+        failure_groups[f["error_type"]].append(f["test_name"])
+
+    # 반복 실패 감지
+    prev_ctx = read_state(HEAL_CONTEXT_STATE)
+    healable, skipped = _detect_repeated_failures_parallel(failures, prev_ctx)
+
+    if skipped:
+        skipped_names = [f["test_name"] for f in skipped]
+        print(f"\n[99] 동일 오류 2회 연속 반복 → {len(skipped)}건 스킵:")
+        for name in skipped_names:
+            print(f"     - {name}")
+        for s in skipped:
+            slog("heal_skip_repeated", test_name=s["test_name"],
+                 error_type=s.get("error_type", ""), pipeline="parallel")
+
+    # 모든 실패가 반복 → 힐링 중단
+    if not healable and skipped:
+        print("[99] 모든 실패가 반복 패턴 — 수동 수정이 필요합니다.")
+        ctx = {
+            "heal_count": heal_count,
+            "skipped_repeated": [f["test_name"] for f in skipped],
+            "error": "모든 실패가 동일 오류 2회 반복. 수동 수정 필요.",
+            "analyzed_at": datetime.now().isoformat(),
+        }
+        write_state(HEAL_CONTEXT_STATE, ctx)
+        append_lessons(failures)
+        update_heal_stats(failures)
+        return None
+
+    # 최신 lessons_learned 스냅샷 (subagent 간 학습 공유)
+    lessons_snapshot = ""
+    for lpath in [LESSONS_PATH, LESSONS_AUTO_PATH]:
+        if lpath.exists():
+            try:
+                lessons_snapshot += lpath.read_text(encoding="utf-8") + "\n"
+            except Exception:
+                pass
+
     ctx = {
         "heal_count": heal_count,
-        "failure_count": len(failures),
-        "failures": failures,
+        "failure_count": len(healable),
+        "failures": healable,
+        "failure_groups": dict(failure_groups),
+        "skipped_repeated": [f["test_name"] for f in skipped],
         "urls": urls,
+        "lessons_snapshot": lessons_snapshot[-3000:] if lessons_snapshot else "",
         "analyzed_at": datetime.now().isoformat(),
     }
     write_state(HEAL_CONTEXT_STATE, ctx)
-    print(f"\n[99] heal_context 저장됨: {HEAL_CONTEXT_STATE}  ({len(failures)}건 실패)")
+    print(f"\n[99] heal_context 저장됨: {HEAL_CONTEXT_STATE}  "
+          f"(힐링 대상 {len(healable)}건"
+          + (f", 반복 스킵 {len(skipped)}건" if skipped else "") + ")")
 
-    # 실수 패턴 자동 기록
-    append_lessons(failures)
+    # 실수 패턴 자동 기록 + heal_stats 빈도 업데이트
+    append_lessons(healable + skipped)
+    update_heal_stats(healable + skipped)
 
     return ctx
 
 
-def print_heal_instructions(heal_context: dict) -> None:
-    """Claude Code가 힐링할 수 있도록 컨텍스트를 stdout에 출력."""
-    print("\n" + "=" * 60)
-    print("  테스트 실패 — 힐링 필요")
-    print("=" * 60)
-    print(f"  heal_count : {heal_context['heal_count']} / {MAX_HEAL}")
-    print(f"  failures   : {heal_context['failure_count']}건")
-    print()
-    for f in heal_context["failures"]:
-        print(f"  [{f['test_name']}]")
-        lines = f["traceback"].splitlines()[:10]
-        for line in lines:
-            print(f"    {line}")
-        print()
-    print(f"  heal_context 저장: {HEAL_CONTEXT_STATE}")
-    print()
-    # MCP 시각 검증 안내
-    screenshots = [f for f in heal_context["failures"] if f.get("screenshot")]
-    if screenshots:
-        print(f"  스크린샷: {len(screenshots)}개 (Read tool로 시각 확인 가능)")
-        print()
-    print("  Claude Code는 위 traceback을 보고 해당 테스트 파일을 패치한 후")
-    print("  python parallel/99_merge.py 를 다시 실행하세요.")
-    print()
-    print("  [MCP 시각 검증] 원인 불명확 시 Playwright MCP로 실제 페이지 확인 가능")
-    print()
-    print("  [필수] 힐링 완료 체크리스트:")
-    print("    1. 코드 패치 적용")
-    print("    2. agents/lessons_learned.md에 힐링 기록 추가")
-    print("    3. python parallel/99_merge.py 재실행으로 통과 확인")
-    print("=" * 60)
+def _try_auto_heal() -> bool:
+    """06_auto_heal.py를 subprocess로 호출하여 deterministic 패치 시도.
+
+    Returns:
+        True: auto_heal이 일부/전부 패치 성공 (재실행 필요)
+        False: 자동 패치 가능한 패턴 없음 (Agent 힐링 필요)
+    """
+    auto_heal_script = PROJECT_ROOT / "scripts" / "06_auto_heal.py"
+    if not auto_heal_script.exists():
+        return False
+    try:
+        result = subprocess.run(
+            [PYTHON_EXE, str(auto_heal_script)],
+            cwd=str(PROJECT_ROOT),
+            capture_output=True, text=True,
+            timeout=120,
+        )
+        # 출력 표시
+        if result.stdout.strip():
+            for line in result.stdout.strip().splitlines():
+                print(f"  {line}")
+        # 종료코드 0 = 모든 실패 자동 수정 완료
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, Exception) as e:
+        print(f"  [auto_heal] 실행 실패 (무시): {e}")
+        return False
+
+
+def print_heal_instructions(heal_context: dict, pipeline: str = "parallel") -> None:
+    """배치 분할 병렬 힐링 지시를 출력."""
+    failures = heal_context.get("failures", [])
+    urls = heal_context.get("urls", {})
+    # URL 하나로 통합 (여러 그룹이면 첫 번째)
+    url = next(iter(urls.values()), "") if urls else ""
+
+    batches = build_heal_batches(failures)
+    print_heal_batches(batches, url=url, pipeline=pipeline)
 
 
 def verify_lessons_learned_updated(heal_start_time: str) -> bool:
@@ -304,6 +429,9 @@ def main():
     )
     dist_mode = "loadfile" if has_dependent else "load"
 
+    quick_mode = args.quick
+    slog("step_start", step="99_merge", scope=scope_label,
+         file_count=len(existing), quick=quick_mode)
     print(f"\n[99] 실행 범위: {scope_label}  ({len(existing)}개 파일)")
     print(f"[99] 병렬 실행: workers={n_workers}  dist={dist_mode}"
           + (" (의존 테스트 감지 → loadfile)" if has_dependent else ""))
@@ -332,7 +460,6 @@ def main():
 
     # --quick 플래그만 quick mode (state/quick.json 사용)
     # --group 단독 사용 시에는 parallel.json 업데이트
-    quick_mode = args.quick
     state_path = QUICK_STATE if quick_mode else PARALLEL_STATE
 
     if not quick_mode:
@@ -382,7 +509,17 @@ def main():
             heal_count += 1
             heal_ctx = build_heal_context(report, heal_count)
             if heal_ctx:
-                print_heal_instructions(heal_ctx)
+                # auto_heal 시도 (deterministic 패치)
+                auto_heal_applied = _try_auto_heal()
+                if auto_heal_applied:
+                    print("[99] auto_heal 성공 — Agent 힐링 불필요할 수 있습니다.")
+                    print("     python parallel/99_merge.py 를 다시 실행하여 확인하세요.")
+                else:
+                    pl = "quick" if quick_mode else "parallel"
+                print_heal_instructions(heal_ctx, pipeline=pl)
+            else:
+                # build_heal_context가 None 반환 (사이트 불가 또는 전체 반복)
+                HEAL_CONTEXT_STATE.unlink(missing_ok=True)
     else:
         HEAL_CONTEXT_STATE.unlink(missing_ok=True)
 
@@ -479,6 +616,9 @@ def main():
     print(f"  Tests  : {GENERATED_DIR}")
     print(f"  Report : {index_path or '(힐링 중 — 최종 실행 시 생성)'}")
     print("=" * 60)
+    slog("step_end", step="99_merge", passed=passed, failed=failed,
+         total=total, pass_rate=pass_rate, heal_count=heal_count,
+         duration_sec=_duration)
 
 
 if __name__ == "__main__":

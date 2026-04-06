@@ -1,41 +1,43 @@
-"""
-자동 생성된 Playwright 테스트 코드
-URL: https://the-internet.herokuapp.com/
-케이스: tc_15_file_upload (tc_15)
-
-Claude Code가 plan 기반으로 완성한 파일.
-수동 편집 가능.
-"""
 import tempfile
+import shutil
 from pathlib import Path
-
-from playwright.sync_api import expect
+from playwright.sync_api import Page, expect
 
 BASE_URL = "https://the-internet.herokuapp.com/"
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-TEST_DATA_PATH = PROJECT_ROOT / "config" / "test_data.json"
+TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
 
 
-def test_file_upload(page):
+def test_file_upload(page: Page):
     """파일 업로드"""
-    page.goto(BASE_URL + "upload")
+    page.goto("https://the-internet.herokuapp.com/upload")
+    page.wait_for_load_state("domcontentloaded")
 
-    # Create a temporary file to upload
+    # 임시 텍스트 파일 생성
     with tempfile.NamedTemporaryFile(
-        suffix=".txt", prefix="test_upload_", delete=False, mode="w"
-    ) as tmp:
-        tmp.write("test upload content")
-        tmp_path = tmp.name
+        mode="w", suffix=".txt", prefix="test_upload", delete=False
+    ) as f:
+        f.write("test content")
+        tmp_path = f.name
 
-    upload_file_name = Path(tmp_path).name
+    # 파일명을 test_upload.txt로 맞추기 위해 rename
+    target_path = Path(tmp_path).parent / "test_upload.txt"
+    shutil.move(tmp_path, str(target_path))
 
-    # Set file on the file input
-    page.locator("#file-upload").set_input_files(tmp_path)
+    try:
+        file_input = page.locator("#file-upload")
+        expect(file_input).to_be_attached(timeout=10000)
+        file_input.set_input_files(str(target_path))
 
-    # Click upload button
-    page.locator("#file-submit").click()
+        upload_button = page.locator("#file-submit")
+        upload_button.click()
 
-    # Verify upload success
-    expect(page.locator("h3")).to_contain_text("File Uploaded!", timeout=10000)
-    expect(page.locator("#uploaded-files")).to_contain_text(upload_file_name)
+        page.wait_for_load_state("domcontentloaded")
+
+        heading = page.locator("h3")
+        expect(heading).to_contain_text("File Uploaded!", timeout=10000)
+
+        uploaded_files = page.locator("#uploaded-files")
+        expect(uploaded_files).to_contain_text("test_upload.txt", timeout=5000)
+    finally:
+        if target_path.exists():
+            target_path.unlink()

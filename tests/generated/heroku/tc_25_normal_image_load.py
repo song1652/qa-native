@@ -1,32 +1,18 @@
-"""
-자동 생성된 Playwright 테스트 코드
-URL: https://the-internet.herokuapp.com/
-케이스: tc_25_normal_image_load (tc_25)
-
-Claude Code가 plan 기반으로 완성한 파일.
-수동 편집 가능.
-"""
 from pathlib import Path
-from playwright.sync_api import expect
+from playwright.sync_api import Page, expect
 
 BASE_URL = "https://the-internet.herokuapp.com/"
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-TEST_DATA_PATH = PROJECT_ROOT / "config" / "test_data.json"
+TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
 
 
-def test_tc_25_normal_image_load(page):
-    """정상 이미지 로드 확인"""
-    page.goto(BASE_URL + "broken_images")
-    expect(page.locator("body")).to_be_visible()
-    page.wait_for_load_state("networkidle", timeout=15000)
+def test_normal_image_load(page: Page):
+    page.goto("https://the-internet.herokuapp.com/broken_images")
+    page.wait_for_load_state("domcontentloaded")
 
-    natural_widths = page.evaluate("""
-        () => {
-            const imgs = Array.from(document.querySelectorAll('#content img'));
-            return imgs.map(img => img.naturalWidth);
-        }
-    """)
+    content = page.locator("div.example")
+    expect(content).to_be_visible(timeout=10000)
 
-    loaded = [w for w in natural_widths if w > 0]
-    assert len(loaded) >= 1, f"Expected at least 1 loaded image, all widths: {natural_widths}"
+    loaded_count = page.evaluate(
+        "() => Array.from(document.querySelectorAll('div.example img')).filter(img => img.naturalWidth > 0).length"
+    )
+    assert loaded_count >= 1, f"Expected at least 1 normally loaded image, found {loaded_count}"

@@ -1,0 +1,18 @@
+from playwright.sync_api import expect
+from pathlib import Path
+
+BASE_URL = "https://demoqa.com"
+TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
+_RM_ADS = "document.querySelectorAll('ins.adsbygoogle,iframe[src*=google],iframe[src*=doubleclick],#adplus-anchor,.ad-container').forEach(e=>e.remove())"  # noqa: E501
+
+
+def test_button_right_click(page):
+    page.goto(f"{BASE_URL}/buttons", wait_until="domcontentloaded")
+    page.wait_for_timeout(2000)
+    page.evaluate(_RM_ADS)
+
+    right_click_btn = page.get_by_text("Right Click Me", exact=True)
+    right_click_btn.click(button="right")
+
+    expect(page.locator("#rightClickMessage")).to_be_visible(timeout=10000)
+    expect(page.locator("#rightClickMessage")).to_contain_text("You have done a right click")

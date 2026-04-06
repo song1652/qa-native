@@ -1,30 +1,23 @@
-"""
-자동 생성된 Playwright 테스트 코드
-URL: https://the-internet.herokuapp.com/
-케이스: tc_09_js_confirm_cancel (tc_09)
-
-Claude Code가 plan 기반으로 완성한 파일.
-수동 편집 가능.
-"""
+import json
 from pathlib import Path
-
-from playwright.sync_api import expect
+from playwright.sync_api import Page, expect
 
 BASE_URL = "https://the-internet.herokuapp.com/"
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-TEST_DATA_PATH = PROJECT_ROOT / "config" / "test_data.json"
+TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
 
 
-def test_js_confirm_cancel(page):
-    """JS Confirm 취소"""
-    page.goto(BASE_URL + "javascript_alerts")
+def test_js_confirm_cancel(page: Page) -> None:
+    page.goto("https://the-internet.herokuapp.com/javascript_alerts")
+    page.wait_for_load_state("domcontentloaded")
 
-    # Set up dialog handler to dismiss
-    page.on("dialog", lambda dialog: dialog.dismiss())
+    dialog_message = []
 
-    page.locator("button", has_text="Click for JS Confirm").click()
+    def handle_dialog(dialog):
+        dialog_message.append(dialog.message)
+        dialog.dismiss()
 
-    expect(page.locator("#result")).to_contain_text(
-        "You clicked: Cancel", timeout=10000
-    )
+    page.on("dialog", handle_dialog)
+
+    page.get_by_role("button", name="Click for JS Confirm").click()
+
+    expect(page.locator("#result")).to_contain_text("You clicked: Cancel", timeout=10000)

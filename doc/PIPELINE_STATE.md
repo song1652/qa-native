@@ -46,11 +46,38 @@
     "failures": [
       { "test_id": "", "test_name": "", "traceback": "", "screenshot": null }
     ],
+    "skipped_repeated": ["test_name_1"],
     "raw_tail": "",
     "analyzed_at": ""
   }
 }
 ```
+
+## state/heal_context.json 구조 (병렬 파이프라인)
+
+단일 파이프라인과 동일한 힐링 플로우를 공유. `99_merge.py`가 생성/관리.
+
+```json
+{
+  "heal_count": 1,
+  "failure_count": 3,
+  "failures": [
+    { "test_id": "", "test_name": "", "file": "", "traceback": "", "error_type": "Locator", "screenshot": null }
+  ],
+  "failure_groups": { "Locator": ["test_a"], "Assertion": ["test_b"] },
+  "skipped_repeated": ["test_c"],
+  "urls": { "heroku": "https://..." },
+  "lessons_snapshot": "(최신 lessons_learned 스냅샷, 최대 3000자)",
+  "analyzed_at": "ISO datetime"
+}
+```
+
+| 필드 | 설명 |
+|------|------|
+| `failure_groups` | 에러 유형별 실패 테스트 그룹 (Agent가 같은 유형 일괄 처리) |
+| `skipped_repeated` | 동일 오류 2회 연속 반복으로 스킵된 테스트 목록 |
+| `urls` | 실패 테스트의 그룹별 URL (pages.json에서 조회) |
+| `lessons_snapshot` | 힐링 시점의 lessons_learned + _auto 스냅샷 (subagent 간 학습 공유) |
 
 ## state/heal_stats.json 구조
 
@@ -61,7 +88,7 @@
   "patterns": {
     "{error_type}::{summary}": {
       "count": 1,
-      "error_type": "Locator | Assertion | Timeout | URL | 기타",
+      "error_type": "Locator | Assertion | Timeout | URL | JS평가 | Python런타임 | Playwright일반 | 기타",
       "summary": "핵심 오류 라인 (최대 120자)",
       "first_seen": "ISO datetime",
       "last_seen": "ISO datetime"
@@ -132,7 +159,7 @@
 
 ## step 전이 규칙
 
-`_constants.py`의 `VALID_TRANSITIONS` 맵에 정의. `assert_valid_transition()`으로 검증 가능.
+`_constants.py`의 `VALID_TRANSITIONS` 맵에 정의. `write_state()`가 `pipeline.json` 기록 시 자동으로 `assert_valid_transition()`을 호출하여 잘못된 전이를 방지.
 
 ```
 init → analyzed → generated → reviewed → done

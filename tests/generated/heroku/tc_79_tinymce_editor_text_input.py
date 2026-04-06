@@ -1,46 +1,37 @@
-"""
-자동 생성된 Playwright 테스트 코드
-URL: https://the-internet.herokuapp.com/
-케이스: tc_79_tinymce_editor_text_input (tc_79)
-
-Claude Code가 plan 기반으로 완성한 파일.
-수동 편집 가능.
-"""
 from pathlib import Path
-
-from playwright.sync_api import expect
+from playwright.sync_api import Page, expect
 
 BASE_URL = "https://the-internet.herokuapp.com/"
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-TEST_DATA_PATH = PROJECT_ROOT / "config" / "test_data.json"
+TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
 
 
-def test_tc_79_tinymce_editor_text_input(page):
-    """TinyMCE 에디터 텍스트 입력"""
-    page.goto(BASE_URL + "tinymce")
+def test_tinymce_editor_text_input(page: Page):
+    page.goto("https://the-internet.herokuapp.com/tinymce")
+    page.wait_for_load_state("domcontentloaded")
+    page.wait_for_timeout(2000)
 
-    # Wait for iframe to load
-    editor_frame = page.locator("iframe#mce_0_ifr")
-    expect(editor_frame).to_be_visible(timeout=15000)
+    tinymce_frame = page.frame_locator("iframe#mce_0_ifr")
+    expect(tinymce_frame.locator("body#tinymce")).to_be_visible(timeout=15000)
 
-    # Use page.evaluate to set innerHTML directly
-    # (lessons: TinyMCE overlay blocks click+fill)
-    page.evaluate(
-        "const iframe = document.querySelector('iframe#mce_0_ifr');"
-        " const body = iframe.contentDocument.querySelector('#tinymce');"
-        " body.innerHTML = '<p>Hello Playwright</p>';"
-    )
+    page.evaluate("""() => {
+        const iframe = document.querySelector('iframe#mce_0_ifr');
+        if (iframe && iframe.contentDocument) {
+            const body = iframe.contentDocument.querySelector('#tinymce');
+            if (body) {
+                body.innerHTML = '<p>Hello Playwright</p>';
+            }
+        }
+    }""")
 
-    # Verify text was set by reading it back from the iframe
-    # Wrap in IIFE so `return` is valid inside a function body
-    result = page.evaluate(
-        "(() => {"
-        " const iframe = document.querySelector('iframe#mce_0_ifr');"
-        " const body = iframe.contentDocument.querySelector('#tinymce');"
-        " return body.innerText;"
-        "})()"
-    )
-    assert "Hello Playwright" in result, (
-        f"Expected 'Hello Playwright' in editor, got: {result!r}"
-    )
+    page.wait_for_timeout(500)
+
+    content = page.evaluate("""() => {
+        const iframe = document.querySelector('iframe#mce_0_ifr');
+        if (iframe && iframe.contentDocument) {
+            const body = iframe.contentDocument.querySelector('#tinymce');
+            return body ? body.innerText : '';
+        }
+        return '';
+    }""")
+
+    assert "Hello Playwright" in content, f"Expected 'Hello Playwright' in editor, got: {content}"

@@ -15,6 +15,8 @@ from pathlib import Path
 from _paths import PIPELINE_STATE, PROJECT_ROOT, read_state, write_state
 from _python import PYTHON_EXE
 
+HEAL_STATS_PATH = PROJECT_ROOT / "state" / "heal_stats.json"
+
 
 # ── 자동 패치 함수들 ─────────────────────────────────────────────
 
@@ -80,12 +82,63 @@ def fix_triple_click(source: str, traceback: str) -> tuple[str, bool]:
     return new_source, new_source != source
 
 
-# 모든 패치 함수 목록
+def fix_evaluate_return(source: str, traceback: str) -> tuple[str, bool]:
+    """page.evaluate('return ...') → page.evaluate('() => ...')."""
+    if "illegal return" not in traceback.lower() and "syntaxerror" not in traceback.lower():
+        return source, False
+
+    # page.evaluate("return X") → page.evaluate("() => X")
+    # 큰따옴표/작은따옴표 각각 처리 (중첩 따옴표 안전)
+    pattern_dq = re.compile(r'page\.evaluate\(\s*"return\s+([^"]+)"\s*\)')
+    new_source = pattern_dq.sub(r'page.evaluate("() => \1")', source)
+    pattern_sq = re.compile(r"page\.evaluate\(\s*'return\s+([^']+)'\s*\)")
+    new_source = pattern_sq.sub(r"page.evaluate('() => \1')", new_source)
+    return new_source, new_source != source
+
+
+def fix_ad_removal(source: str, traceback: str) -> tuple[str, bool]:
+    """광고 간섭 Timeout → 광고 제거 코드 삽입."""
+    if "timeout" not in traceback.lower():
+        return source, False
+    # automationexercise.com 등 광고 사이트만 대상
+    if "automationexercise" not in source and "adsbygoogle" not in traceback:
+        return source, False
+    if "adsbygoogle" in source:
+        return source, False  # 이미 광고 제거 코드 있음
+
+    ad_removal = '    page.evaluate("document.querySelectorAll(\'ins.adsbygoogle, iframe[src*=google], iframe[src*=doubleclick]\').forEach(e => e.remove())")\n'
+    # page.goto() 다음 줄에 삽입
+    pattern = re.compile(r'(    page\.goto\([^\)]+\)\n)')
+    new_source = pattern.sub(r'\1' + ad_removal, source, count=1)
+    return new_source, new_source != source
+
+
+def _load_frequent_patterns(min_count: int = 3) -> list[dict]:
+    """heal_stats.json에서 빈출 패턴(count >= min_count) 로드."""
+    if not HEAL_STATS_PATH.exists():
+        return []
+    try:
+        stats = json.loads(HEAL_STATS_PATH.read_text(encoding="utf-8"))
+        patterns = stats.get("patterns", {})
+        frequent = [
+            v for v in patterns.values()
+            if v.get("count", 0) >= min_count
+            and v.get("summary", "") != "unknown"
+            and "legacy" not in v.get("summary", "")
+        ]
+        return sorted(frequent, key=lambda x: x["count"], reverse=True)
+    except Exception:
+        return []
+
+
+# 모든 패치 함수 목록 (정적 + 빈출 패턴 기반)
 PATCHERS = [
     fix_strict_mode,
     fix_timeout_increase,
     fix_to_have_class_regex,
     fix_triple_click,
+    fix_evaluate_return,
+    fix_ad_removal,
 ]
 
 
@@ -109,6 +162,14 @@ def main():
     if not failures:
         print("[06-auto] 실패 없음.")
         sys.exit(0)
+
+    # 빈출 패턴 보고 (Agent 힌트)
+    frequent = _load_frequent_patterns(min_count=3)
+    if frequent:
+        print(f"[06-auto] 빈출 패턴 Top {min(len(frequent), 5)}:")
+        for p in frequent[:5]:
+            print(f"  [{p['count']}회] {p['error_type']}: {p['summary'][:60]}")
+        print()
 
     # 실패 파일별 패치 적용
     patched_files = {}

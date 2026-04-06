@@ -17,6 +17,11 @@ plan: {ctx.plan}
 3. state/pipeline.json에 review_summary 저장, step = "reviewed"
 4. 리뷰 중 발견된 새로운 실수 패턴이 있으면 agents/lessons_learned.md 해당 섹션에 한 줄 패턴으로 추가 (기존 패턴과 중복 시 생략)
 
+## Few-shot 예시 (참조용)
+
+코드 리뷰 good/bad 예시: `prompts/examples/review_good_bad.json`
+(CRITICAL: 공유 헬퍼 import, HIGH: 셀렉터 추측/하드코딩/ENV 미처리, LOW: 미사용 import)
+
 ## 필수 검토 항목
 - 공유 헬퍼 금지: helpers.py 등 외부 파일 import -> 각 파일 자체 완결
 - test_data 경로: `Path(__file__).resolve().parent` 4번 -> 프로젝트 루트 (3번 아님)

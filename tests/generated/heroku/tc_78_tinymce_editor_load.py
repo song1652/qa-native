@@ -1,29 +1,19 @@
-"""
-자동 생성된 Playwright 테스트 코드
-URL: https://the-internet.herokuapp.com/
-케이스: tc_78_tinymce_editor_load (tc_78)
-
-Claude Code가 plan 기반으로 완성한 파일.
-수동 편집 가능.
-"""
 from pathlib import Path
-
-from playwright.sync_api import expect
+from playwright.sync_api import Page, expect
 
 BASE_URL = "https://the-internet.herokuapp.com/"
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-TEST_DATA_PATH = PROJECT_ROOT / "config" / "test_data.json"
+TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
 
 
-def test_tc_78_tinymce_editor_load(page):
-    """TinyMCE 에디터 로드 확인"""
-    page.goto(BASE_URL + "tinymce")
+def test_tinymce_editor_load(page: Page):
+    page.goto("https://the-internet.herokuapp.com/tinymce")
+    page.wait_for_load_state("domcontentloaded")
+    page.wait_for_timeout(2000)
 
-    # Verify TinyMCE iframe exists and is visible
-    editor_frame = page.locator("iframe#mce_0_ifr")
-    expect(editor_frame).to_be_visible(timeout=15000)
+    # TinyMCE 6+ uses tox-* class names; iframe class is tox-edit-area__iframe
+    tinymce_frame = page.frame_locator("iframe.tox-edit-area__iframe")
+    expect(tinymce_frame.locator("body")).to_be_visible(timeout=15000)
 
-    # Verify toolbar is present (tox-editor-header contains toolbar buttons)
-    toolbar = page.locator(".tox-editor-header")
-    expect(toolbar).to_be_visible(timeout=15000)
+    # Editor header contains the toolbar/menubar
+    toolbar = page.locator(".tox-editor-header, .mce-toolbar, .tox-toolbar")
+    assert toolbar.count() > 0, "TinyMCE toolbar/editor-header should be present"

@@ -1,24 +1,25 @@
-"""
-자동 생성된 Playwright 테스트 코드
-URL: https://the-internet.herokuapp.com/
-케이스: tc_113_js_prompt_cancel (tc_113)
-
-Claude Code가 plan 기반으로 완성한 파일.
-수동 편집 가능.
-"""
-from playwright.sync_api import expect
+import json
+from pathlib import Path
+from playwright.sync_api import Page, expect
 
 BASE_URL = "https://the-internet.herokuapp.com/"
+TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
 
 
-def test_tc_113_js_prompt_cancel(page):
-    """JS Prompt 취소"""
-    page.goto(BASE_URL + "javascript_alerts")
+def test_js_prompt_cancel(page: Page):
+    """TC-113: JS Prompt 취소 - 결과 텍스트에 'You entered: null' 표시"""
+    page.goto("https://the-internet.herokuapp.com/javascript_alerts")
+    page.wait_for_load_state("domcontentloaded")
 
-    # dismiss (cancel) the prompt dialog
-    page.on("dialog", lambda dialog: dialog.dismiss())
-    page.locator("button", has_text="Click for JS Prompt").click()
+    dialog_messages = []
 
-    expect(page.locator("#result")).to_contain_text(
-        "You entered: null", timeout=5000
-    )
+    def handle_dialog(dialog):
+        dialog_messages.append(dialog.message)
+        dialog.dismiss()
+
+    page.on("dialog", handle_dialog)
+
+    page.get_by_role("button", name="Click for JS Prompt").click()
+
+    result = page.locator("#result")
+    expect(result).to_contain_text("You entered: null", timeout=10000)

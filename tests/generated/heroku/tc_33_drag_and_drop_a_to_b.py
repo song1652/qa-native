@@ -1,58 +1,48 @@
-"""
-자동 생성된 Playwright 테스트 코드
-URL: https://the-internet.herokuapp.com/
-케이스: tc_33_drag_and_drop_a_to_b (tc_33)
-
-Claude Code가 plan 기반으로 완성한 파일.
-수동 편집 가능.
-"""
 from pathlib import Path
-from playwright.sync_api import expect
+from playwright.sync_api import Page, expect
 
 BASE_URL = "https://the-internet.herokuapp.com/"
+TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-TEST_DATA_PATH = PROJECT_ROOT / "config" / "test_data.json"
+_DND_SCRIPT = """
+(args) => {
+    const src = document.querySelector(args[0]);
+    const dst = document.querySelector(args[1]);
+    const dt = {
+        _data: {},
+        setData: function(k, v) { this._data[k] = v; },
+        getData: function(k) { return this._data[k] || ''; },
+        effectAllowed: 'all',
+        dropEffect: 'move'
+    };
+    function fire(el, name) {
+        const e = document.createEvent('DragEvent');
+        e.initEvent(name, true, true);
+        Object.defineProperty(e, 'dataTransfer', { value: dt });
+        el.dispatchEvent(e);
+    }
+    fire(src, 'dragstart');
+    fire(dst, 'dragenter');
+    fire(dst, 'dragover');
+    fire(dst, 'drop');
+    fire(src, 'dragend');
+}
+"""
 
 
-def test_tc_33_drag_and_drop_a_to_b(page):
-    """드래그 앤 드롭 A에서 B로"""
-    page.goto(BASE_URL + "drag_and_drop")
-    expect(page.locator("#column-a")).to_be_visible()
-    expect(page.locator("#column-b")).to_be_visible()
+def test_drag_and_drop_a_to_b(page: Page) -> None:
+    page.goto("https://the-internet.herokuapp.com/drag_and_drop")
+    page.wait_for_load_state("domcontentloaded")
 
-    # HTML5 drag and drop requires JS simulation with custom events
-    page.evaluate("""
-        () => {
-            function simulateDragDrop(sourceNode, destinationNode) {
-                var EVENT_TYPES = { DRAG_END: 'dragend', DRAG_START: 'dragstart', DROP: 'drop' };
-                function createCustomEvent(type) {
-                    var event = new CustomEvent("Event", { bubbles: true, cancelable: true });
-                    event.initCustomEvent(type, true, true, null);
-                    event.dataTransfer = {
-                        data: {},
-                        setData: function(type, val) { this.data[type] = val; },
-                        getData: function(type) { return this.data[type]; }
-                    };
-                    return event;
-                }
-                var event = createCustomEvent(EVENT_TYPES.DRAG_START);
-                sourceNode.dispatchEvent(event);
-                var dropEvent = createCustomEvent(EVENT_TYPES.DROP);
-                dropEvent.dataTransfer = event.dataTransfer;
-                destinationNode.dispatchEvent(dropEvent);
-                var dragEndEvent = createCustomEvent(EVENT_TYPES.DRAG_END);
-                sourceNode.dispatchEvent(dragEndEvent);
-            }
-            simulateDragDrop(
-                document.querySelector('#column-a'),
-                document.querySelector('#column-b')
-            );
-        }
-    """)
+    col_a = page.locator("#column-a")
+    col_b = page.locator("#column-b")
+    expect(col_a).to_be_visible(timeout=10000)
+    expect(col_b).to_be_visible(timeout=10000)
+
+    page.evaluate(_DND_SCRIPT, ["#column-a", "#column-b"])
     page.wait_for_timeout(500)
 
-    col_a_text = page.locator("#column-a header").inner_text()
-    col_b_text = page.locator("#column-b header").inner_text()
-    assert col_a_text == "B", f"Expected column-a to show 'B', got: '{col_a_text}'"
-    assert col_b_text == "A", f"Expected column-b to show 'A', got: '{col_b_text}'"
+    col_a_header = page.locator("#column-a header")
+    col_b_header = page.locator("#column-b header")
+    expect(col_a_header).to_have_text("B", timeout=5000)
+    expect(col_b_header).to_have_text("A", timeout=5000)

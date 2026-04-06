@@ -140,7 +140,7 @@ python parallel/99_merge.py
 | 특정 케이스 FAIL | assertion / locator 오류 | 해당 `.py` 파일 직접 확인 후 수정, 또는 Healer 재실행 |
 | 스크린샷 미생성 | conftest.py 중복 로드 | `tests/generated/` 하위에 conftest.py 없어야 함 |
 | 힐링 3회 반복 실패 | selector/assertion 불일치 | MCP로 실제 페이지 DOM 확인 (`Playwright_navigate` → `playwright_get_visible_html`) |
-| 병렬 힐링 후 lessons_learned 누락 경고 | 힐링 패치만 적용, 기록 누락 | `agents/lessons_learned.md`에 힐링 기록 추가 후 `99_merge.py` 재실행 |
+| 병렬 힐링 후 lessons_learned 누락 경고 | 힐링 패치만 적용, 교훈 미기록 | `agents/lessons_learned.md`에 교훈 수동 기록 후 `99_merge.py` 재실행 (자동 로그는 `lessons_learned_auto.md`에 별도) |
 | DOM 분석 실패 | 네트워크 / URL 오류 | URL 접근 가능 여부 확인 |
 
 ---

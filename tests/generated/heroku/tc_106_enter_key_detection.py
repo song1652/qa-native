@@ -1,31 +1,28 @@
-"""
-자동 생성된 Playwright 테스트 코드
-URL: https://the-internet.herokuapp.com/key_presses
-케이스: tc_106_enter_key_detection (tc_106)
+import json
+from pathlib import Path
+from playwright.sync_api import Page, expect
 
-Claude Code가 plan 기반으로 완성한 파일.
-수동 편집 가능.
-"""
-from playwright.sync_api import expect
-
-BASE_URL = "https://the-internet.herokuapp.com"
+BASE_URL = "https://the-internet.herokuapp.com/"
+TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
 
 
-def test_tc_106_enter_key_detection(page):
-    """Enter 키 입력 감지"""
-    page.goto(f"{BASE_URL}/key_presses")
-    page.wait_for_load_state("networkidle")
+def test_enter_key_detection(page: Page):
+    # key_presses 페이지에서 Enter 키 입력 시 감지 확인
+    page.goto("https://the-internet.herokuapp.com/key_presses")
+    page.wait_for_load_state("domcontentloaded")
 
-    # Enter triggers form submit → page reload → #result text disappears.
-    # Prevent form submission before pressing Enter.
+    # form submit 이벤트 preventDefault (Enter가 폼 제출 트리거 방지)
     page.evaluate("""
-        document.querySelector('form').addEventListener('submit', function(e) {
-            e.preventDefault();
-        });
+        () => {
+            const form = document.querySelector('form');
+            if (form) {
+                form.addEventListener('submit', e => e.preventDefault());
+            }
+        }
     """)
 
-    page.locator("#target").click()
+    input_field = page.locator("#target")
+    input_field.click()
     page.keyboard.press("Enter")
 
-    result = page.locator("#result")
-    expect(result).to_contain_text("You entered: ENTER", timeout=5000)
+    expect(page.locator("#result")).to_contain_text("You entered: ENTER", timeout=5000)

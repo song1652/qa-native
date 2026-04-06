@@ -13,13 +13,16 @@ test_data: {ctx.test_data}
 team_charter: {ctx.team_charter}
 lessons_learned: {ctx.lessons_learned}
 output_path: {ctx.output_path}
+batch_info: {ctx.batch_info}
+batch_files: {ctx.batch_files}
 
 수행할 작업:
 1. **lessons_learned를 먼저 읽고** 과거 실수 패턴 확인 (같은 실수 반복 금지)
-2. test_cases와 dom_info를 분석해 테스트 plan 수립
+2. 배치 내 **모든 test_cases**와 dom_info를 분석해 테스트 plan 수립
    - structured 케이스: precondition/steps/expected 직접 반영
    - natural 케이스: dom_info 기반 steps/assertion 자동 추론
 3. plan 기반으로 완전한 Playwright 테스트 코드 작성 (SKILL.md + lessons_learned 패턴 반영)
+   - 배치 내 여러 케이스는 **독립적으로 병렬 작성** 가능 (공유 상태 없음)
 4. **tc_*.md 1개 = 테스트 파일 1개 = 테스트 함수 1개** 규칙으로 output_path 디렉토리에 개별 파일 저장
    - 파일명: `tc_{번호}_{english_snake_case}.py` (예: `tc_01_login_success.py`)
    - 단일 파이프라인과 동일한 파일명 규칙

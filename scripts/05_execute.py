@@ -15,6 +15,7 @@ from datetime import datetime
 from _python import PYTHON_EXE
 from _paths import PIPELINE_STATE, PROJECT_ROOT, read_state, write_state, append_run_history
 from result_parser import parse_results
+from structured_log import slog
 from report_html import case_row as _case_row, build_report
 
 TESTCASES_DIR = PROJECT_ROOT / "testcases"
@@ -166,6 +167,8 @@ def main():
         print(f"[05] 테스트 실행 중: {file_path}  ({n_funcs}개 함수, 병렬 workers={n_workers}, dist={dist_mode})")
     else:
         print(f"[05] 테스트 실행 중: {file_path}")
+    slog("step_start", step="05_execute", file_path=file_path,
+         n_funcs=n_funcs, no_report=no_report)
     print()
 
     json_report_path = Path(tempfile.gettempdir()) / f"qa_single_report_{ts}.json"
@@ -277,6 +280,8 @@ def main():
     state["execution_result"] = execution_result
     state["step"] = "done"
     write_state(state_path, state)
+    slog("step_end", step="05_execute", passed=passed_count,
+         failed=failed_count, total=total, pass_rate=pass_rate)
 
     append_run_history({
         "timestamp": now,

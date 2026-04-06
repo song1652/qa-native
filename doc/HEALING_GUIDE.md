@@ -1,6 +1,8 @@
 # 힐링 가이드
 
 모든 파이프라인(단일/병렬)에서 힐링 시 동일 기준 적용.
+단일(`06_heal.py` + `06_auto_heal.py`)과 병렬(`99_merge.py`)이 동일한 힐링 플로우를 공유:
+에러 분류(7종) → 사이트 사전 접근 체크 → 반복 실패 감지(2회 스킵) → auto_heal(deterministic 패치) → **배치 분할 병렬 힐링**(HEAL_SUBAGENT_CONTEXTS, 배치당 6건) → lessons/heal_stats 기록.
 
 > 오류 유형별 패치 전략 상세: `.claude/skills/heal-patterns/SKILL.md`
 > Playwright 코드 작성 베스트프랙티스: `.claude/skills/playwright-best-practices/SKILL.md`
@@ -10,7 +12,7 @@
 하나라도 빠지면 힐링 미완료:
 
 1. 코드 패치 적용
-2. `agents/lessons_learned.md`에 한 줄 패턴 형식으로 기록 (`heal_utils.py`가 중복 자동 건너뜀):
+2. `agents/lessons_learned.md`에 교훈을 수동 기록 (자동 로그는 `heal_utils.py`가 `lessons_learned_auto.md`에 기록):
    ```
    - **{핵심 키워드}**: {상황 설명}. {해결법/교훈}
    ```

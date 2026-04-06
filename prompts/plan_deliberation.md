@@ -16,10 +16,28 @@ test_cases: {ctx.test_cases}
 출력 형식:
 1. state/pipeline.json에 plan 저장, step = "planned"
 
-plan 각 항목:
-{ case_name, case_type, description, steps:[{action,selector,value}], assertion:{type,expected} }
+plan 각 항목 JSON 스키마:
+```json
+{
+  "case_name": "tc_{번호}_{english_snake_case}",
+  "case_type": "structured | natural",
+  "description": "테스트 목적을 구체적으로 기술 (모호한 표현 금지)",
+  "steps": [
+    {"action": "goto|fill|click|hover|select|wait|evaluate", "selector": "#id 또는 dom_info 기반 셀렉터", "value": "test_data 참조 또는 리터럴"}
+  ],
+  "assertion": {
+    "type": "url_contains|element_visible|text_contains|element_count|class_contains",
+    "expected": "기대 결과 (외부 사이트 메시지 하드코딩 금지)"
+  }
+}
+```
 - structured 케이스: precondition/steps/expected 직접 반영
 - natural 케이스: dom_info 기반 steps/assertion 자동 추론
+
+## Few-shot 예시 (참조용)
+
+good plan 예시: `prompts/examples/plan_good.json` — 셀렉터를 dom_info에서 확인, test_data 참조, 영문 snake_case
+bad plan 예시: `prompts/examples/plan_bad.json` — 셀렉터 추측, 하드코딩, 한글 함수명, 모호한 description
 
 ## 핵심 규칙 (CLAUDE.md 발췌)
 - 테스트 함수명: 반드시 영문 snake_case `test_{english_snake_case}` (한글 제목도 영어 번역)

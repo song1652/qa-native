@@ -4,8 +4,10 @@ function buildRunPanel(mode) {
   if (mode === 'single') {
     const pages = pagesData.pages || {};
     let pageOpts = '<option value="">-- 페이지 선택 --</option>';
-    for (const [name, url] of Object.entries(pages)) {
-      pageOpts += `<option value="${esc(name)}" data-url="${esc(url)}">${esc(name)}</option>`;
+    for (const [name, entry] of Object.entries(pages)) {
+      const url = typeof entry === 'string' ? entry : (entry && entry.url) || '';
+      const spa = (typeof entry === 'object' && entry.spa) ? ' (SPA)' : '';
+      pageOpts += `<option value="${esc(name)}" data-url="${esc(url)}">${esc(name)}${spa}</option>`;
     }
     let caseOpts = '<option value="">-- 케이스 폴더 선택 --</option>';
     groups.forEach(g => {

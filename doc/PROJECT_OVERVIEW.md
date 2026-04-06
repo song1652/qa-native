@@ -65,9 +65,10 @@ Claude Code가 하네스의 두뇌이면서 자신의 산출물을 검증하는 
 ```
 ┌────────────────────────────────────────────────┐
 │               Claude Code (두뇌)                │
-│  DOM 분석 해석 → 테스트 전략 수립                    │
-│  테스트 코드 직접 작성                              │
-│  실패 트레이스백 분석 → 코드 자동 패치                 │
+│  DOM 분석 해석 → 테스트 전략 수립                     │
+│  테스트 코드 직접 작성                               │
+│  실패 트레이스백 분석 → 코드 자동 패치                  │
+│  FSM 전이 검증 + 반복 실패 자동 스킵                   │
 └──────────────────┬─────────────────────────────┘
                    │  읽기 / 쓰기
                    ▼
@@ -105,7 +106,8 @@ PARALLEL_SUBAGENT_CONTEXTS 출력
 parallel/99_merge.py
   pytest tests/generated/ 일괄 실행
   통합 HTML 리포트 생성
-  실패 시 state/heal_context.json → 힐링 루프 (최대 3회)
+  실패 시 단일과 동일한 힐링 플로우:
+    에러 분류 → 사이트 체크 → 반복 감지 → auto_heal → heal_context.json → 힐링 루프 (최대 3회)
 ```
 
 ### 심의 Agent 흐름 (Plan / Code Review / Healing)
@@ -119,7 +121,7 @@ parallel/99_merge.py
   └─ 심의 Agent 1회 호출 (사수/부사수 내부 시뮬레이션)
        └─ plan / review / patch 확정
        └─ state/pipeline.json 업데이트 (결과 저장)
-       └─ 필요 시 agents/lessons_learned.md 오류 패턴 추가
+       └─ 필요 시 agents/lessons_learned.md 교훈 수동 추가 (자동 로그는 lessons_learned_auto.md)
 
 ※ dialog.json은 팀 자유 토론 전용. QA 파이프라인 심의는 state/pipeline.json에만 기록됨.
 ```
@@ -193,5 +195,6 @@ Claude가 멀티라운드 티키타카 진행 (최소 3라운드)
 Python 3.13 / Playwright (Chromium) / pytest / flake8 / Claude Code (API 없음)
 
 > 대시보드: Python ThreadingHTTPServer + SSE + Vanilla JS (포트 8766, CORS는 localhost만 허용)
+> Overview에 Heal Stats 도넛 차트 + Top 빈출 패턴 시각화 포함
 > 루트 스크립트(run_qa.py 등)는 `_bootstrap.py`로 scripts/ 경로를 자동 설정
 > 상세 API·기능: [`SCRIPTS_GUIDE.md`](SCRIPTS_GUIDE.md) 참조

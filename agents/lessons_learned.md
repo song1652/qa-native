@@ -1,33 +1,12 @@
 # Lessons Learned — QA 자동화 실수 패턴
 
 > **독자**: 심의 Agent — 코드 작성·리뷰·힐링 전 자동 참조.
-> 같은 실수를 반복하지 않기 위한 패턴 모음.
+> 같은 실수를 반복하지 않기 위한 **큐레이션된** 패턴 모음.
+> 자동 기록 로그는 [lessons_learned_auto.md](lessons_learned_auto.md) 참조.
 
 ---
 
 ## Locator 오류
-
-- **Locator**: `expect(pdf_link).to_be_visible(timeout=5000)` — dom_info 셀렉터 재확인, #id 우선 사용
-- **Locator**: `expect(rows).to_have_count(3, timeout=10000)` — dom_info 셀렉터 재확인, #id 우선 사용
-- **Locator**: `expect(page.locator("#ui-id-2")).to_be_visible(timeout=5000)` — dom_info 셀렉터 재확인, #id 우선 사용
-
-- **Locator**: `E   playwright._impl._errors.TimeoutError: Page.hover: Timeout 30000ms exceeded.` — dom_info 셀렉터 재확인, #id 우선 사용
-- **Locator**: `expect(page.locator("#checkbox input")).to_be_visible()` — dom_info 셀렉터 재확인, #id 우선 사용
-- **Locator**: `expect(page.locator("#result")).to_contain_text("You entered: ENTER")` — dom_info 셀렉터 재확인, #id 우선 사용
-- **Locator**: `expect(page.locator("div.row div.large-10")).to_have_count(3)` — dom_info 셀렉터 재확인, #id 우선 사용
-- **Locator**: `expect(page.locator("div.row div.large-10")).to_have_count(3)` — dom_info 셀렉터 재확인, #id 우선 사용
-- **Locator**: `expect(img).to_be_visible()` — dom_info 셀렉터 재확인, #id 우선 사용
-- **Locator**: `expect(page.locator("#checkbox input")).to_be_visible()` — dom_info 셀렉터 재확인, #id 우선 사용
-- **Locator**: `expect(toolbar).to_be_visible(timeout=15000)` — dom_info 셀렉터 재확인, #id 우선 사용
-- **Locator**: `E   playwright._impl._errors.TimeoutError: Page.hover: Timeout 30000ms exceeded.` — dom_info 셀렉터 재확인, #id 우선 사용
-- **Locator**: `E   playwright._impl._errors.TimeoutError: Page.hover: Timeout 30000ms exceeded.` — dom_info 셀렉터 재확인, #id 우선 사용
-
-- **Locator**: `expect(nav_links.first).to_be_visible(timeout=5000)` — dom_info 셀렉터 재확인, #id 우선 사용
-
-- **Locator**: `expect(page.locator(".modal-content")).not_to_be_visible(timeout=10000)` — dom_info 셀렉터 재확인, #id 우선 사용
-
-- **Locator**: `expect(page.locator("a[href='/category_products/4']")).to_be_visible(timeout=10000)` — dom_info 셀렉터 재확인, #id 우선 사용
-- **Locator**: `expect(page.locator("h2[data-qa='account-created']")).to_be_visible(` — dom_info 셀렉터 재확인, #id 우선 사용
 
 - **not_to_have_url 주의**: `expect(page).not_to_have_url()` 사용 시 서버가 URL을 변경하지 않는 경우 실패. 폼 제출 후 URL 변경 대신 DOM 변화(요소 소멸 등)로 검증
 - **중복 셀렉터 주의**: heroku dynamic_controls 페이지는 `#loading`이 2개 존재. `#message` 텍스트 출현으로 대기할 것
@@ -41,34 +20,6 @@
 - **팝업 오버레이 대처**: Escape로 안 닫히는 팝업은 `page.evaluate()`로 `display:none` 강제 제거가 가장 확실
 
 ## Assertion 오류
-
-- **Assertion**: `assert count_before == 3, (` — 실제 페이지 텍스트/상태로 기댓값 수정
-- **Assertion**: `assert col_b_text == "A", f"Expected column-b to show 'A', got: '{col_b_text}'"` — 실제 페이지 텍스트/상태로 기댓값 수정
-- **Assertion**: `assert "/download/" in href, (` — 실제 페이지 텍스트/상태로 기댓값 수정
-- **Assertion**: `assert col_a_text == "B", f"Expected column-a to show 'B', got: '{col_a_text}'"` — 실제 페이지 텍스트/상태로 기댓값 수정
-- **Assertion**: `assert text is not None, "Expected shadow DOM innerText to be accessible"` — 실제 페이지 텍스트/상태로 기댓값 수정
-- **Assertion**: `assert text is not None, "Expected second shadow DOM element to be accessible"` — 실제 페이지 텍스트/상태로 기댓값 수정
-- **Assertion**: `assert count > 0, f"Expected at least 1 list item, got {count}"` — 실제 페이지 텍스트/상태로 기댓값 수정
-
-- **Assertion**: `assert "headerSortUp" in classes or "headerSortDown" in classes, f"Expected sort class, got: {classes}"` — 실제 페이지 텍스트/상태로 기댓값 수정
-- **Assertion**: `assert "headerSortUp" in classes or "headerSortDown" in classes, f"Expected sort class, got: {classes}"` — 실제 페이지 텍스트/상태로 기댓값 수정
-- **Assertion**: `assert "headerSortUp" in classes or "headerSortDown" in classes, f"Expected sort class, got: {classes}"` — 실제 페이지 텍스트/상태로 기댓값 수정
-- **Assertion**: `assert "headerSortUp" in classes or "headerSortDown" in classes, f"Expected sort class, got: {classes}"` — 실제 페이지 텍스트/상태로 기댓값 수정
-- **Assertion**: `assert "headerSortUp" in classes or "headerSortDown" in classes, f"Expected sort class, got: {classes}"` — 실제 페이지 텍스트/상태로 기댓값 수정
-- **Assertion**: `assert "headerSortUp" in classes, f"Expected headerSortUp class, got: {classes}"` — 실제 페이지 텍스트/상태로 기댓값 수정
-- **Assertion**: `assert page.url != initial_url, f"Expected URL to change from {initial_url}, but stayed same"` — 실제 페이지 텍스트/상태로 기댓값 수정
-- **Assertion**: `assert count >= 4, f"Expected >= 4 nav links, got {count}"` — 실제 페이지 텍스트/상태로 기댓값 수정
-- **Assertion**: `assert count >= 4, f"Expected >= 4 nav links after refresh, got {count}"` — 실제 페이지 텍스트/상태로 기댓값 수정
-- **Assertion**: `assert position == "fixed", f"Expected #menu to be fixed, got: {position}"` — 실제 페이지 텍스트/상태로 기댓값 수정
-- **Assertion**: `assert "Back to JQuery UI" in menu_text, (` — 실제 페이지 텍스트/상태로 기댓값 수정
-- **Assertion**: `assert count >= 5, f"Expected at least 5 list items, got {count}"` — 실제 페이지 텍스트/상태로 기댓값 수정
-- **Assertion**: `assert "In a list!" in text` — 실제 페이지 텍스트/상태로 기댓값 수정
-- **Assertion**: `assert "Your content goes here." in text, f"Expected default text not found. Got: {text}"` — 실제 페이지 텍스트/상태로 기댓값 수정
-- **Assertion**: `expect(page).to_have_url(BASE_URL + "users/3")` — 실제 페이지 텍스트/상태로 기댓값 수정
-
-- **Assertion**: `assert new_style != orig_style, (` — 실제 페이지 텍스트/상태로 기댓값 수정
-
-- **Assertion**: `expect(page).to_have_url(re.compile(r"/products"), timeout=10000)` — 실제 페이지 텍스트/상태로 기댓값 수정
 
 - **tablesorter 첫 클릭은 headerSortDown**: `th` 첫 클릭 시 `headerSortDown` 적용, 두 번째 클릭 시 `headerSortUp`. `headerSortUp` 단독 검증이 필요하면 두 번 클릭할 것. 클릭 후 `page.wait_for_timeout(300)` 대기 필수
 - **정렬 테이블 클릭 타겟**: JS 기반 정렬 테이블은 `th`가 아닌 내부 `span`/`a` 요소를 클릭. 정렬 후 DOM 업데이트 대기 필요
@@ -103,20 +54,13 @@
 
 ## 기타
 
-- **기타**: `E   KeyError: 'forgot_email'` — test_data.json 그룹 키 누락. `test_data["heroku"]["forgot_email"]` 처럼 그룹 키("heroku" 등) 포함하여 접근
-- **기타**: `E   playwright._impl._errors.Error: Page.evaluate: SyntaxError: Illegal return statement` — page.evaluate()에 arrow function 없이 return 사용 금지. 반드시 `() => { ... }` 래핑
+- **test_data.json 그룹 키 필수**: `test_data["heroku"]["forgot_email"]` 처럼 그룹 키 포함하여 접근. KeyError 방지
+- **page.evaluate()에 arrow function 필수**: return 문 사용 시 반드시 `() => { ... }` 래핑. 직접 return 사용 시 SyntaxError
 - **drag-and-drop JS 시뮬레이션**: `new DragEvent()`는 the-internet.herokuapp.com에서 동작 안 함. CustomEvent + `initCustomEvent()` + dataTransfer 객체 수동 주입 방식 사용
 - **동적 콘텐츠 exact count 금지**: dynamic_content 등 서버 응답이 가변적인 페이지는 `to_have_count(3)` 대신 `count >= 1`로 검증
 - **download href 형식**: the-internet.herokuapp.com/download 링크 href는 `/download/filename` 아닌 `download/filename` (상대 경로). `"/download/" in href` 대신 `"download" in href` 사용
 - **floating_menu CSS position**: the-internet.herokuapp.com/floating_menu의 #menu는 `position: absolute` (fixed 아님). CSS position 검증 대신 뷰포트 내 visible 여부로 검증
 - **geolocation grant_permissions asyncio 충돌**: `context.grant_permissions(["geolocation"])` 사용 시 asyncio loop 에러 발생 가능. `page.evaluate()`로 `navigator.geolocation.getCurrentPosition`을 직접 모킹하는 방식 사용
-
-- **기타**: `raise Error(` — 
-- **기타**: `raise Error(` — 
-- **기타**: `raise Error(` — 
-- **기타**: `raise Error(` — 
-- **기타**: `assert "Let's have some different text!" in text` — 
-
 - **test_data.json 경로**: `tests/generated/{group}/{file}.py`에서 프로젝트 루트까지 `.parent` 4번 필요 (3번 아님). `resolve()` 포함 권장
 - **pytest 모듈 충돌**: 서브디렉토리별 동일 basename 테스트 파일이 있으면 `__init__.py` 필수
 - **navigate 중 evaluate 금지**: 클릭 후 페이지 이동이 예상되면 `wait_for_load_state()` 호출 후 evaluate. 팝업 제거는 try/except 처리
@@ -157,9 +101,46 @@
 - **미사용 import 금지**: `import re`, `from playwright.sync_api import expect` 등 실제 코드에서 사용하지 않는 모듈을 import하면 F401 lint 오류. 코드 완성 시 사용하는 모듈만 import할 것
 - **미사용 변수 금지**: `old_text = button.inner_text()` 등 할당만 하고 참조하지 않으면 F841. 불필요한 변수 할당 제거
 
-## Timeout 오류
+## heroku 힐링 패턴 (2026-04-06)
 
-- **Timeout**: `E   playwright._impl._errors.TimeoutError: Timeout 30000ms exceeded.` — expect(..., timeout=10000) 또는 wait_for_selector 추가
-- **Timeout**: `E   playwright._impl._errors.TimeoutError: Timeout 30000ms exceeded.` — expect(..., timeout=10000) 또는 wait_for_selector 추가
+- **drag-and-drop DragEvent 방식**: `CustomEvent + initCustomEvent()` 방식은 column-b를 "undefined"로 만듦. `document.createEvent('DragEvent') + initEvent() + Object.defineProperty(e, 'dataTransfer', {value: dt})` 방식 사용
+- **exit intent 모달**: `#modal` 셀렉터 없음, 실제는 `#ouibounce-modal`. 마우스 이벤트로 트리거 안 됨 → `_ouibounce.fire()` 직접 호출
+- **floating menu viewport 체크 금지**: `position: absolute`이므로 스크롤 후 `rect.top < 0`. 뷰포트 좌표 검증 대신 DOM 존재 + 링크 포함 여부로 검증
+- **jqueryui menu get_by_role 금지**: 서브메뉴 항목은 hover 전까지 `display:none`. `get_by_role("menuitem", name=...)` 불가 → `page.locator("#menu > li.ui-menu-item").nth(1).hover()` 후 `page.locator("#menu a", has_text=...)` 사용
+- **jqueryui PDF 클릭**: PDF 링크는 파일 다운로드 → `net::ERR_ABORTED` 발생. `expect_navigation` 대신 href 속성 검증
+- **shadow DOM 두 번째 요소**: `shadowRoot.textContent`에 CSS 스타일 포함. 실제 slot 내용은 host element의 `innerHTML`에서 확인
+- **shifting content list**: `<li>` 없음, `<br><br>` 구분 텍스트. `li` 셀렉터 대신 `.large-6` 컨텐츠 영역 텍스트 검증
+- **shifting content image strict mode**: `locator("img")`가 2개 반환(GitHub badge + content img) → `#content img.shift`로 스코핑
+- **TinyMCE 6+ 셀렉터**: `iframe#mce_0_ifr` 없음, 실제는 `iframe.tox-edit-area__iframe`. toolbar는 `.tox-editor-header`
+- **dropdown option[disabled] to_be_visible 실패**: `<option>` 요소는 Playwright에서 hidden 처리. `to_be_visible()` 대신 `.count() > 0` + JS `selectedIndex` 텍스트 검증
+- **dynamic content strict mode**: row 0은 레이아웃 헤더 행(img 3개), row 1-3이 실제 콘텐츠. `img.first` 없이 `row.locator("img")`는 strict mode 위반 → row별 img count 검사 후 처리
 
-- **Timeout**: `async with self.expect_navigation(` — expect(..., timeout=10000) 또는 wait_for_selector 추가
+## demoqa.com 추가 패턴 (2026-04-06)
+
+- **alert 버튼 locator**: `get_by_role("button", name="...")` 대신 ID 사용 — `#alertButton`, `#timerAlertButton`, `#confirmButton`, `#promtButton` (promtButton 오타 주의)
+- **modal Close 버튼**: `get_by_role("button", name="Close")` strict mode 위반 (x 버튼 + Close 버튼 2개). ID 사용: `#closeSmallModal`, `#closeLargeModal`
+- **webtable rows select**: 옵션 value="10"/"20"/"30"/"40"/"50". "5 rows"/"10 rows" 라벨 없음
+- **droppable "Drop Here"**: 텍스트가 "Drop Here" (대문자 H). "Drop here" 아님
+- **droppable prevent propagation 탭 ID**: `#droppableExample-tab-preventPropogation` (오타 Propogation)
+- **dragabble container**: `.draggable-parent` 없음 → `.containment-wrapper`. 내부 드래그 요소는 `.draggable`
+- **react-select singleValue**: CSS module 동적 클래스 → JS evaluate로 `[class*="singleValue"]` 접근
+- **#cars**: 일반 `<select multiple>`. `select_option(["volvo","saab"])` 사용
+- **menu "SUB SUB LIST"**: 텍스트에 `»` 포함 → `locator("a").filter(has_text="SUB SUB LIST")` 사용
+- **menu "Sub Item"**: 2개 존재 → `.first` 추가 필수
+- **form 라디오/체크박스 label**: `has_text` strict mode 위반 가능. `label[for='gender-radio-1']` 방식으로 특정
+- **form empty submit 검증**: `field-error` 클래스 없음 → 모달 비표시 + 빈 필드 값으로 검증
+- **sidebar header**: `.main-header` 없음 → `.text-center` 사용
+- **dynamic-properties 버튼**: "Will react on click" 없음 → `#enableAfter` disabled→enabled 전환 검증
+- **locator.wait_for(state="enabled")**: 지원 안 됨 → `expect(locator).to_be_enabled(timeout=N)` 사용
+
+## demoqa.com 사이트 구조 변경 (2026-04-06)
+
+- **networkidle 금지**: demoqa.com은 광고 스크립트가 많아 `wait_for_load_state("networkidle")`가 30초 이상 걸려 타임아웃. `"domcontentloaded"` + `wait_for_timeout(2000)` 사용
+- **rc-tree (체크박스)**: 구 `rct-*` 클래스가 `rc-tree-*`로 변경. 확장: `.rc-tree-switcher_close` 클릭, 축소: `.rc-tree-switcher_open` 클릭, 체크박스: `.rc-tree-checkbox[aria-label='Select {name}']`, 제목: `.rc-tree-title`. 별도 expand-all/collapse-all 버튼 없음
+- **웹 테이블**: 구 `rt-table`/`rt-tbody`/`rt-tr-group` 대신 표준 `<table>`/`<tbody>`/`<tr>`/`<td>`. 페이지당 행 수 select는 `select.form-control`(옵션: "Show 10", "Show 20" 등). 헤더 클릭 정렬 미지원
+- **아코디언**: 구 `#section1Heading`/`#section1Content` 대신 Bootstrap 5 `.accordion-item` > `.accordion-button` + `.accordion-body`
+- **드롭 가능(accept 탭)**: `#notAcceptable` ID 없어짐. "Not Acceptable" 텍스트로 `.drag-box` 찾기. drop 영역은 `.drop-box` (ID 없음)
+- **폼 모달 닫기**: `#closeLargeModal` 버튼 클릭 불작동. `page.keyboard.press("Escape")` 사용
+- **jQuery UI drag**: `drag_to()` 및 `page.mouse.move()` 불안정. JS `dispatchEvent(new MouseEvent())` 방식이 가장 안정적: mousedown → mousemove(20 steps) → mouseup. footer/광고 제거 선행 필수
+- **react-select subjects**: Enter 키가 폼 전체를 submit함. 옵션 드롭다운 `.subjects-auto-complete__option` 클릭 사용
+- **resizable handle**: footer와 광고가 pointer events 가로챔. footer 포함 모든 overlay 제거 후 드래그

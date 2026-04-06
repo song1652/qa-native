@@ -72,15 +72,21 @@ python run_qa.py --url https://example.com/ --cases testcases/mysite/tc_01.md
 python run_qa_parallel.py
 ```
 
-**`config/pages.json` 형식:**
+**`config/pages.json` 형식 (string/object 혼용 가능):**
 ```json
 {
   "mysite": "https://example.com/",
-  "login": "https://example.com/login",
-  "admin": "https://admin.example.com/"
+  "login": {
+    "url": "https://example.com/login",
+    "auth": null,
+    "spa": true,
+    "preconditions": [],
+    "notes": "SPA 로그인 페이지"
+  }
 }
 ```
 키 이름 = `testcases/` 하위 폴더명과 일치해야 합니다. 해당 폴더가 없는 키는 자동 건너뜁니다.
+object 형식 사용 시 `page_meta`(auth, spa, preconditions, notes)가 subagent 컨텍스트에 자동 포함됩니다.
 
 **동작 순서:**
 1. `config/pages.json` 읽기 + `testcases/` 폴더 자동 스캔
@@ -113,7 +119,7 @@ python parallel/99_merge.py --quick --group mysite --no-heal
 
 **동작:**
 1. `tests/generated/` 폴더 pytest 일괄 실행 (병렬 8 workers, timeout=900s)
-2. **실패 시**: `state/heal_context.json` 생성 → Claude Code가 traceback 분석 후 패치 → 재실행 (최대 3회). `--no-heal` 시 이 단계를 건너뜀
+2. **실패 시**: 단일 파이프라인과 동일한 힐링 플로우 실행 — 에러 분류(7종) → 사이트 사전 접근 체크 → 반복 실패 감지(2회 스킵) → `06_auto_heal.py` (deterministic 패치) → `state/heal_context.json` 생성 → Claude Code 패치 → 재실행 (최대 3회). `--no-heal` 시 이 단계를 건너뜀
 3. 전체 통과 시: `tests/reports/parallel_index_{날짜시간}.html` 리포트 생성
 4. `--group` 지정 시 리포트에 해당 그룹만 포함 (미선택 그룹 제외)
 
@@ -141,6 +147,7 @@ python agents/dashboard/serve.py
 | 실행 로그 실시간 확인 | 실행 버튼 클릭 후 하단 로그 박스에 3초 간격 폴링 표시 |
 | 파이프라인 진행 상태 모니터링 | 단일: 6단계 프로그레스 바 / 병렬: 워커 카드 그리드 |
 | 테스트 결과 필터·페이지네이션 | All/Pass/Fail 필터 버튼 + 20개 단위 페이지 (단일·병렬·빠른 실행 공통) |
+| **힐링 통계 시각화** | Overview 대시보드에 Heal Stats 위젯: 오류 유형별 도넛 차트 + Top 5 빈출 패턴 목록 |
 | 팀 토론 실시간 모니터링 | 사수/부사수 티키타카 대화가 발언마다 실시간 표시 (SSE) |
 | 팀 토론 시작 | 팀 토론 섹션 주제 입력 → 토론 시작 버튼 |
 | 토론 결론 항목별 승인 | 각 항목 ✓/✗ 버튼 클릭 |
@@ -255,7 +262,7 @@ Claude Code가 실행 중인 상태에서 함께 구동해야 합니다.
   → --lf 실행 시 0개 수집이면 --lf 없이 재실행 (fallback)
 
 06_auto_heal.py
-  → 06_heal.py 이후 자동 패치. strict mode→.first, timeout 증가, to_have_class regex, triple_click 자동 수정
+  → 06_heal.py 이후 자동 패치. 6개 정적 패턴(strict mode, timeout, to_have_class regex, triple_click, evaluate return, 광고 제거) + heal_stats 빈출 패턴 Top 5 보고
   → 수정 파일만 재실행하여 검증. 전부 통과 시 Agent 불필요 (종료코드 0)
   → 잔여 실패 시 heal_context 업데이트 후 Agent에 위임 (종료코드 1)
 
@@ -304,11 +311,12 @@ python scripts/05_execute.py
 | 파일 | 역할 | 직접 실행 |
 |---|---|---|
 | `scripts/_python.py` | `PROJECT_ROOT`를 `_paths.py`에서 import하여 `.venv` 경로 구성. `PYTHON_EXE` 상수 제공 | ❌ (다른 스크립트가 import) |
-| `scripts/_paths.py` | 중앙 경로 상수 (`STATE_DIR`, `LOGS_DIR`, `DOM_CACHE_DIR`, `RUN_HISTORY` 등) + `read_state()` (fcntl 공유 잠금) / `write_state()` (atomic rename) / `append_run_history()` (실행 이력 append) / `get_cached_dom()` (TTL 체크) / `save_dom_cache()` (atomic write + `_cached_at`) / `resolve_sub_doms(state)` (sub_dom_keys → {url:dom} 매핑) 유틸 | ❌ (다른 스크립트가 import) |
+| `scripts/_paths.py` | 중앙 경로 상수 (`STATE_DIR`, `LOGS_DIR`, `DOM_CACHE_DIR`, `RUN_HISTORY` 등) + `read_state()` (fcntl 공유 잠금) / `write_state()` (atomic rename + **pipeline.json FSM 전이 자동 검증**) / `append_run_history()` (실행 이력 append) / `get_cached_dom()` (TTL 체크) / `save_dom_cache()` (atomic write + `_cached_at`) / `resolve_sub_doms(state)` (sub_dom_keys → {url:dom} 매핑) 유틸 | ❌ (다른 스크립트가 import) |
 | `scripts/_constants.py` | 파이프라인 종료 코드 상수 (`EXIT_SUCCESS=0`, `EXIT_HEAL_NEEDED=10`, `EXIT_HEAL_EXCEEDED=2`, `EXIT_REJECTED=2`) + `VALID_TRANSITIONS` step 전이 맵 + `assert_valid_transition()` 검증 함수 | ❌ (다른 스크립트가 import) |
 | `scripts/result_parser.py` | pytest JSON 리포트 → `{nodeid: passed}` 매핑 파싱. `05_execute.py`와 `99_merge.py`가 공유 | ❌ (다른 스크립트가 import) |
 | `scripts/hook_utils.py` | 훅 스크립트 공통 유틸. `check_state(path, key, value, extra_check)` — 5개 `check_pending_*.py`가 공유 | ❌ (다른 스크립트가 import) |
-| `scripts/heal_utils.py` | 힐링 공용 유틸리티. `classify_error`, `extract_key_lines`, `find_screenshot_for_test`, `append_lessons`, `update_heal_stats` — `06_heal.py`와 `99_merge.py`에서 공유 | ❌ (다른 스크립트가 import) |
+| `scripts/structured_log.py` | 구조화된 로그 (JSON Lines). `slog(event, **kwargs)` → `logs/structured.jsonl`에 기록. 05_execute, 06_heal, 99_merge에서 사용. 파이프라인 병목 분석·이벤트 추적용 | ❌ (다른 스크립트가 import) |
+| `scripts/heal_utils.py` (힐링 배치 병렬화: `build_heal_batches()` + `print_heal_batches()` — 단일/병렬/빠른 공통, HEAL_BATCH_SIZE=6) | 힐링 공용 유틸리티. `classify_error` (7분류: Locator/Assertion/Timeout/URL/JS평가/Python런타임/Playwright일반/기타), `extract_key_lines`, `find_screenshot_for_test`, `append_lessons` (→ `lessons_learned_auto.md`에 자동 기록), `update_heal_stats` — `06_heal.py`와 `99_merge.py`에서 공유 | ❌ (다른 스크립트가 import) |
 | `scripts/parse_cases.py` | `.md`/`.json` 테스트케이스 파일 파서 (YAML frontmatter 지원) | ❌ (run_qa.py가 import해서 사용) |
 | `tests/test_core_parsers.py` | 핵심 파서 유닛 테스트 (parse_cases 등) | ❌ (pytest가 자동 실행) |
 | `scripts/sync_test_data.py` | `test_data.json` 동기화 유틸 | ❌ (필요 시 import) |
@@ -352,11 +360,12 @@ python scripts/05_execute.py
 | `state/discuss.json` | 팀 토론 상태 (주제, 결론, 투표 항목) | 대시보드 토론 시작 시 |
 | `agents/dialog.json` | **팀 자유 토론 대화 로그 전용** (QA 파이프라인 심의는 기록 안 함) | 팀 토론 시작 시 |
 | [`agents/team_notes.md`](../agents/team_notes.md) | 승인된 팀 결정사항 (구현 완료 후 초기화) | 토론 항목 전체 투표 완료 시 |
-| [`agents/lessons_learned.md`](../agents/lessons_learned.md) | 테스트 실패·코드리뷰 실수 패턴 누적 | 힐링·코드리뷰 심의 완료 시 |
+| [`agents/lessons_learned.md`](../agents/lessons_learned.md) | 큐레이션된 실수 패턴 (수동 관리) | 힐링·코드리뷰 심의 완료 시 |
+| [`agents/lessons_learned_auto.md`](../agents/lessons_learned_auto.md) | 자동 기록 힐링 로그 (heal_utils.py) | 06_heal.py 실행 시 자동 |
 | `pending_impl.json` | 승인 후 구현 대기 항목 (훅이 감지해 자동 구현) | 대시보드 전체 투표 완료 시 |
 | `state/parallel.json` | 병렬 파이프라인 실행 결과 (targets, 통계) | `99_merge.py` 완료 시 |
 | `state/quick.json` | 빠른 실행 결과 (병렬 상태와 분리) | `99_merge.py --quick` 완료 시 |
-| `state/heal_context.json` | 병렬 파이프라인 실패 traceback (힐링 루프용) | `99_merge.py` 실패 시 |
+| `state/heal_context.json` | 병렬 파이프라인 힐링 컨텍스트 (에러 분류, failure_groups, skipped_repeated, lessons_snapshot 포함) | `99_merge.py` 실패 시 |
 | `state/heal_stats.json` | 힐링 오류 패턴별 빈도 카운터 (Top 5를 심의 컨텍스트에 주입) | `06_heal.py` 실패 분석 시 |
 | `state/run_history.json` | 실행 이력 배열 (timestamp, passed/failed, heal_count, first_pass, duration_sec) | 매 실행 완료 시 자동 append |
 | `logs/merge.txt` | 99_merge.py 실행 로그 | `99_merge.py` 실행 시 |

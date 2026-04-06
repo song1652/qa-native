@@ -7,7 +7,7 @@
 - 이미 읽은 파일은 재읽기 금지
 - 독립적 도구 호출은 반드시 병렬 실행
 - 완료 보고 시 이미 설명한 내용 반복 금지
-- **state/pipeline.json 수동 덮어쓰기 금지**: `heal_count` 등 누적 필드가 리셋됨. 반드시 스크립트(06_heal 등)를 통해 상태 변경
+- **state/pipeline.json 수동 덮어쓰기 금지**: `heal_count` 등 누적 필드가 리셋됨. 반드시 스크립트(06_heal 등)를 통해 상태 변경. `write_state()`가 FSM 전이 규칙을 자동 검증
 
 API 호출 없이 Claude Code 자체가 LLM 역할을 수행하는 QA 자동화 시스템.
 모든 단계 결과는 `state/pipeline.json`에 누적되며, Claude Code가 순서대로 직접 실행한다.
@@ -16,8 +16,8 @@ API 호출 없이 Claude Code 자체가 LLM 역할을 수행하는 QA 자동화 
 - `anthropic`, `langchain`, `openai` 등 외부 LLM SDK import 절대 금지. API 키 사용 금지
 - 모든 단계 결과는 반드시 state/pipeline.json에 저장 후 다음 단계 진행
 - 코드 생성은 Claude Code가 직접 파일로 작성 (문자열 출력 후 저장 아님)
-- **lessons_learned 필수 참조**: 코드 작성·리뷰·힐링 전 [lessons_learned.md](agents/lessons_learned.md) 확인
-- **lessons_learned 즉시 기록**: 코드 패치(힐링·lint 수정·생성 오류 등) 1건마다 즉시 lessons_learned.md에 기록 (몰아서 하지 말 것, 중복 시 생략)
+- **lessons_learned 필수 참조**: 코드 작성·리뷰·힐링 전 [lessons_learned.md](agents/lessons_learned.md) 확인 (큐레이션된 패턴). 자동 기록 로그는 [lessons_learned_auto.md](agents/lessons_learned_auto.md)
+- **lessons_learned 즉시 기록**: 코드 패치(힐링·lint 수정·생성 오류 등) 시 교훈을 lessons_learned.md에 수동 기록 (자동 기록은 heal_utils.py가 _auto.md에 처리). 중복 시 생략
 - **테스트 함수명**: 반드시 영문 snake_case `test_{english_snake_case}` (한글 제목도 영어로 번역)
 - **테스트 파일은 자체 완결**: 공유 헬퍼 파일 생성 금지. BASE_URL·import·상수를 각 파일에 직접 포함
 - **tc_*.md 1개 = 테스트 파일 1개 = 테스트 함수 1개**
@@ -27,7 +27,7 @@ API 호출 없이 Claude Code 자체가 LLM 역할을 수행하는 QA 자동화 
 
 | 파일 | 용도 |
 |------|------|
-| [pages.json](config/pages.json) | `{ "페이지명": "URL" }` — 키는 testcases/ 하위 폴더명과 일치 |
+| [pages.json](config/pages.json) | `{ "페이지명": "URL" }` 또는 `{ "페이지명": { "url": "...", "auth": null, "spa": bool, "preconditions": [], "notes": "" } }` — 키는 testcases/ 하위 폴더명과 일치. string/object 혼용 가능 |
 | [test_data.json](config/test_data.json) | 키 = pages.json 페이지명. frontmatter `data_key`가 서브키 참조. 하드코딩 금지 |
 | [run_history.json](state/run_history.json) | 실행 이력 배열. 매 실행 완료 시 자동 append (메타 평가·트렌드 분석용) |
 
@@ -77,8 +77,8 @@ API 호출 없이 Claude Code 자체가 LLM 역할을 수행하는 QA 자동화 
 - 힐링 시 참조: lessons_learned.md, .claude/skills/heal-patterns/SKILL.md
 - 재실행: 05_execute.py --no-report --only-failed
 - 최대 3회 제한: 3회 힐링 후에도 실패 시 즉시 중단하고 수동 수정 요청 (06_heal.py 종료코드 2)
-- 무한 루프 금지: 동일 오류가 2회 연속 반복되면 해당 테스트는 스킵하고 사람에게 보고
-- 힐링 패치마다 lessons_learned.md에 패턴 기록 필수 (중복 시 생략)
+- 무한 루프 금지: 동일 오류가 2회 연속 반복되면 06_heal.py가 자동 스킵하고 사람에게 보고 (코드로 구현됨)
+- 힐링 패치마다 lessons_learned.md에 교훈 기록 (자동 로그는 heal_utils.py가 _auto.md에 기록)
 ```
 
 **린트 수정 — ecomode**
@@ -91,9 +91,11 @@ API 호출 없이 Claude Code 자체가 LLM 역할을 수행하는 QA 자동화 
 
 ## 힐링
 
-힐링 완료 필수: (1) 코드 패치 (2) [lessons_learned.md](agents/lessons_learned.md)에 한 줄 패턴 기록 (중복 시 생략) (3) 재실행 통과 확인.
+힐링 완료 필수: (1) 코드 패치 (2) [lessons_learned.md](agents/lessons_learned.md)에 교훈 기록 (중복 시 생략, 자동 로그는 [_auto.md](agents/lessons_learned_auto.md)에 별도 기록) (3) 재실행 통과 확인.
 lint 수정·코드 생성 시 반복 오류도 동일하게 lessons_learned.md에 즉시 기록.
 오류 유형별 패치 전략 → [Heal Patterns SKILL.md](.claude/skills/heal-patterns/SKILL.md). MCP 시각 검증 → [HEALING_GUIDE](doc/HEALING_GUIDE.md)
+
+**힐링 배치 병렬화**: 06_heal.py / 99_merge.py가 `HEAL_SUBAGENT_CONTEXTS`를 출력하면, 각 배치를 Agent tool로 **동시에** 실행. 배치당 최대 6건 (heal_utils.HEAL_BATCH_SIZE). 단일/병렬/빠른 실행 모두 동일한 출력 형식 사용.
 
 ## 단일 파이프라인 (단일 URL)
 
@@ -125,7 +127,7 @@ run_qa_parallel.py → testcases/ 스캔 + pages.json URL 조회 → PARALLEL_SU
 1. `PARALLEL_SUBAGENT_CONTEXTS_START ~ END` JSON 읽기
 2. 각 항목을 Agent tool로 **동시에** 실행 — [parallel_subagent.md](prompts/parallel_subagent.md) 참조
 3. 모든 subagent 완료 후 `python parallel/99_merge.py`
-4. 실패 시 힐링 루프 (최대 3회, [HEALING_GUIDE](doc/HEALING_GUIDE.md) 참조). 초과 시 수동 수정 요청
+4. 실패 시 단일과 동일한 힐링 플로우: 에러 분류 → 사이트 체크 → 반복 감지(2회 스킵) → auto_heal → Agent 힐링 (최대 3회, [HEALING_GUIDE](doc/HEALING_GUIDE.md) 참조). 초과 시 수동 수정 요청
 
 ## 팀 토론
 
