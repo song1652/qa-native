@@ -1,4 +1,18 @@
 // ── Dashboard Overview ──
+async function resetHealStats() {
+  if (!confirm('Heal Stats를 초기화하시겠습니까?')) return;
+  await fetch('/api/heal_stats/reset', { method: 'POST' });
+  const main = document.getElementById('main');
+  if (main) renderDashboardOverview(main);
+}
+
+async function resetRunHistory() {
+  if (!confirm('Run History를 초기화하시겠습니까?')) return;
+  await fetch('/api/run_history/reset', { method: 'POST' });
+  const main = document.getElementById('main');
+  if (main) renderDashboardOverview(main);
+}
+
 async function _loadOverviewData() {
   try {
     const [rh, hs] = await Promise.all([
@@ -95,7 +109,7 @@ async function renderDashboardOverview(main) {
     const firstPass = lastRun.first_pass ? 'First Pass' : lastRun.heal_count + '회 힐링';
     historyHtml = `
           <div class="ov-section">
-            <div class="ov-section-title">Run History</div>
+            <div class="ov-section-title">Run History<button class="ov-reset-btn" onclick="resetRunHistory()" title="Run History 초기화">Reset</button></div>
             <div class="trend-chart">${bars}</div>
             <div class="trend-meta">최근 실행: ${duration} · ${firstPass}</div>
           </div>`;
@@ -153,7 +167,7 @@ async function renderDashboardOverview(main) {
 
     healStatsHtml = `
           <div class="ov-section">
-            <div class="ov-section-title">Heal Stats</div>
+            <div class="ov-section-title">Heal Stats<button class="ov-reset-btn" onclick="resetHealStats()" title="Heal Stats 초기화">Reset</button></div>
             <div class="hs-grid">
               <div class="hs-donut-wrap">
                 <svg viewBox="0 0 100 100" class="hs-donut">${donutSegments}</svg>

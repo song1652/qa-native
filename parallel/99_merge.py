@@ -340,7 +340,16 @@ def build_html(test_results: dict, summary: dict,
         if cases:
             for case_idx, case in enumerate(cases):
                 uid = f"{label}_{case_idx}"
-                case_pass = all(group_tests.values()) if group_tests else False
+                # case id (tc_01 등)로 개별 테스트 결과 매칭
+                # nodeid 예: tests/generated/demoqa/tc_01_xxx.py::test_yyy
+                # case_id 예: tc_01 → /tc_01_ 패턴으로 정확 매칭
+                case_id = case.get("id", "")
+                matched = next(
+                    (v for k, v in group_tests.items()
+                     if case_id and f"/{case_id}_" in k),
+                    None,
+                )
+                case_pass = matched if matched is not None else False
                 rows_html += _case_row(case, uid, case_pass)
         else:
             for file_idx, f in enumerate(files):

@@ -462,6 +462,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         "/api/merge_log":          "_post_merge_log",
         "/api/run_quick":          "_post_run_quick",
         "/api/import/convert":     "_post_import_convert",
+        "/api/heal_stats/reset":   "_post_heal_stats_reset",
+        "/api/run_history/reset":  "_post_run_history_reset",
     }
 
     # ── Dispatchers ───────────────────────────────────────────────
@@ -856,6 +858,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def _post_quick_reset(self):
         if QUICK_STATE_PATH.exists():
             QUICK_STATE_PATH.unlink()
+        self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
+
+    def _post_heal_stats_reset(self):
+        init = {"version": 1, "patterns": {}}
+        HEAL_STATS_PATH.write_text(
+            json.dumps(init, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
+
+    def _post_run_history_reset(self):
+        RUN_HISTORY_PATH.write_text("[]", encoding="utf-8")
         self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
 
     def _post_run_merge(self):
