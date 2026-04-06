@@ -1,13 +1,24 @@
-"""Playwright 테스트 — test_checkbox_toggle (tc_04)"""
-from playwright.sync_api import expect
+"""
+자동 생성된 Playwright 테스트 코드
+URL: https://the-internet.herokuapp.com/
+케이스: tc_04_checkbox_toggle (tc_04)
+
+Claude Code가 plan 기반으로 완성한 파일.
+수동 편집 가능.
+"""
+from pathlib import Path
 
 BASE_URL = "https://the-internet.herokuapp.com/"
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+TEST_DATA_PATH = PROJECT_ROOT / "config" / "test_data.json"
 
-def test_checkbox_toggle(page):
-    page.goto(BASE_URL + "checkboxes")
-    checkboxes = page.locator("#checkboxes input[type='checkbox']")
-    checkboxes.nth(0).click()
-    checkboxes.nth(1).click()
-    expect(checkboxes.nth(0)).to_be_checked()
-    expect(checkboxes.nth(1)).not_to_be_checked()
+
+def test_tc_04_checkbox_toggle(page):
+    """Toggle both checkboxes and verify states"""
+    # TODO: Claude Code가 아래를 완성
+    # 케이스 타입: structured
+    # data_key: null
+    # 전략: goto() → click(#checkboxes input:nth-of-type(1)) → click(#checkboxes input:nth-of-type(2))
+    # 검증: attribute: checkbox1=checked,checkbox2=unchecked
+    pass

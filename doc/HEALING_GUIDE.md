@@ -16,11 +16,38 @@
    ```
 3. 재실행으로 통과 확인
 
+## 힐링 제한 및 재실행 옵션
+
+**최대 3회 제한**: 06_heal.py가 자동으로 `heal_count` 추적. 초과 시 `step = "heal_failed"`, 종료코드 2로 중단.
+
+**--only-failed 옵션**: 이전 실행 결과의 실패 테스트만 선택적으로 재실행
+```bash
+python scripts/05_execute.py --only-failed [--no-report]
+```
+- 성공한 테스트는 건너뜀
+- 힐링 중간 재실행 속도 향상 (불필요한 테스트 제외)
+- 전체 통과 후 최종 실행 시에는 전체 재실행 권장
+
 ## 빈도 데이터 활용
 
 - `06_heal.py`가 실패 시 `state/heal_stats.json`에 오류 패턴별 빈도 자동 기록
 - `06a_dialog.py`가 Top 5 빈출 패턴을 DELIBERATION_CONTEXT에 자동 주입
 - 빈출 패턴은 힐링 시 우선 점검 대상
+
+## OMC ultraqa를 이용한 자동 힐링
+
+손수 패치하는 대신 `/oh-my-claudecode:ultraqa` 스킬로 자동 힐링 가능:
+
+```
+python scripts/05_execute.py --no-report
+(실패 발생 시)
+/oh-my-claudecode:ultraqa
+  - 목표: 실패 테스트 자동 분석 후 패치 + 재실행
+  - 최대 3회까지 자동 반복 (초과 시 중단)
+  - 명령: .venv/bin/python -m pytest tests/generated/{group}/ -n 8 --tb=short
+```
+
+**주의**: ultraqa는 최대 3회 제한을 추적하므로, 3회 초과 실패는 수동 개입 필요.
 
 ## MCP 시각 검증 (힐링 시 선택 사용)
 

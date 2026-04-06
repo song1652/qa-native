@@ -1,0 +1,254 @@
+    /* ── Pipeline Monitor ── */
+    .pipeline-view {
+      padding: 24px;
+    }
+
+    .pipeline-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 20px;
+    }
+
+    .step-progress {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-bottom: 24px;
+      padding: 24px 28px;
+      background: rgba(30, 41, 59, 0.3);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      position: relative;
+    }
+
+    .step-progress::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.3), rgba(16, 185, 129, 0.3), transparent);
+    }
+
+    .step-node {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      min-width: 70px;
+      position: relative;
+    }
+
+    .step-circle {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      border: 2.5px solid rgba(255, 255, 255, 0.08);
+      background: rgba(13, 17, 23, 0.8);
+      color: var(--text-dim);
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .step-circle.active {
+      border-color: var(--pending-color);
+      background: rgba(245, 158, 11, 0.08);
+      color: var(--pending-color);
+      box-shadow: 0 0 20px rgba(245, 158, 11, 0.35), 0 0 40px rgba(245, 158, 11, 0.1);
+    }
+
+    .step-circle.done {
+      border-color: var(--approved-color);
+      background: rgba(16, 185, 129, 0.08);
+      color: var(--approved-color);
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.3), 0 0 30px rgba(16, 185, 129, 0.08);
+    }
+
+    @keyframes node-pulse {
+      0%, 100% { box-shadow: 0 0 20px rgba(245, 158, 11, 0.35), 0 0 40px rgba(245, 158, 11, 0.1); }
+      50% { box-shadow: 0 0 25px rgba(245, 158, 11, 0.5), 0 0 50px rgba(245, 158, 11, 0.15); }
+    }
+
+    .step-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-align: center;
+      max-width: 70px;
+    }
+
+    .step-label.active {
+      color: var(--pending-color);
+      font-weight: 600;
+    }
+
+    .step-label.done {
+      color: var(--approved-color);
+    }
+
+    .step-line {
+      flex: 1;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.06);
+      margin: 0 4px;
+      margin-bottom: 20px;
+    }
+
+    .step-line.done {
+      background: linear-gradient(90deg, var(--approved-color), rgba(16, 185, 129, 0.6));
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.2);
+    }
+
+    .pipeline-info {
+      background: var(--surface-glass);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: var(--radius-lg);
+      padding: 22px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      position: relative;
+    }
+
+    .pipeline-info::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 20px;
+      right: 20px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.3), transparent);
+    }
+
+    .pipeline-info-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+
+    .pipeline-info-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .pipeline-info-label {
+      min-width: 100px;
+      color: var(--text-dim);
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    .pipeline-info-val {
+      color: var(--text);
+    }
+
+    .pipeline-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    /* ── Run Pipeline Form ── */
+    .run-pipeline-form {
+      background: var(--surface-glass);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      position: relative;
+    }
+
+    .run-pipeline-form::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.3), transparent);
+    }
+
+    .run-pipeline-form h3 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      color: var(--text);
+    }
+
+    .run-form-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .run-form-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .run-form-label {
+      min-width: 80px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-dim);
+    }
+
+    .run-form-select {
+      flex: 1;
+      padding: 10px 14px;
+      font-size: 13px;
+      background: rgba(13, 17, 23, 0.7);
+      color: var(--text);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      outline: none;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.25s;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
+    }
+
+    .run-form-select:focus {
+      border-color: rgba(99, 102, 241, 0.4);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.08);
+    }
+
+    .run-form-select option {
+      background: #1c2128;
+      color: var(--text);
+    }
+
+    .run-form-url-display {
+      flex: 1;
+      font-size: 13px;
+      color: var(--text-dim);
+      padding: 8px 12px;
+      background: rgba(13, 17, 23, 0.4);
+      border: 1px solid var(--border-glass);
+      border-radius: 8px;
+      min-height: 34px;
+    }
+
+    .run-form-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }

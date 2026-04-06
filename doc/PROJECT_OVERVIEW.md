@@ -77,14 +77,14 @@ Claude Code가 하네스의 두뇌이면서 자신의 산출물을 검증하는 
        ▼           ▼           ▼
   Python        Playwright   pytest
   스크립트      (브라우저)   (테스트 실행)
- 01~06_*.py    Chromium      HTML 리포트
+01~06_auto_heal.py Chromium  HTML 리포트
 ```
 
 ### 병렬 파이프라인
 
 ```
 testcases/{group}/tc_*.md  (1파일 = 1케이스)
-      ↓                     예: heroku/ (20개)
+      ↓                     예: mysite/ (N개)
 run_qa_parallel.py
       ↓
 config/pages.json → URL 조회 + testcases/ 폴더 자동 스캔
@@ -141,7 +141,7 @@ Claude가 멀티라운드 티키타카 진행 (최소 3라운드)
 
 ---
 
-## 스킬 프레임워크
+## 스킬 프레임워크 & OMC 통합
 
 `.claude/skills/`에 정적 가이드라인을 공식 SKILL.md 표준으로 관리. 자체 로더/엔진 없이 Claude Code가 자동 인식.
 
@@ -149,6 +149,11 @@ Claude가 멀티라운드 티키타카 진행 (최소 3라운드)
 |---|---|
 | `playwright-best-practices/SKILL.md` | Playwright 테스트 코드 작성 베스트프랙티스 |
 | `heal-patterns/SKILL.md` | 힐링 오류 유형별 패치 전략 |
+
+**OMC 스킬 통합:**
+- **swarm** — 코드 생성 단계(02_generate.py)에서 다중 케이스 병렬 작성
+- **ecomode** — 린트 수정(03_lint.py)에서 효율적 포맷 처리
+- **ultraqa** — 힐링 루프(06_heal.py)에서 최대 3회 자동 패치 시도
 
 동적 빈도 데이터는 `state/heal_stats.json`에 기록. `06_heal.py`가 실패 시 자동 업데이트하고, `06a_dialog.py`가 Top 5 빈출 패턴을 DELIBERATION_CONTEXT에 주입.
 
@@ -168,9 +173,24 @@ Claude가 멀티라운드 티키타카 진행 (최소 3라운드)
 
 ---
 
+## 최적화 기법
+
+### DOM 병렬 수집 (01_analyze.py)
+- **단일 브라우저**: 메인 URL(networkidle+30s) + 서브페이지(load+500ms, Semaphore(8)) 단일 브라우저에서 분석
+- **React 컴포넌트 추출**: `components`, `idElements` 객체 구조화
+- **DOM 캐시**: URL 해시 기반 `state/dom_cache/` 캐싱, TTL 7일 (env: `DOM_CACHE_TTL_HOURS`)
+- **--force-refresh**: 캐시 무시 강제 재분석 플래그
+
+### 병렬 테스트 실행 (05_execute.py)
+- **최대 8 workers** — pytest-xdist 기반 병렬 실행
+- **--only-failed 플래그** — 이전 실패 케이스만 선별 재실행
+- **--no-report 모드** — 힐링 루프 중 리포트 생성 스킵 (전체 통과 후 최종 1회만)
+
+---
+
 ## 기술 스택
 
 Python 3.13 / Playwright (Chromium) / pytest / flake8 / Claude Code (API 없음)
 
-> 대시보드: Python ThreadingHTTPServer + SSE + Vanilla JS (포트 8766)
+> 대시보드: Python ThreadingHTTPServer + SSE + Vanilla JS (포트 8765)
 > 상세 API·기능: [`SCRIPTS_GUIDE.md`](SCRIPTS_GUIDE.md) 참조

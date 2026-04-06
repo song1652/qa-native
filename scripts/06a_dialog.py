@@ -13,13 +13,19 @@ from _paths import PIPELINE_STATE, PROJECT_ROOT, read_state
 HEAL_STATS_PATH = PROJECT_ROOT / "state" / "heal_stats.json"
 
 
-def read_file(path):
+def read_file(path, filter_files=None):
+    """파일 또는 디렉토리의 내용을 읽는다.
+    filter_files: set of filenames — 지정 시 해당 파일만 포함 (힐링 시 실패 파일만 전달).
+    """
     p = Path(path)
     if p.is_dir():
         parts = []
         for f in sorted(p.glob("*.py")):
-            if f.name not in ("__init__.py", "conftest.py"):
-                parts.append(f"# === {f.name} ===\n{f.read_text(encoding='utf-8')}")
+            if f.name in ("__init__.py", "conftest.py"):
+                continue
+            if filter_files and f.name not in filter_files:
+                continue
+            parts.append(f"# === {f.name} ===\n{f.read_text(encoding='utf-8')}")
         return "\n\n".join(parts)
     return p.read_text(encoding="utf-8") if p.exists() else ""
 
@@ -44,6 +50,15 @@ def main():
 
     generated_path = state.get("generated_file_path", "tests/generated/test_generated.py")
 
+    # 실패 파일만 필터링 (힐링 시 전체 120개 대신 실패 3-5개만 Agent에 전달)
+    failures = heal_context.get("failures", [])
+    failed_filenames = set()
+    for f in failures:
+        test_id = f.get("test_id", "")
+        if "::" in test_id:
+            fname = Path(test_id.split("::")[0]).name
+            failed_filenames.add(fname)
+
     # 모든 컨텍스트 파일 병렬 읽기 (프로젝트 루트 기준 절대 경로)
     project_root = Path(__file__).parent.parent
     paths = {
@@ -51,10 +66,14 @@ def main():
         "senior_role":     project_root / "agents/roles/senior.md",
         "junior_role":     project_root / "agents/roles/junior.md",
         "lessons_learned": project_root / "agents/lessons_learned.md",
-        "generated_code":  generated_path,
     }
     with ThreadPoolExecutor() as ex:
         futures = {k: ex.submit(read_file, v) for k, v in paths.items()}
+        # generated_code는 실패 파일만 포함
+        futures["generated_code"] = ex.submit(
+            read_file, generated_path,
+            failed_filenames if failed_filenames else None,
+        )
         ctx = {k: f.result() for k, f in futures.items()}
 
     heal_count = heal_context.get("heal_count", 1)

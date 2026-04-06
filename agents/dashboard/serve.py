@@ -35,6 +35,8 @@ PARALLEL_STATE_PATH = PROJECT_ROOT / "state" / "parallel.json"
 GENERATED_DIR = PROJECT_ROOT / "tests" / "generated"
 REPORTS_DIR = PROJECT_ROOT / "tests" / "reports"
 QUICK_STATE_PATH = PROJECT_ROOT / "state" / "quick.json"
+RUN_HISTORY_PATH = PROJECT_ROOT / "state" / "run_history.json"
+HEAL_STATS_PATH = PROJECT_ROOT / "state" / "heal_stats.json"
 LOGS_DIR = PROJECT_ROOT / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
 IMPORT_DIR = PROJECT_ROOT / "import"
@@ -229,12 +231,15 @@ def list_generated_groups() -> list:
     return groups
 
 
+MAX_REPORTS = 200
+
+
 def list_reports() -> list:
-    """tests/reports/ 의 HTML 파일 목록 (최신순)."""
+    """tests/reports/ 의 HTML 파일 목록 (최신순, 최대 MAX_REPORTS개)."""
     if not REPORTS_DIR.exists():
         return []
     reports = []
-    for f in sorted(REPORTS_DIR.glob("*.html"), key=lambda p: p.stat().st_mtime, reverse=True):
+    for f in sorted(REPORTS_DIR.glob("*.html"), key=lambda p: p.stat().st_mtime, reverse=True)[:MAX_REPORTS]:
         reports.append({
             "name": f.name,
             "modified_at": datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
@@ -455,6 +460,20 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 json.dumps(payload, ensure_ascii=False).encode("utf-8"),
                 "application/json; charset=utf-8"
             )
+        # ── 실행 이력 ────────────────────────────────────────────────
+        elif path == "/api/run_history":
+            payload = load_json(RUN_HISTORY_PATH) or []
+            self._serve_bytes(
+                json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                "application/json; charset=utf-8"
+            )
+        # ── 힐링 통계 ────────────────────────────────────────────────
+        elif path == "/api/heal_stats":
+            payload = load_json(HEAL_STATS_PATH) or {}
+            self._serve_bytes(
+                json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                "application/json; charset=utf-8"
+            )
         elif path == "/api/generated_groups":
             payload = list_generated_groups()
             self._serve_bytes(
@@ -471,7 +490,19 @@ class DashboardHandler(BaseHTTPRequestHandler):
             fname = path[len("/reports/"):]
             fpath = REPORTS_DIR / fname
             if fpath.exists() and fpath.suffix == ".html":
-                self._serve_file(fpath, "text/html; charset=utf-8")
+                content = fpath.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(content)))
+                self.send_header("X-XSS-Protection", "0")
+                self.send_header("Content-Security-Policy",
+                                 "default-src 'self' https:; "
+                                 "script-src 'unsafe-inline'; "
+                                 "style-src 'unsafe-inline' https:; "
+                                 "font-src 'self' https: data:; "
+                                 "img-src 'self' data: blob:")
+                self.end_headers()
+                self.wfile.write(content)
             else:
                 self.send_response(404)
                 self.end_headers()
@@ -510,6 +541,28 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     json.dumps({"ok": False, "error": str(e)},
                                ensure_ascii=False).encode("utf-8"),
                     "application/json; charset=utf-8")
+
+        # ── 정적 파일 (CSS/JS) ────────────────────────────────────────
+        elif path.startswith("/static/"):
+            rel = path[len("/static/"):]
+            if ".." in rel:
+                self.send_response(403)
+                self.end_headers()
+                return
+            fpath = HERE / "static" / rel
+            if fpath.exists() and fpath.is_file():
+                ext = fpath.suffix.lower()
+                mime_map = {
+                    ".css": "text/css; charset=utf-8",
+                    ".js": "application/javascript; charset=utf-8",
+                    ".png": "image/png",
+                    ".svg": "image/svg+xml",
+                }
+                content_type = mime_map.get(ext, "application/octet-stream")
+                self._serve_file(fpath, content_type)
+            else:
+                self.send_response(404)
+                self.end_headers()
 
         else:
             self.send_response(404)
@@ -915,6 +968,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(content)))
+            if "html" in content_type:
+                self.send_header("X-XSS-Protection", "0")
             self.end_headers()
             self.wfile.write(content)
         else:

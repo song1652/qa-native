@@ -79,24 +79,73 @@ def parse_failures(output: str, file_path: str) -> list[dict]:
     return failures
 
 
-def collect_failure_details(file_path: str) -> tuple[list[dict], str]:
-    """pytest를 상세 모드로 실행해 실패 정보를 수집한다."""
+def collect_failure_details_from_report(state: dict) -> tuple[list[dict], str]:
+    """05_execute가 생성한 JSON report에서 실패 정보를 파싱한다 (pytest 재실행 없음)."""
+    import json as _json
+    json_report_path = state.get("execution_result", {}).get("json_report_path", "")
+    if json_report_path and Path(json_report_path).exists():
+        try:
+            report = _json.loads(Path(json_report_path).read_text(encoding="utf-8"))
+            failures = []
+            raw_lines = []
+            for test in report.get("tests", []):
+                if test.get("outcome") in ("failed", "error"):
+                    nodeid = test.get("nodeid", "")
+                    test_name = nodeid.split("::")[-1] if "::" in nodeid else nodeid
+                    # call 단계의 longrepr (traceback)
+                    longrepr = ""
+                    call = test.get("call", {})
+                    longrepr = call.get("longrepr", "")
+                    if not longrepr:
+                        # setup/teardown 에러
+                        for phase in ("setup", "teardown"):
+                            p = test.get(phase, {})
+                            if p.get("longrepr"):
+                                longrepr = p["longrepr"]
+                                break
+                    failures.append({
+                        "test_id": nodeid,
+                        "test_name": test_name,
+                        "traceback": longrepr,
+                    })
+                    raw_lines.append(f"FAILED {nodeid}")
+                    if longrepr:
+                        raw_lines.append(longrepr[:500])
+            return failures, "\n".join(raw_lines)
+        except Exception:
+            pass
+    # JSON report가 없으면 fallback: 실패 테스트만 재실행
+    return _collect_failure_details_fallback(
+        state.get("generated_file_path", "tests/generated/")
+    )
+
+
+def _collect_failure_details_fallback(file_path: str) -> tuple[list[dict], str]:
+    """Fallback: JSON report 없을 때 실패 테스트만 재실행하여 정보 수집."""
     try:
+        cmd = [PYTHON_EXE, "-m", "pytest", file_path,
+               "--tb=long", "-v", "--no-header", "--lf"]
+        if Path(file_path).is_dir():
+            cmd += ["-n8", "--dist=load"]
         result = subprocess.run(
-            [PYTHON_EXE, "-m", "pytest", file_path, "--tb=long", "-v", "--no-header"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=300,  # 5분 타임아웃 (무한 행 방지)
+            cmd,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            timeout=600,
         )
         output = result.stdout + result.stderr
+        if "no tests ran" in output or "collected 0 items" in output:
+            cmd_full = [c for c in cmd if c != "--lf"]
+            result = subprocess.run(
+                cmd_full,
+                capture_output=True, text=True,
+                encoding="utf-8", errors="replace",
+                timeout=600,
+            )
+            output = result.stdout + result.stderr
     except subprocess.TimeoutExpired:
-        output = "[06] pytest 실행 타임아웃 (300초 초과)"
+        output = "[06] pytest 실행 타임아웃 (600초 초과)"
     failures = parse_failures(output, file_path)
-
-    # 실패 케이스별 DOM 스냅샷 수집 (selector 힌트용)
-    # 스크린샷은 conftest.py의 pytest_runtest_makereport 훅이 처리
     return failures, output
 
 
@@ -153,7 +202,7 @@ def main():
     print(f"[06] 실패 분석 중 (힐링 {heal_count + 1}/{MAX_HEAL}회차)...")
     print()
 
-    failures, raw_output = collect_failure_details(file_path)
+    failures, raw_output = collect_failure_details_from_report(state)
 
     # 실패가 파싱되지 않은 경우 raw 출력 전체 저장
     if not failures and execution_result.get("exit_code", 0) != 0:
@@ -163,12 +212,21 @@ def main():
     for f in failures:
         f["screenshot"] = find_screenshot_for_test(f["test_name"])
 
+    # 에러 타입별 그룹핑 (Agent가 같은 유형 일괄 처리 가능)
+    from collections import defaultdict
+    failure_groups = defaultdict(list)
+    for f in failures:
+        error_type = classify_error(f["traceback"])
+        f["error_type"] = error_type
+        failure_groups[error_type].append(f["test_name"])
+
     heal_context = {
         "heal_count": heal_count + 1,
         "failure_count": len(failures),
         "failures": failures,
+        "failure_groups": dict(failure_groups),
         "url": state.get("url", ""),
-        "raw_tail": raw_output[-2000:],  # 마지막 2000자 (Claude Code 참고용)
+        "raw_tail": raw_output[-2000:],
         "analyzed_at": datetime.now().isoformat(),
     }
 

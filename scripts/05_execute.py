@@ -4,6 +4,7 @@ LLM 없음. pytest 실행 후 결과를 state/pipeline.json에 저장.
 커스텀 다크 테마 HTML 리포트 생성 (병렬 파이프라인 리포트와 동일한 형식).
 """
 import ast
+import html as _html
 import json
 import re
 import shutil
@@ -12,8 +13,13 @@ import sys
 import tempfile
 from pathlib import Path
 from datetime import datetime
+
+
+def _esc(text: str) -> str:
+    """HTML 이스케이프 — 사용자 데이터를 안전하게 출력."""
+    return _html.escape(str(text), quote=True)
 from _python import PYTHON_EXE
-from _paths import PIPELINE_STATE, PROJECT_ROOT, read_state, write_state
+from _paths import PIPELINE_STATE, PROJECT_ROOT, read_state, write_state, append_run_history
 
 TESTCASES_DIR = PROJECT_ROOT / "testcases"
 SCREENSHOTS_DIR = PROJECT_ROOT / "tests" / "screenshots"
@@ -57,10 +63,10 @@ def case_row(case: dict, uid: str, is_passed: bool) -> str:
     status_cls = "pass" if is_passed else "fail"
     badge_txt = "PASS" if is_passed else "FAIL"
 
-    clean_steps = [_strip_prefix(s) for s in steps if s.strip()]
+    clean_steps = [_esc(_strip_prefix(s)) for s in steps if s.strip()]
     steps_html = "".join(f"<li>{s}</li>" for s in clean_steps) if clean_steps else "<li>-</li>"
 
-    pre_lines = [_strip_prefix(l) for l in precondition.splitlines() if l.strip()]
+    pre_lines = [_esc(_strip_prefix(l)) for l in precondition.splitlines() if l.strip()]
     pre_content = "<br>".join(pre_lines)
     pre_html = (
         f'<div class="detail-row">'
@@ -71,13 +77,13 @@ def case_row(case: dict, uid: str, is_passed: bool) -> str:
     )
 
     exp_raw = expected.replace("\\n", "\n")
-    exp_lines = [_strip_prefix(l) for l in exp_raw.splitlines() if l.strip()]
+    exp_lines = [_esc(_strip_prefix(l)) for l in exp_raw.splitlines() if l.strip()]
     exp_content = "<br>".join(exp_lines)
 
-    return f"""<div class="case-item" onclick="toggle('{uid}')">
+    return f"""<div class="case-item" data-toggle="{uid}">
   <div class="case-header">
     <span class="case-dot {status_cls}"></span>
-    <span class="case-title">{title}</span>
+    <span class="case-title">{_esc(title)}</span>
     <div class="case-right">
       <span class="case-status-txt {status_cls}">{badge_txt}</span>
       <span class="chevron" id="chv_{uid}">&#8250;</span>
@@ -111,7 +117,7 @@ def build_report_html(test_results: dict, pytest_summary: dict,
 
     # 사이드바 nav: 그룹 1개
     display_label = group_name.replace("_", " ").upper()
-    nav_items = f'<li class="nav-item" onclick="scrollTo(\'{group_name}\')">{display_label}</li>\n'
+    nav_items = f'<li class="nav-item" data-scroll="{group_name}">{display_label}</li>\n'
 
     # 케이스별 결과 매칭
     rows_html = ""
@@ -246,16 +252,18 @@ def build_report_html(test_results: dict, pytest_summary: dict,
   .empty-msg{{padding:16px 20px;font-size:13px;color:var(--text3)}}
 </style>
 <script>
-function toggle(uid){{
-  var d=document.getElementById('detail_'+uid);
-  var c=document.getElementById('chv_'+uid);
-  if(d.style.display==='none'||!d.style.display){{d.style.display='block';c.classList.add('open');}}
-  else{{d.style.display='none';c.classList.remove('open');}}
-}}
-function scrollTo(label){{
-  var el=document.getElementById('group_'+label);
-  if(el)el.scrollIntoView({{behavior:'smooth',block:'start'}});
-}}
+document.addEventListener('click',function(e){{
+  var t=e.target.closest('[data-toggle]');
+  if(t){{var u=t.getAttribute('data-toggle');
+    var d=document.getElementById('detail_'+u);
+    var c=document.getElementById('chv_'+u);
+    if(d.style.display==='none'||!d.style.display){{d.style.display='block';c.classList.add('open');}}
+    else{{d.style.display='none';c.classList.remove('open');}}
+  }}
+  var s=e.target.closest('[data-scroll]');
+  if(s){{var el=document.getElementById('group_'+s.getAttribute('data-scroll'));
+    if(el)el.scrollIntoView({{behavior:'smooth',block:'start'}});}}
+}});
 </script>
 </head>
 <body>
@@ -383,6 +391,15 @@ def main():
 
     state = read_state(state_path)
 
+    # 힐링 재실행 감지: 이전 실행에서 실패가 있었으면 heal_count 증가
+    # 단, 06_heal.py가 이미 증가시킨 경우(step=heal_needed) 중복 방지
+    prev_result = state.get("execution_result", {})
+    prev_failed = prev_result.get("failed", 0)
+    if prev_failed > 0 and state.get("step") != "heal_needed":
+        heal_count = state.get("heal_count", 0) + 1
+        state["heal_count"] = heal_count
+        write_state(state_path, state)
+
     file_path = state.get("generated_file_path", "tests/generated/test_generated.py")
     if not Path(file_path).exists():
         print(f"[오류] 테스트 파일 없음: {file_path}")
@@ -403,7 +420,7 @@ def main():
     parallel_opts = []
     if n_funcs > 1:
         dist_mode = "loadfile" if has_dependent else "load"
-        n_workers = min(n_funcs, 4)
+        n_workers = min(n_funcs, 8)
         parallel_opts = [f"-n{n_workers}", f"--dist={dist_mode}"]
         print(f"[05] 테스트 실행 중: {file_path}  ({n_funcs}개 함수, 병렬 workers={n_workers}, dist={dist_mode})")
     else:
@@ -413,27 +430,37 @@ def main():
     # JSON 리포트 임시 경로
     json_report_path = Path(tempfile.gettempdir()) / f"qa_single_report_{ts}.json"
 
-    result = subprocess.run(
-        [
-            PYTHON_EXE, "-m", "pytest", file_path,
-            "--json-report",
-            f"--json-report-file={json_report_path}",
-            "-v",
-            "--tb=short",
-        ] + parallel_opts,
-        capture_output=False,   # 실시간 출력
-        text=True,
-        timeout=300,            # 5분 타임아웃 (무한 행 방지)
-    )
+    try:
+        result = subprocess.run(
+            [
+                PYTHON_EXE, "-m", "pytest", file_path,
+                "--json-report",
+                f"--json-report-file={json_report_path}",
+                "-v",
+                "--tb=short",
+            ] + parallel_opts,
+            capture_output=False,   # 실시간 출력
+            text=True,
+            timeout=900,            # 15분 타임아웃 (대규모 테스트 대응)
+        )
+    except subprocess.TimeoutExpired:
+        print("\n[05] pytest 실행 타임아웃 (900초 초과)")
+        state["step"] = "timeout"
+        state["execution_result"] = {
+            "passed": 0, "failed": 0, "total": 0,
+            "exit_code": -1, "summary": "타임아웃 (900초 초과)",
+            "executed_at": now, "heal_count": state.get("heal_count", 0),
+        }
+        write_state(state_path, state)
+        sys.exit(1)
 
-    # JSON 리포트 파싱
+    # JSON 리포트 파싱 (06_heal에서 재활용 — 삭제하지 않음)
     report = {}
     if json_report_path.exists():
         try:
             report = json.loads(json_report_path.read_text(encoding="utf-8"))
         except Exception:
             pass
-        json_report_path.unlink(missing_ok=True)
 
     pytest_summary = report.get("summary", {})
     test_results = parse_results(report)
@@ -499,11 +526,26 @@ def main():
         "group_results": group_results,
         "executed_at": now,
         "heal_count":  state.get("heal_count", 0),
+        "json_report_path": str(json_report_path),
     }
 
     state["execution_result"] = execution_result
     state["step"] = "done"
     write_state(state_path, state)
+
+    # 실행 이력 기록 (단일 파이프라인)
+    append_run_history({
+        "timestamp": now,
+        "pipeline": "single",
+        "group": state.get("group_dir", "unknown"),
+        "passed": passed_count,
+        "failed": failed_count,
+        "total": total,
+        "pass_rate": pass_rate,
+        "heal_count": state.get("heal_count", 0),
+        "first_pass": state.get("heal_count", 0) == 0 and failed_count == 0,
+        "duration_sec": None,
+    })
 
     print()
     print("=" * 55)

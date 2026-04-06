@@ -48,10 +48,10 @@ Claude가 자동으로 호출하는 파일 (직접 실행 불필요)
 
 ```bash
 # 케이스 폴더 지정 (권장) — 폴더 내 tc_*.md 파일 전체를 자동 읽음
-python run_qa.py --url https://the-internet.herokuapp.com/ --cases testcases/heroku/
+python run_qa.py --url https://example.com/ --cases testcases/mysite/
 
 # 단일 파일 지정
-python run_qa.py --url https://the-internet.herokuapp.com/ --cases testcases/heroku/tc_01.md
+python run_qa.py --url https://example.com/ --cases testcases/mysite/tc_01.md
 ```
 
 **동작 순서:**
@@ -74,9 +74,9 @@ python run_qa_parallel.py
 **`config/pages.json` 형식:**
 ```json
 {
-  "login": "https://the-internet.herokuapp.com/login",
-  "secure": "https://the-internet.herokuapp.com/secure",
-  "heroku": "https://the-internet.herokuapp.com/"
+  "mysite": "https://example.com/",
+  "login": "https://example.com/login",
+  "admin": "https://admin.example.com/"
 }
 ```
 키 이름 = `testcases/` 하위 폴더명과 일치해야 합니다. 해당 폴더가 없는 키는 자동 건너뜁니다.
@@ -96,19 +96,19 @@ python run_qa_parallel.py
 ```bash
 python parallel/99_merge.py
 # 특정 그룹만 실행
-python parallel/99_merge.py --group heroku
+python parallel/99_merge.py --group mysite
 # 빠른 실행 모드 (state/quick.json에 결과 저장, parallel_state 미변경)
-python parallel/99_merge.py --quick --group heroku
+python parallel/99_merge.py --quick --group mysite
 ```
 
 **옵션:**
 | 옵션 | 설명 |
 |---|---|
-| `--group`, `-g` | 실행할 폴더명 (예: `heroku`). 생략 시 전체 실행 |
+| `--group`, `-g` | 실행할 폴더명 (예: `mysite`). 생략 시 전체 실행 |
 | `--quick` | 빠른 실행 모드. 결과를 `state/quick.json`에 저장 (`state/parallel.json` 미변경) |
 
 **동작:**
-1. `tests/generated/` 폴더 pytest 일괄 실행 (병렬 4 workers)
+1. `tests/generated/` 폴더 pytest 일괄 실행 (병렬 8 workers, timeout=900s)
 2. **실패 시**: `state/heal_context.json` 생성 → Claude Code가 traceback 분석 후 패치 → 재실행 (최대 3회)
 3. 전체 통과 시: `tests/reports/parallel_index_{날짜시간}.html` 리포트 생성
 4. `--group` 지정 시 리포트에 해당 그룹만 포함 (미선택 그룹 제외)
@@ -123,7 +123,7 @@ python parallel/99_merge.py --quick --group heroku
 
 ```bash
 python agents/dashboard/serve.py
-# 브라우저에서 http://localhost:8766 자동 열림
+# 브라우저에서 http://localhost:8765 자동 열림
 ```
 
 **대시보드에서 할 수 있는 것:**
@@ -165,7 +165,7 @@ python agents/dashboard/serve.py
 **서버 재시작 방법 (코드 변경 후):**
 ```bash
 # 포트 확인 (macOS)
-lsof -i :8766
+lsof -i :8765
 # PID 종료
 kill -9 [PID]
 # 재시작
@@ -210,8 +210,10 @@ Claude Code가 실행 중인 상태에서 함께 구동해야 합니다.
 
 ```
 01_analyze.py
-  → URL에 접속해 DOM 구조 추출 (input, button, form, link 등)
-  → state/pipeline.json에 dom_info 저장
+  → 메인 URL + 서브페이지 DOM을 단일 브라우저에서 분석 (메인: networkidle+30s, 서브: load+500ms, Semaphore(8))
+  → input, button, form, link + React 컴포넌트(tree, tabs, drag, accordion, progress 등) 추출
+  → state/pipeline.json에 dom_info (인라인) + sub_dom_keys (URL→해시 매핑) 저장, state/dom_cache/에 캐시 (TTL 7일)
+  → --force-refresh 플래그: 캐시를 무시하고 강제 재분석
 
 02a_dialog.py
   → Plan 심의에 필요한 파일들을 병렬로 읽어 JSON으로 출력
@@ -223,22 +225,33 @@ Claude Code가 실행 중인 상태에서 함께 구동해야 합니다.
 
 03_lint.py
   → flake8으로 생성된 테스트 코드 품질 검사
-  → state/pipeline.json에 lint_result 저장
+  → state/pipeline.json에 lint_result 저장, step=reviewed 설정
+  → 이후 check_pending_approve.py 훅이 step=reviewed를 감지하여 05_execute.py 트리거
 
 03a_dialog.py
   → 코드 리뷰 심의에 필요한 파일들을 병렬로 읽어 JSON으로 출력
   → Claude가 lint 결과 + 코드를 보고 리뷰 진행
 
 05_execute.py
-  → pytest로 테스트 실행
+  → pytest로 테스트 실행 (최대 8 workers 병렬)
   → state/pipeline.json에 execution_result 저장
   → `--no-report` 플래그: 리포트·스크린샷 생성 건너뜀 (힐링 중간 실행용)
+  → `--only-failed` 플래그: 이전 실행에서 실패한 테스트만 재실행 (힐링 시 시간 대폭 절감)
   → 첫 실행 포함 모든 실행은 `--no-report`, 전체 통과 확인 후 마지막 1회만 리포트 생성
+  → 워커 자동 감소 재실행 (8→4→2→1):
+    처음엔 최대 8워커로 실행. 실패율 15% 이상이면 워커를 절반으로 줄여 실패분만 자동 재실행.
+    각 단계 결과를 원래 결과에 병합하여 최종 리포트에 반영.
+    (외부 사이트 rate limiting / 병렬 타이밍 이슈 자동 대응)
 
 06_heal.py
-  → 실패한 테스트의 traceback을 수집하고 스크린샷 경로를 연결해 heal_context 저장
-  → state/heal_stats.json에 오류 패턴별 빈도 자동 업데이트
-  → 종료코드 0=전체 통과, 1=실패 있음, 2=힐링 횟수 초과
+  → 05_execute가 생성한 JSON 리포트(json_report_path)에서 실패 정보를 파싱 (pytest 재실행 없음)
+  → 스크린샷 경로를 연결해 heal_context 저장. 타임아웃 600s, -n8 병렬
+  → --lf 실행 시 0개 수집이면 --lf 없이 재실행 (fallback)
+
+06_auto_heal.py
+  → 06_heal.py 이후 자동 패치. strict mode→.first, timeout 증가, to_have_class regex, triple_click 자동 수정
+  → 수정 파일만 재실행하여 검증. 전부 통과 시 Agent 불필요 (종료코드 0)
+  → 잔여 실패 시 heal_context 업데이트 후 Agent에 위임 (종료코드 1)
 
 06a_dialog.py
   → 힐링 심의에 필요한 파일들을 병렬로 읽어 JSON으로 출력
@@ -284,7 +297,7 @@ python scripts/05_execute.py
 | 파일 | 역할 | 직접 실행 |
 |---|---|---|
 | `scripts/_python.py` | `.venv/bin/python` 경로 자동 감지 + `PYTHON_EXE` 상수 제공 | ❌ (다른 스크립트가 import) |
-| `scripts/_paths.py` | 중앙 경로 상수 (`STATE_DIR`, `LOGS_DIR`, `DOM_CACHE_DIR` 등) + `read_state()` (fcntl 공유 잠금) / `write_state()` (atomic rename) 유틸 | ❌ (다른 스크립트가 import) |
+| `scripts/_paths.py` | 중앙 경로 상수 (`STATE_DIR`, `LOGS_DIR`, `DOM_CACHE_DIR`, `RUN_HISTORY` 등) + `read_state()` (fcntl 공유 잠금) / `write_state()` (atomic rename) / `append_run_history()` (실행 이력 append) / `get_cached_dom()` (TTL 체크) / `save_dom_cache()` (atomic write + `_cached_at`) / `resolve_sub_doms(state)` (sub_dom_keys → {url:dom} 매핑) 유틸 | ❌ (다른 스크립트가 import) |
 | `scripts/_constants.py` | 파이프라인 종료 코드 상수 (`EXIT_SUCCESS`, `EXIT_HEAL_NEEDED`, `EXIT_HEAL_EXCEEDED`, `EXIT_REJECTED`) | ❌ (다른 스크립트가 import) |
 | `scripts/heal_utils.py` | 힐링 공용 유틸리티. `classify_error`, `extract_key_lines`, `find_screenshot_for_test`, `append_lessons`, `update_heal_stats` — `06_heal.py`와 `99_merge.py`에서 공유 | ❌ (다른 스크립트가 import) |
 | `scripts/parse_cases.py` | `.md`/`.json` 테스트케이스 파일 파서 (YAML frontmatter 지원) | ❌ (run_qa.py가 import해서 사용) |
@@ -294,12 +307,26 @@ python scripts/05_execute.py
 
 ---
 
+## OMC 스킬 활용 (oh-my-claudecode)
+
+파이프라인 단계별로 OMC 스킬을 활용하여 속도와 효율을 극대화합니다.
+
+| 단계 | 스킬 | 효과 |
+|------|------|------|
+| 코드 완성 (scaffold → 실제 코드) | `/oh-my-claudecode:swarm` | N개 agent가 공유 풀에서 파일을 가져가며 병렬 작성. 수동 분배 불필요 |
+| 린트 수정 | `/oh-my-claudecode:ecomode` | Haiku/Sonnet으로 단순 수정 처리. 토큰 비용 절감 |
+| 힐링 루프 | `/oh-my-claudecode:ultraqa` | test→fix→repeat 자동 사이클. 전체 통과까지 자동 반복 |
+
+상세 사용법은 `CLAUDE.md`의 "OMC 스킬 적용" 섹션 참조.
+
+---
+
 ## 설정 파일 (config/)
 
 | 파일 | 역할 | 예시 키 |
 |---|---|---|
-| `config/pages.json` | 페이지명 → URL 매핑. `run_qa_parallel.py`가 자동 참조 | `"heroku": "https://the-internet.herokuapp.com/"` |
-| `config/test_data.json` | 테스트 입력값 중앙 관리. 테스트 코드에서 하드코딩 금지, 이 파일에서 읽어 사용 | `"heroku": { "valid_user": {...}, "invalid_user": {...}, "js_prompt": {...}, "forgot_email": {...} }` |
+| `config/pages.json` | 페이지명 → URL 매핑. `run_qa_parallel.py`가 자동 참조 | `"mysite": "https://example.com/"` |
+| `config/test_data.json` | 테스트 입력값 중앙 관리. 테스트 코드에서 하드코딩 금지, 이 파일에서 읽어 사용 | `"mysite": { "valid_user": {...}, ... }` |
 
 `test_data.json` 형식: `{ "페이지명": { "data_key": { "username": "...", "password": "..." } } }`
 - 키는 `pages.json`의 페이지명과 일치
@@ -322,6 +349,7 @@ python scripts/05_execute.py
 | `state/quick.json` | 빠른 실행 결과 (병렬 상태와 분리) | `99_merge.py --quick` 완료 시 |
 | `state/heal_context.json` | 병렬 파이프라인 실패 traceback (힐링 루프용) | `99_merge.py` 실패 시 |
 | `state/heal_stats.json` | 힐링 오류 패턴별 빈도 카운터 (Top 5를 심의 컨텍스트에 주입) | `06_heal.py` 실패 분석 시 |
+| `state/run_history.json` | 실행 이력 배열 (timestamp, passed/failed, heal_count, first_pass, duration_sec) | 매 실행 완료 시 자동 append |
 | `logs/merge.txt` | 99_merge.py 실행 로그 | `99_merge.py` 실행 시 |
 | `logs/quick_run.txt` | 빠른 실행 로그 | 대시보드 빠른 실행 시 |
 | `logs/run_parallel.txt` | 병렬 파이프라인 실행 로그 | 대시보드에서 병렬 실행 시 |

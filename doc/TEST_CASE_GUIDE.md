@@ -23,7 +23,14 @@ testcases/
     tc_03_empty_username.md
   mypage/
     tc_01_profile_view.md
+  demoqa/
+    tc_01_textbox_fill_all_fields.md
+    tc_02_textbox_empty_submit.md
+    ... (120개)
 ```
+
+**실제 프로젝트 사례**: `testcases/demoqa/`에는 120개의 테스트케이스 존재.
+각 파일이 독립적인 Python 테스트 파일(tc_01.py, tc_02.py, ...)로 변환되어 `tests/generated/demoqa/`에 저장됨.
 
 ---
 
@@ -103,8 +110,8 @@ type: structured
 
 - **기본 언어**: 한글
 - **영어 사용**: UI 요소명, 버튼명, 입력값, 기술 용어
-  - O: `Login 버튼 클릭`, `username 필드에 tomsmith 입력`
-  - X: `로그인 버튼 클릭`, `사용자이름 필드에 tomsmith 입력`
+  - O: `Login 버튼 클릭`, `username 필드에 test_data[valid_user].username 입력`
+  - X: `로그인 버튼 클릭`, `사용자이름 필드에 값 입력`
 - **화면 표시 텍스트 번역 금지**: 실제 UI에 보이는 문자 그대로 사용
   - O: `You logged into a secure area!`, `Your password is invalid!`
   - X: `로그인 성공 메시지`, `비밀번호가 틀립니다`
@@ -166,7 +173,7 @@ type: structured
 3. Login 버튼 클릭
 
 ## Steps
-1. username 필드에 tomsmith 입력   ← Bad (하드코딩)
+1. username 필드에 testuser 입력   ← Bad (하드코딩)
 2. 로그인 정보 입력 후 Login 클릭   ← Bad (복수 액션을 하나에 묶음)
 ```
 

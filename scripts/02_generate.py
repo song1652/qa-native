@@ -133,8 +133,10 @@ def main():
         case_id = case.get("case_id", f"tc_{idx + 1:02d}")
         case_num = case_id.replace("tc_", "") if case_id.startswith("tc_") else f"{idx + 1:02d}"
 
-        # 파일명: test_ 접두사 제외 (병렬 파이프라인과 동일하게 tc_*.md stem 형식 유지)
+        # 파일명: test_ 접두사 + tc_XX_ 접두사 중복 방지
         file_slug = func_name[5:] if func_name.startswith("test_") else func_name
+        # case_name이 "tc_01_xxx" 형태면 "tc_01_" 부분 제거
+        file_slug = re.sub(r'^tc_\d+_', '', file_slug)
         filename = f"tc_{case_num}_{file_slug}.py"
         out_path = out_dir / filename
 

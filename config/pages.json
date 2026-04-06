@@ -1,5 +1,4 @@
 {
-  "login": "https://the-internet.herokuapp.com/login",
-  "secure": "https://the-internet.herokuapp.com/secure",
-  "heroku": "https://the-internet.herokuapp.com/"
+  "heroku": "https://the-internet.herokuapp.com/",
+  "demoqa": "https://demoqa.com"
 }

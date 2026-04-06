@@ -10,7 +10,6 @@ LLM 없음. 순수 Python.
 """
 import ast
 import json
-import re
 import shutil
 import subprocess
 import sys
@@ -21,7 +20,7 @@ from collections import defaultdict
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 from _paths import (
     PROJECT_ROOT, PARALLEL_STATE, HEAL_CONTEXT_STATE, QUICK_STATE,
-    read_state, write_state,
+    read_state, write_state, append_run_history,
 )
 from _python import PYTHON_EXE
 from heal_utils import (
@@ -29,6 +28,7 @@ from heal_utils import (
     find_screenshot_for_test, append_lessons,
     LESSONS_PATH,
 )
+from report_html import case_row as _case_row, build_report
 try:
     from parse_cases import load_cases as _load_cases
 except ImportError:
@@ -202,267 +202,50 @@ def _scan_generated_groups() -> dict[str, list[Path]]:
 
 def build_html(test_results: dict, summary: dict,
                created_at: str, target_groups: list[str] | None = None) -> str:
-    # tests/generated/ 디렉토리 스캔으로 그룹 구성 (대상 그룹만 필터)
     groups = _scan_generated_groups()
     if target_groups:
         groups = {k: v for k, v in groups.items() if k in target_groups}
 
-    pass_total = summary.get("passed", 0)
-    fail_total = summary.get("failed", 0) + summary.get("error", 0)
-    total = pass_total + fail_total
-    pass_rate = round(pass_total / total * 100, 1) if total else 0
-    all_pass = fail_total == 0
-    overall_cls = "pass" if all_pass else "fail"
-    overall_txt = "ALL PASS" if all_pass else f"{fail_total} FAILED"
-
-    nav_items = ""
-    for label in groups:
-        nav_items += f'<li class="nav-item" onclick="scrollTo(\'{label}\')">{label.replace("_"," ").upper()}</li>\n'
-
-    group_sections = ""
+    groups_data = []
     for label, files in groups.items():
-        # 이 그룹에 해당하는 테스트 결과 추출
         group_tests = {
             k: v for k, v in test_results.items()
             if f"/{label}/" in k or f"\\{label}\\" in k
         }
-        g_passed = all(group_tests.values()) if group_tests else False
         g_pass_cnt = sum(1 for v in group_tests.values() if v)
         g_total_cnt = len(group_tests)
+        g_passed = all(group_tests.values()) if group_tests else False
 
-        status_cls = "pass" if g_passed else ("fail" if group_tests else "warn")
-        status_txt = "PASS" if g_passed else ("FAIL" if group_tests else "N/A")
-
-        # 케이스 메타데이터 로드 (testcases/{group}/)
         cases = _load_cases_for_group(label)
         rows_html = ""
-
         if cases:
             for case_idx, case in enumerate(cases):
                 uid = f"{label}_{case_idx}"
-                # 케이스별 결과 매칭: 파일별로 결과 확인
                 case_pass = all(group_tests.values()) if group_tests else False
-                rows_html += case_row(case, uid, case_pass)
+                rows_html += _case_row(case, uid, case_pass)
         else:
-            # 케이스 메타데이터 없으면 파일 단위로 표시
             for file_idx, f in enumerate(files):
                 uid = f"{label}_{file_idx}"
                 nodeid_match = next(
-                    (k for k in test_results
-                     if f.stem in k),
-                    None
+                    (k for k in test_results if f.stem in k), None
                 )
                 is_passed = test_results.get(nodeid_match, False) if nodeid_match else False
                 simple_case = {
                     "title": f.stem.replace("_", " ").title(),
-                    "precondition": "",
-                    "steps": [],
-                    "expected": "",
+                    "precondition": "", "steps": [], "expected": "",
                 }
-                rows_html += case_row(simple_case, uid, is_passed)
+                rows_html += _case_row(simple_case, uid, is_passed)
 
         if not rows_html:
             rows_html = '<p class="empty-msg">케이스 정보 없음</p>'
 
-        display_label = label.replace("_", " ").upper()
-        group_sections += f"""
-<section class="group-card" id="group_{label}">
-  <div class="group-header {status_cls}">
-    <div class="group-title-wrap">
-      <span class="group-dot {status_cls}"></span>
-      <span class="group-title">{display_label}</span>
-      <span class="group-sub">{g_pass_cnt} / {g_total_cnt} passed</span>
-    </div>
-    <div class="group-right">
-      <span class="badge {status_cls}">{status_txt}</span>
-    </div>
-  </div>
-  <div class="case-list">{rows_html}</div>
-</section>"""
+        groups_data.append({
+            "label": label, "rows_html": rows_html,
+            "pass_cnt": g_pass_cnt, "total_cnt": g_total_cnt,
+            "all_pass": g_passed, "has_tests": bool(group_tests),
+        })
 
-    return f"""<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>QA Report</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-  :root {{
-    --bg:#0f1117;--surface:#1a1d27;--surface2:#21242f;--border:#2e3140;
-    --text:#e8eaf0;--text2:#8b8fa8;--text3:#555870;
-    --pass:#22c55e;--pass-bg:rgba(34,197,94,.1);
-    --fail:#ef4444;--fail-bg:rgba(239,68,68,.1);
-    --warn:#f59e0b;--warn-bg:rgba(245,158,11,.1);
-    --accent:#6366f1;--radius:12px;--radius-sm:8px;
-  }}
-  *{{box-sizing:border-box;margin:0;padding:0}}
-  body{{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}}
-  .layout{{display:grid;grid-template-columns:220px 1fr;min-height:100vh}}
-  .sidebar{{background:var(--surface);border-right:1px solid var(--border);padding:28px 0;position:sticky;top:0;height:100vh;overflow-y:auto}}
-  .sidebar-logo{{padding:0 20px 24px;border-bottom:1px solid var(--border);margin-bottom:16px}}
-  .logo-text{{font-size:15px;font-weight:700}}
-  .logo-sub{{font-size:11px;color:var(--text3);margin-top:3px}}
-  .nav-section{{padding:0 12px}}
-  .nav-label{{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:0 8px;margin-bottom:6px}}
-  .nav-item{{font-size:13px;color:var(--text2);padding:8px 10px;border-radius:var(--radius-sm);cursor:pointer;transition:all .15s;list-style:none;font-weight:500}}
-  .nav-item:hover{{background:var(--surface2);color:var(--text)}}
-  .main{{padding:36px 40px;max-width:900px}}
-  .topbar{{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:32px}}
-  .topbar h1{{font-size:24px;font-weight:700;letter-spacing:-.5px}}
-  .meta{{font-size:12px;color:var(--text3);margin-top:5px}}
-  .overall-badge{{display:flex;align-items:center;gap:8px;padding:10px 18px;border-radius:var(--radius);font-size:13px;font-weight:700;letter-spacing:.3px}}
-  .overall-badge.pass{{background:var(--pass-bg);color:var(--pass);border:1px solid rgba(34,197,94,.2)}}
-  .overall-badge.fail{{background:var(--fail-bg);color:var(--fail);border:1px solid rgba(239,68,68,.2)}}
-  .stats{{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:32px}}
-  .stat-card{{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;transition:border-color .2s}}
-  .stat-card:hover{{border-color:var(--accent)}}
-  .stat-num{{font-size:32px;font-weight:700;letter-spacing:-1px;line-height:1;margin-bottom:6px}}
-  .stat-lbl{{font-size:12px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px}}
-  .group-card{{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px;overflow:hidden;transition:border-color .2s}}
-  .group-card:hover{{border-color:#3a3d50}}
-  .group-header{{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}}
-  .group-header.pass{{border-left:3px solid var(--pass)}}
-  .group-header.fail{{border-left:3px solid var(--fail)}}
-  .group-header.warn{{border-left:3px solid var(--warn)}}
-  .group-title-wrap{{display:flex;align-items:center;gap:10px}}
-  .group-dot{{width:8px;height:8px;border-radius:50%;flex-shrink:0}}
-  .group-dot.pass{{background:var(--pass);box-shadow:0 0 6px var(--pass)}}
-  .group-dot.fail{{background:var(--fail);box-shadow:0 0 6px var(--fail)}}
-  .group-dot.warn{{background:var(--warn);box-shadow:0 0 6px var(--warn)}}
-  .group-title{{font-size:14px;font-weight:700;letter-spacing:.5px}}
-  .group-sub{{font-size:12px;color:var(--text3)}}
-  .group-right{{display:flex;align-items:center;gap:8px}}
-  .badge{{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.5px}}
-  .badge.pass{{background:var(--pass-bg);color:var(--pass);border:1px solid rgba(34,197,94,.25)}}
-  .badge.fail{{background:var(--fail-bg);color:var(--fail);border:1px solid rgba(239,68,68,.25)}}
-  .badge.warn{{background:var(--warn-bg);color:var(--warn);border:1px solid rgba(245,158,11,.25)}}
-  .case-list{{padding:8px 0}}
-  .case-item{{border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}}
-  .case-item:last-child{{border-bottom:none}}
-  .case-item:hover{{background:var(--surface2)}}
-  .case-header{{display:flex;align-items:center;gap:12px;padding:12px 20px}}
-  .case-dot{{width:6px;height:6px;border-radius:50%;flex-shrink:0}}
-  .case-dot.pass{{background:var(--pass)}}.case-dot.fail{{background:var(--fail)}}
-  .case-title{{flex:1;font-size:13px;font-weight:500;color:var(--text);line-height:1.4}}
-  .case-right{{display:flex;align-items:center;gap:10px;flex-shrink:0}}
-  .case-status-txt{{font-size:11px;font-weight:700;letter-spacing:.5px}}
-  .case-status-txt.pass{{color:var(--pass)}}
-  .case-status-txt.fail{{color:var(--fail)}}
-  .chevron{{color:var(--text3);font-size:18px;transition:transform .2s;display:inline-block}}
-  .chevron.open{{transform:rotate(90deg)}}
-  .case-detail{{display:none;padding:0 20px 16px 38px;animation:fadeIn .15s ease}}
-  @keyframes fadeIn{{from{{opacity:0;transform:translateY(-4px)}}to{{opacity:1;transform:none}}}}
-  .detail-row{{display:flex;gap:16px;margin-top:10px;font-size:12px;line-height:1.6}}
-  .detail-label{{min-width:90px;font-weight:600;color:var(--text3);text-transform:uppercase;font-size:10px;letter-spacing:.5px;padding-top:2px;flex-shrink:0}}
-  .detail-val{{color:var(--text2)}}
-  .steps-list{{padding-left:16px;margin:0}}
-  .steps-list li{{margin:3px 0}}
-  .empty-msg{{padding:16px 20px;font-size:13px;color:var(--text3)}}
-</style>
-<script>
-function toggle(uid){{
-  var d=document.getElementById('detail_'+uid);
-  var c=document.getElementById('chv_'+uid);
-  if(d.style.display==='none'||!d.style.display){{d.style.display='block';c.classList.add('open');}}
-  else{{d.style.display='none';c.classList.remove('open');}}
-}}
-function scrollTo(label){{
-  var el=document.getElementById('group_'+label);
-  if(el)el.scrollIntoView({{behavior:'smooth',block:'start'}});
-}}
-</script>
-</head>
-<body>
-<div class="layout">
-  <aside class="sidebar">
-    <div class="sidebar-logo">
-      <div class="logo-text">QA Native</div>
-      <div class="logo-sub">Parallel Test Report</div>
-    </div>
-    <nav class="nav-section">
-      <div class="nav-label">Groups</div>
-      <ul style="list-style:none;">{nav_items}</ul>
-    </nav>
-  </aside>
-  <div class="main">
-    <div class="topbar">
-      <div>
-        <h1>Test Results</h1>
-        <div class="meta">{created_at} &middot; {len(groups)} groups &middot; {total} cases</div>
-      </div>
-      <div class="overall-badge {overall_cls}">{overall_txt}</div>
-    </div>
-    <div class="stats">
-      <div class="stat-card"><div class="stat-num" style="color:var(--text);">{total}</div><div class="stat-lbl">Total</div></div>
-      <div class="stat-card"><div class="stat-num" style="color:var(--pass);">{pass_total}</div><div class="stat-lbl">Passed</div></div>
-      <div class="stat-card"><div class="stat-num" style="color:var(--fail);">{fail_total}</div><div class="stat-lbl">Failed</div></div>
-      <div class="stat-card"><div class="stat-num" style="color:{'var(--pass)' if all_pass else 'var(--fail)'};">{pass_rate}%</div><div class="stat-lbl">Pass Rate</div></div>
-    </div>
-    {group_sections}
-  </div>
-</div>
-</body>
-</html>"""
-
-
-_STEP_NUM_RE = re.compile(r"^\s*\d+[\.\)]\s*")
-_BULLET_RE   = re.compile(r"^\s*[-*]\s*")
-
-
-def _strip_prefix(text: str) -> str:
-    """'1. ', '2) ', '- ', '* ' 같은 앞 접두사 제거."""
-    t = _STEP_NUM_RE.sub("", text)
-    t = _BULLET_RE.sub("", t)
-    return t.strip()
-
-
-def case_row(case: dict, uid: str, is_passed: bool) -> str:
-    title = case.get("title", "untitled")
-    precondition = case.get("precondition", "")
-    steps = case.get("steps", [])
-    expected = case.get("expected", "")
-    status_cls = "pass" if is_passed else "fail"
-    badge_txt = "PASS" if is_passed else "FAIL"
-
-    clean_steps = [_strip_prefix(s) for s in steps if s.strip()]
-    steps_html = "".join(f"<li>{s}</li>" for s in clean_steps) if clean_steps else "<li>-</li>"
-
-    pre_lines = [_strip_prefix(l) for l in precondition.splitlines() if l.strip()]
-    pre_content = "<br>".join(pre_lines)
-    pre_html = (
-        f'<div class="detail-row">'
-        f'<span class="detail-label">Precondition</span>'
-        f'<span class="detail-val">{pre_content}</span>'
-        f'</div>'
-        if pre_content else ""
-    )
-
-    exp_raw = expected.replace("\\n", "\n")
-    exp_lines = [_strip_prefix(l) for l in exp_raw.splitlines() if l.strip()]
-    exp_content = "<br>".join(exp_lines)
-
-    return f"""<div class="case-item" onclick="toggle('{uid}')">
-  <div class="case-header">
-    <span class="case-dot {status_cls}"></span>
-    <span class="case-title">{title}</span>
-    <div class="case-right">
-      <span class="case-status-txt {status_cls}">{badge_txt}</span>
-      <span class="chevron" id="chv_{uid}">&#8250;</span>
-    </div>
-  </div>
-  <div class="case-detail" id="detail_{uid}">
-    {pre_html}
-    <div class="detail-row">
-      <span class="detail-label">Steps</span>
-      <span class="detail-val"><ol class="steps-list">{steps_html}</ol></span>
-    </div>
-    <div class="detail-row">
-      <span class="detail-label">Expected</span>
-      <span class="detail-val">{exp_content}</span>
-    </div>
-  </div>
-</div>"""
+    return build_report(groups_data, summary, created_at, "Parallel Test Report")
 
 
 # ── 메인 ────────────────────────────────────────────────────────
@@ -483,6 +266,8 @@ def main():
         help="빠른 실행 모드: state/quick.json에 결과 저장 (parallel_state 미변경)"
     )
     args = parser.parse_args()
+    import time as _time
+    _start_time = _time.monotonic()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # 1. 실행 대상 결정
@@ -511,7 +296,7 @@ def main():
                 print(f"  예시: python parallel/99_merge.py --group {available[0]}")
         return
 
-    n_workers = min(len(existing), 4)
+    n_workers = min(len(existing), 8)
 
     # 의존성 있는 테스트 감지
     has_dependent = any(
@@ -558,18 +343,23 @@ def main():
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     json_report_path = Path(tempfile.gettempdir()) / f"qa_report_{ts}.json"
 
-    proc = subprocess.run(
-        [PYTHON_EXE, "-m", "pytest"] + test_targets + [
-            f"-n{n_workers}",
-            f"--dist={dist_mode}",
-            "--json-report",
-            f"--json-report-file={json_report_path}",
-            "--tb=short", "-v",
-        ],
-        cwd=str(PROJECT_ROOT),
-        capture_output=False,
-    )
-    pytest_exit_code = proc.returncode
+    try:
+        proc = subprocess.run(
+            [PYTHON_EXE, "-m", "pytest"] + test_targets + [
+                f"-n{n_workers}",
+                f"--dist={dist_mode}",
+                "--json-report",
+                f"--json-report-file={json_report_path}",
+                "--tb=short", "-v",
+            ],
+            cwd=str(PROJECT_ROOT),
+            capture_output=False,
+            timeout=900,
+        )
+        pytest_exit_code = proc.returncode
+    except subprocess.TimeoutExpired:
+        print("\n[99] pytest 실행 타임아웃 (900초 초과)")
+        pytest_exit_code = -1
     report = {}
     if json_report_path.exists():
         report = json.loads(json_report_path.read_text(encoding="utf-8"))
@@ -657,6 +447,22 @@ def main():
     else:
         run_state["status"] = "heal_needed"
     write_state(state_path, run_state)
+
+    # 실행 이력 기록
+    _duration = round(_time.monotonic() - _start_time, 1)
+    groups_list = list(group_results.keys()) if group_results else (args.group or [])
+    append_run_history({
+        "timestamp": now,
+        "pipeline": "parallel",
+        "groups": groups_list,
+        "passed": passed,
+        "failed": failed,
+        "total": total,
+        "pass_rate": pass_rate,
+        "heal_count": heal_count,
+        "first_pass": failed == 0 and heal_count == 0,
+        "duration_sec": _duration,
+    })
 
     # 6. 요약 출력
     print()

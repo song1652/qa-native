@@ -23,7 +23,7 @@ python run_team.py --topic "주제"
 
 **2.** 심의 완료 후 사용자에게 알림:
    "토론이 완료됐어요. 대시보드에서 결론을 확인하고 승인/반려해주세요."
-   (대시보드 http://localhost:8766 → 해당 토론 세션 하단에 승인/반려 버튼이 표시됩니다)
+   (대시보드 http://localhost:8765 → 해당 토론 세션 하단에 승인/반려 버튼이 표시됩니다)
    - 승인 시: 서버가 `agents/team_notes.md` 저장 + `pending_impl.json` 생성
      → 스케줄러(2분 내)가 `pending_impl.json` 감지 → Claude가 항목 자동 구현
      → 구현 완료 후 `pending_impl.json` 삭제, `team_notes.md`·`state/discuss.json` 초기화

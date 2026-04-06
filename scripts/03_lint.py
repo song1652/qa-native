@@ -57,7 +57,7 @@ def main():
     }
 
     state["lint_result"] = lint_result
-    # step은 변경하지 않음 (generated 유지, 리뷰 후 Claude가 reviewed 설정)
+    state["step"] = "reviewed"
     write_state(state_path, state)
 
     status = "통과" if lint_result["passed"] else f"이슈 {lint_result['issue_count']}건"

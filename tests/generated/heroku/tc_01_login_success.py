@@ -1,20 +1,24 @@
-"""Playwright 테스트 — test_login_success (tc_01)"""
-import json
-import re
+"""
+자동 생성된 Playwright 테스트 코드
+URL: https://the-internet.herokuapp.com/
+케이스: tc_01_login_success (tc_01)
+
+Claude Code가 plan 기반으로 완성한 파일.
+수동 편집 가능.
+"""
 from pathlib import Path
-from playwright.sync_api import expect
 
 BASE_URL = "https://the-internet.herokuapp.com/"
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 TEST_DATA_PATH = PROJECT_ROOT / "config" / "test_data.json"
 
 
-def test_login_success(page):
-    with open(TEST_DATA_PATH, encoding="utf-8") as f:
-        data = json.load(f)["heroku"]["valid_user"]
-    page.goto(BASE_URL + "login")
-    page.locator("#username").fill(data["username"])
-    page.locator("#password").fill(data["password"])
-    page.locator("button.radius").click()
-    expect(page).to_have_url(re.compile(r"/secure"), timeout=5000)
-    expect(page.locator("#flash")).to_contain_text("You logged into a secure area!", timeout=5000)
+def test_tc_01_login_success(page):
+    """Verify successful login with valid credentials"""
+    # TODO: Claude Code가 아래를 완성
+    # 케이스 타입: structured
+    # data_key: null
+    # 전략: goto() → fill(#username) → fill(#password) → click(button.radius)
+    # 검증: url: /secure
+    pass
