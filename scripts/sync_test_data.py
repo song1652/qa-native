@@ -9,7 +9,9 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+_SCRIPTS_DIR = str(Path(__file__).parent)
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
 from parse_cases import load_cases
 
 

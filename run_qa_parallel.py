@@ -22,9 +22,9 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
-sys.path.insert(0, str(Path(__file__).parent / "scripts"))
+import _bootstrap  # noqa: F401 — scripts/ 경로 설정
 from parse_cases import load_cases
-from _paths import PROJECT_ROOT, PARALLEL_STATE, STATE_DIR
+from _paths import PROJECT_ROOT, PARALLEL_STATE, STATE_DIR, read_state, write_state
 
 # 01_analyze.py의 analyze() 직접 import
 from importlib import import_module as _im
@@ -35,17 +35,10 @@ PARALLEL_STATE_PATH = PARALLEL_STATE
 
 
 def _save_state(state: dict) -> None:
-    """state/parallel.json에 상태 저장 (기존 상태와 병합)."""
-    existing = {}
-    if PARALLEL_STATE_PATH.exists():
-        try:
-            existing = json.loads(PARALLEL_STATE_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            pass
+    """state/parallel.json에 상태 저장 (기존 상태와 원자적 병합, 파일 잠금 적용)."""
+    existing = read_state(PARALLEL_STATE_PATH)
     existing.update(state)
-    PARALLEL_STATE_PATH.write_text(
-        json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    write_state(PARALLEL_STATE_PATH, existing)
 
 
 def load_pages() -> dict:

@@ -10,7 +10,9 @@ import tempfile
 from pathlib import Path
 
 # scripts/ 모듈 import 준비
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+_SCRIPTS_DIR = str(Path(__file__).resolve().parent.parent / "scripts")
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
 
 
 # ── 06_heal.py 함수 테스트 ────────────────────────────────────────

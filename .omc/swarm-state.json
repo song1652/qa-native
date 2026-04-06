@@ -1,8 +1,8 @@
 {
-  "session_id": "swarm-20260406-073155",
+  "session_id": "swarm-20260406-182929",
   "agent_count": 5,
   "agent_type": "executor",
-  "task_description": "Complete Playwright test code for demoqa.com",
+  "task_description": "Complete Playwright test code for heroku test cases",
   "status": "active",
-  "started_at": "2026-04-06T07:31:55.968802"
+  "started_at": "2026-04-06T18:29:29.158690"
 }

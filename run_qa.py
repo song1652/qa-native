@@ -41,7 +41,7 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
-sys.path.insert(0, str(Path(__file__).parent / "scripts"))
+import _bootstrap  # noqa: F401 — scripts/ 경로 설정
 from parse_cases import load_cases
 from _paths import PIPELINE_STATE, STATE_DIR
 

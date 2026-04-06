@@ -9,7 +9,7 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent / "scripts"))
+import _bootstrap  # noqa: F401 — scripts/ 경로 설정
 from _paths import DISCUSS_STATE, STATE_DIR
 
 DISCUSS_STATE_PATH = DISCUSS_STATE

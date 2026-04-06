@@ -13,27 +13,28 @@
 ├── run_team.py                ← 팀 토론 시작 (터미널용, 대시보드 권장)
 ├── agents/dashboard/serve.py  ← 모니터링 대시보드 서버
 ├── parallel/99_merge.py       ← 병렬 실행 완료 후 결과 통합
-└── telegram_bot.py            ← 텔레그램 봇 서버
+├── telegram_bot.py            ← 텔레그램 봇 서버
+└── _bootstrap.py              ← 루트 진입점 공통 경로 설정 (scripts/ → sys.path)
 
 Claude가 자동으로 호출하는 파일 (직접 실행 불필요)
-└── scripts/
+└── scripts/                       ← 패키지 (__init__.py 포함)
     ├── 01_analyze.py              파이프라인 1단계: DOM 분석
     ├── 02a_dialog.py              파이프라인 2단계: Plan 심의 준비
     ├── 02_generate.py             파이프라인 3단계: 코드 뼈대 생성
     ├── 03_lint.py                 파이프라인 4단계: lint 검사
     ├── 03a_dialog.py              파이프라인 5단계: 코드 리뷰 심의 준비
-    ├── 05_execute.py              파이프라인 6단계: pytest 실행
+    ├── 05_execute.py              파이프라인 6단계: pytest 실행 (report_html 사용)
     ├── 06_heal.py                 파이프라인 7단계: 실패 분석
     ├── 06a_dialog.py              파이프라인 8단계: 힐링 심의 준비
     ├── team_discuss.py            팀 토론: 심의 컨텍스트 준비
     ├── team_approve.py            팀 토론: 결론 승인 (터미널용, 대시보드 권장)
-    ├── check_pending_approve.py   훅: 단일 파이프라인 리뷰 완료 → 실행 트리거
-    ├── check_pending_discuss.py   훅: 팀 토론 트리거 감지
-    ├── check_pending_impl.py      훅: 승인 항목 자동 구현 트리거 감지
-    ├── check_pending_parallel.py  훅: 병렬 파이프라인 트리거 감지
-    ├── check_pending_pipeline.py  훅: 단일 파이프라인 실행 트리거 감지
-    ├── _python.py                 라이브러리: .venv Python 경로 자동 감지
-    ├── _paths.py                  라이브러리: 중앙 경로 상수 (state/, logs/)
+    ├── check_pending_*.py         훅 5개 (hook_utils.check_state() 공통 사용)
+    ├── _python.py                 라이브러리: .venv Python 경로 (PROJECT_ROOT는 _paths.py에서 import)
+    ├── _paths.py                  라이브러리: 중앙 경로 상수 + read_state/write_state
+    ├── _constants.py              라이브러리: 종료 코드 + VALID_TRANSITIONS 전이 맵
+    ├── result_parser.py           라이브러리: pytest JSON 리포트 파싱 (05_execute, 99_merge 공유)
+    ├── hook_utils.py              라이브러리: 훅 스크립트 공통 유틸 (check_state)
+    ├── __init__.py                패키지 초기화
     ├── sync_test_data.py          test_data.json 동기화
     └── parse_cases.py             라이브러리: 테스트케이스 파일 파서
 ```
@@ -237,7 +238,9 @@ Claude Code가 실행 중인 상태에서 함께 구동해야 합니다.
 
 05_execute.py
   → pytest로 테스트 실행 (최대 8 workers 병렬)
-  → state/pipeline.json에 execution_result 저장
+  → report_html.build_report()로 HTML 리포트 생성 (병렬과 동일 형식)
+  → result_parser.parse_results()로 결과 파싱 (99_merge.py와 공유)
+  → state/pipeline.json에 execution_result 저장 (heal_count는 읽기만, 증가 안 함)
   → `--no-report` 플래그: 리포트·스크린샷 생성 건너뜀 (힐링 중간 실행용)
   → `--only-failed` 플래그: 이전 실행에서 실패한 테스트만 재실행 (힐링 시 시간 대폭 절감)
   → 첫 실행 포함 모든 실행은 `--no-report`, 전체 통과 확인 후 마지막 1회만 리포트 생성
@@ -284,6 +287,7 @@ python scripts/05_execute.py
 ### 훅 스크립트 (UserPromptSubmit Hook)
 
 > `.claude/settings.json`에 등록되어 사용자 프롬프트 제출 시 자동 실행됩니다.
+> 모든 훅은 `hook_utils.check_state(path, key, value, extra_check)` 공통 함수를 사용합니다.
 
 | 파일 | 감지 대상 | 동작 |
 |---|---|---|
@@ -299,9 +303,11 @@ python scripts/05_execute.py
 
 | 파일 | 역할 | 직접 실행 |
 |---|---|---|
-| `scripts/_python.py` | `.venv/bin/python` 경로 자동 감지 + `PYTHON_EXE` 상수 제공 | ❌ (다른 스크립트가 import) |
+| `scripts/_python.py` | `PROJECT_ROOT`를 `_paths.py`에서 import하여 `.venv` 경로 구성. `PYTHON_EXE` 상수 제공 | ❌ (다른 스크립트가 import) |
 | `scripts/_paths.py` | 중앙 경로 상수 (`STATE_DIR`, `LOGS_DIR`, `DOM_CACHE_DIR`, `RUN_HISTORY` 등) + `read_state()` (fcntl 공유 잠금) / `write_state()` (atomic rename) / `append_run_history()` (실행 이력 append) / `get_cached_dom()` (TTL 체크) / `save_dom_cache()` (atomic write + `_cached_at`) / `resolve_sub_doms(state)` (sub_dom_keys → {url:dom} 매핑) 유틸 | ❌ (다른 스크립트가 import) |
-| `scripts/_constants.py` | 파이프라인 종료 코드 상수 (`EXIT_SUCCESS`, `EXIT_HEAL_NEEDED`, `EXIT_HEAL_EXCEEDED`, `EXIT_REJECTED`) | ❌ (다른 스크립트가 import) |
+| `scripts/_constants.py` | 파이프라인 종료 코드 상수 (`EXIT_SUCCESS=0`, `EXIT_HEAL_NEEDED=10`, `EXIT_HEAL_EXCEEDED=2`, `EXIT_REJECTED=2`) + `VALID_TRANSITIONS` step 전이 맵 + `assert_valid_transition()` 검증 함수 | ❌ (다른 스크립트가 import) |
+| `scripts/result_parser.py` | pytest JSON 리포트 → `{nodeid: passed}` 매핑 파싱. `05_execute.py`와 `99_merge.py`가 공유 | ❌ (다른 스크립트가 import) |
+| `scripts/hook_utils.py` | 훅 스크립트 공통 유틸. `check_state(path, key, value, extra_check)` — 5개 `check_pending_*.py`가 공유 | ❌ (다른 스크립트가 import) |
 | `scripts/heal_utils.py` | 힐링 공용 유틸리티. `classify_error`, `extract_key_lines`, `find_screenshot_for_test`, `append_lessons`, `update_heal_stats` — `06_heal.py`와 `99_merge.py`에서 공유 | ❌ (다른 스크립트가 import) |
 | `scripts/parse_cases.py` | `.md`/`.json` 테스트케이스 파일 파서 (YAML frontmatter 지원) | ❌ (run_qa.py가 import해서 사용) |
 | `tests/test_core_parsers.py` | 핵심 파서 유닛 테스트 (parse_cases 등) | ❌ (pytest가 자동 실행) |

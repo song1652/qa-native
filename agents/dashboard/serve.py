@@ -41,6 +41,8 @@ LOGS_DIR = PROJECT_ROOT / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
 IMPORT_DIR = PROJECT_ROOT / "import"
 
+ALLOWED_ORIGIN = "http://localhost:8766"
+
 # ── SSE 클라이언트 관리 ────────────────────────────────────────
 _sse_clients: list[queue.Queue] = []
 _sse_lock = threading.Lock()
@@ -419,159 +421,83 @@ def _write_tc_files(cases: list, output_dir: Path) -> int:
     return len(cases)
 
 
+def _read_body(handler) -> dict:
+    """요청 바디를 JSON으로 파싱해 반환. 바디 없으면 빈 dict."""
+    length = int(handler.headers.get("Content-Length", 0))
+    return json.loads(handler.rfile.read(length).decode("utf-8")) if length else {}
+
+
 class DashboardHandler(BaseHTTPRequestHandler):
+
+    # ── Route 딕셔너리 ────────────────────────────────────────────
+    GET_ROUTES = {
+        "/api/dialogs":          "_get_dialogs",
+        "/api/events":           "_get_events",
+        "/api/dialog":           "_get_dialog",
+        "/api/state":            "_get_state",
+        "/api/pages":            "_get_pages",
+        "/api/pipeline_state":   "_get_pipeline_state",
+        "/api/batch_state":      "_get_batch_state",
+        "/api/quick_state":      "_get_quick_state",
+        "/api/run_history":      "_get_run_history",
+        "/api/heal_stats":       "_get_heal_stats",
+        "/api/generated_groups": "_get_generated_groups",
+        "/api/reports":          "_get_reports",
+        "/api/import/files":     "_get_import_files",
+        "/api/import/sheets":    "_get_import_sheets",
+    }
+
+    POST_ROUTES = {
+        "/api/reset":              "_post_reset",
+        "/api/discuss/start":      "_post_discuss_start",
+        "/api/discuss/vote_item":  "_post_discuss_vote_item",
+        "/api/discuss/reject":     "_post_discuss_reject",
+        "/api/run_qa":             "_post_run_qa",
+        "/api/run_qa_parallel":    "_post_run_qa_parallel",
+        "/api/run_log":            "_post_run_log",
+        "/api/pipeline/reset":     "_post_pipeline_reset",
+        "/api/parallel/reset":     "_post_parallel_reset",
+        "/api/quick/reset":        "_post_quick_reset",
+        "/api/run_merge":          "_post_run_merge",
+        "/api/merge_log":          "_post_merge_log",
+        "/api/run_quick":          "_post_run_quick",
+        "/api/import/convert":     "_post_import_convert",
+    }
+
+    # ── Dispatchers ───────────────────────────────────────────────
     def do_GET(self):
         path = self.path.split("?")[0]
+
+        # index
         if path in ("/", "/index.html"):
             self._serve_file(HERE / "index.html", "text/html; charset=utf-8")
-        elif path == "/api/dialogs":
-            payload = build_dialogs()
-            self._serve_bytes(
-                json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-                "application/json; charset=utf-8"
-            )
-        elif path == "/api/events":
-            self._serve_sse()
-        elif path == "/api/dialog":
-            self._serve_json(DIALOG_PATH)
-        elif path == "/api/state":
-            self._serve_json(STATE_PATH)
-        elif path == "/api/pages":
-            payload = {"pages": list_pages(), "groups": list_testcase_groups()}
-            self._serve_bytes(
-                json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-                "application/json; charset=utf-8"
-            )
-        elif path == "/api/pipeline_state":
-            payload = build_pipeline_state()
-            self._serve_bytes(
-                json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-                "application/json; charset=utf-8"
-            )
-        elif path == "/api/batch_state":
-            payload = build_batch_state()
-            self._serve_bytes(
-                json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-                "application/json; charset=utf-8"
-            )
-        elif path == "/api/quick_state":
-            payload = load_json(QUICK_STATE_PATH) or {}
-            self._serve_bytes(
-                json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-                "application/json; charset=utf-8"
-            )
-        # ── 실행 이력 ────────────────────────────────────────────────
-        elif path == "/api/run_history":
-            payload = load_json(RUN_HISTORY_PATH) or []
-            self._serve_bytes(
-                json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-                "application/json; charset=utf-8"
-            )
-        # ── 힐링 통계 ────────────────────────────────────────────────
-        elif path == "/api/heal_stats":
-            payload = load_json(HEAL_STATS_PATH) or {}
-            self._serve_bytes(
-                json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-                "application/json; charset=utf-8"
-            )
-        elif path == "/api/generated_groups":
-            payload = list_generated_groups()
-            self._serve_bytes(
-                json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-                "application/json; charset=utf-8"
-            )
-        elif path == "/api/reports":
-            payload = list_reports()
-            self._serve_bytes(
-                json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-                "application/json; charset=utf-8"
-            )
-        elif path.startswith("/reports/"):
-            fname = path[len("/reports/"):]
-            fpath = REPORTS_DIR / fname
-            if fpath.exists() and fpath.suffix == ".html":
-                content = fpath.read_bytes()
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(content)))
-                self.send_header("X-XSS-Protection", "0")
-                self.send_header("Content-Security-Policy",
-                                 "default-src 'self' https:; "
-                                 "script-src 'unsafe-inline'; "
-                                 "style-src 'unsafe-inline' https:; "
-                                 "font-src 'self' https: data:; "
-                                 "img-src 'self' data: blob:")
-                self.end_headers()
-                self.wfile.write(content)
-            else:
-                self.send_response(404)
-                self.end_headers()
+            return
 
-        # ── Import API (GET) ──────────────────────────────────────
-        elif path == "/api/import/files":
-            payload = {"ok": True, "files": _list_import_files()}
-            self._serve_bytes(
-                json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-                "application/json; charset=utf-8"
-            )
-        elif path == "/api/import/sheets":
-            from urllib.parse import urlparse, parse_qs
-            qs = parse_qs(urlparse(self.path).query)
-            fname = qs.get("file", [""])[0]
-            if not fname or ".." in fname:
-                self._serve_bytes(
-                    b'{"ok":false,"error":"file parameter required"}',
-                    "application/json; charset=utf-8")
-                return
-            fpath = IMPORT_DIR / fname
-            if not fpath.exists():
-                self._serve_bytes(
-                    json.dumps({"ok": False, "error": f"{fname} not found"},
-                               ensure_ascii=False).encode("utf-8"),
-                    "application/json; charset=utf-8")
-                return
-            try:
-                sheets = _list_excel_sheets(fpath)
-                self._serve_bytes(
-                    json.dumps({"ok": True, "sheets": sheets},
-                               ensure_ascii=False).encode("utf-8"),
-                    "application/json; charset=utf-8")
-            except Exception as e:
-                self._serve_bytes(
-                    json.dumps({"ok": False, "error": str(e)},
-                               ensure_ascii=False).encode("utf-8"),
-                    "application/json; charset=utf-8")
+        # exact-match routes
+        if path in self.GET_ROUTES:
+            getattr(self, self.GET_ROUTES[path])()
+            return
 
-        # ── 정적 파일 (CSS/JS) ────────────────────────────────────────
-        elif path.startswith("/static/"):
-            rel = path[len("/static/"):]
-            if ".." in rel:
-                self.send_response(403)
-                self.end_headers()
-                return
-            fpath = HERE / "static" / rel
-            if fpath.exists() and fpath.is_file():
-                ext = fpath.suffix.lower()
-                mime_map = {
-                    ".css": "text/css; charset=utf-8",
-                    ".js": "application/javascript; charset=utf-8",
-                    ".png": "image/png",
-                    ".svg": "image/svg+xml",
-                }
-                content_type = mime_map.get(ext, "application/octet-stream")
-                self._serve_file(fpath, content_type)
-            else:
-                self.send_response(404)
-                self.end_headers()
+        # prefix routes
+        if path.startswith("/reports/"):
+            self._get_report_file(path)
+            return
 
-        else:
-            self.send_response(404)
-            self.end_headers()
+        if path.startswith("/static/"):
+            self._get_static_file(path)
+            return
+
+        self.send_response(404)
+        self.end_headers()
 
     def do_POST(self):
         path = self.path.split("?")[0]
         try:
-            self._handle_post(path)
+            if path in self.POST_ROUTES:
+                getattr(self, self.POST_ROUTES[path])()
+            else:
+                self.send_response(404)
+                self.end_headers()
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -581,361 +507,487 @@ class DashboardHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
-    def _handle_post(self, path):
-        # ── 대화 초기화 ──────────────────────────────────────────
-        if path == "/api/reset":
-            empty = {"pipeline_url": "", "started_at": "", "sessions": []}
-            DIALOG_PATH.write_text(
-                json.dumps(empty, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
-            self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
+    # ── GET handlers ─────────────────────────────────────────────
+    def _get_dialogs(self):
+        payload = build_dialogs()
+        self._serve_bytes(
+            json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            "application/json; charset=utf-8"
+        )
 
-        # ── 토론 시작 ─────────────────────────────────────────────
-        elif path == "/api/discuss/start":
-            import datetime
-            length = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(length).decode("utf-8"))
-            topic = body.get("topic", "").strip()
-            if not topic:
-                self._serve_bytes(b'{"ok":false,"error":"topic required"}',
-                                  "application/json; charset=utf-8")
-                return
+    def _get_events(self):
+        self._serve_sse()
 
-            history = []
-            if DISCUSS_PATH.exists():
-                try:
-                    prev = json.loads(DISCUSS_PATH.read_text(encoding="utf-8"))
-                    history = prev.get("history", [])
-                    if prev.get("step") in ("approved", "rejected", "discussed"):
-                        history.append({k: v for k, v in prev.items() if k != "history"})
-                except Exception:
-                    pass
+    def _get_dialog(self):
+        self._serve_json(DIALOG_PATH)
 
-            discuss = {
-                "topic": topic, "step": "pending", "conclusion": "",
-                "rejection_reason": "", "rejection_count": 0,
-                "created_at": datetime.datetime.now().isoformat(),
-                "history": history,
-            }
-            DISCUSS_PATH.write_text(
-                json.dumps(discuss, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
+    def _get_state(self):
+        self._serve_json(STATE_PATH)
 
-            # Claude Code UserPromptSubmit 훅(check_pending_discuss.py)이
-            # 다음 프롬프트 제출 시 자동으로 토론 시작을 Claude에게 주입한다.
-            self._serve_bytes(b'{"ok":true}',
-                              "application/json; charset=utf-8")
+    def _get_pages(self):
+        payload = {"pages": list_pages(), "groups": list_testcase_groups()}
+        self._serve_bytes(
+            json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            "application/json; charset=utf-8"
+        )
 
-        # ── 항목별 투표 ───────────────────────────────────────────
-        elif path == "/api/discuss/vote_item":
-            length = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(length).decode("utf-8"))
-            item_id = int(body.get("item_id", -1))
-            vote    = body.get("vote", "")  # "approve" | "reject"
+    def _get_pipeline_state(self):
+        payload = build_pipeline_state()
+        self._serve_bytes(
+            json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            "application/json; charset=utf-8"
+        )
 
-            if not DISCUSS_PATH.exists():
-                self._serve_bytes(
-                    json.dumps({"ok": False, "error": "state/discuss.json 없음"}, ensure_ascii=False).encode("utf-8"),
-                    "application/json; charset=utf-8")
-                return
+    def _get_batch_state(self):
+        payload = build_batch_state()
+        self._serve_bytes(
+            json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            "application/json; charset=utf-8"
+        )
 
-            discuss = json.loads(DISCUSS_PATH.read_text(encoding="utf-8"))
-            items = discuss.get("conclusion_items", [])
-            for item in items:
-                if item["id"] == item_id:
-                    item["status"] = "approved" if vote == "approve" else "rejected"
-                    break
-            discuss["conclusion_items"] = items
+    def _get_quick_state(self):
+        payload = load_json(QUICK_STATE_PATH) or {}
+        self._serve_bytes(
+            json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            "application/json; charset=utf-8"
+        )
 
-            all_voted = bool(items) and all(i["status"] != "pending" for i in items)
-            if all_voted:
-                finalize_team_notes(discuss)
-                discuss["step"] = "approved"
+    def _get_run_history(self):
+        payload = load_json(RUN_HISTORY_PATH) or []
+        self._serve_bytes(
+            json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            "application/json; charset=utf-8"
+        )
 
-            DISCUSS_PATH.write_text(
-                json.dumps(discuss, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
+    def _get_heal_stats(self):
+        payload = load_json(HEAL_STATS_PATH) or {}
+        self._serve_bytes(
+            json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            "application/json; charset=utf-8"
+        )
+
+    def _get_generated_groups(self):
+        payload = list_generated_groups()
+        self._serve_bytes(
+            json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            "application/json; charset=utf-8"
+        )
+
+    def _get_reports(self):
+        payload = list_reports()
+        self._serve_bytes(
+            json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            "application/json; charset=utf-8"
+        )
+
+    def _get_import_files(self):
+        payload = {"ok": True, "files": _list_import_files()}
+        self._serve_bytes(
+            json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            "application/json; charset=utf-8"
+        )
+
+    def _get_import_sheets(self):
+        from urllib.parse import urlparse, parse_qs
+        qs = parse_qs(urlparse(self.path).query)
+        fname = qs.get("file", [""])[0]
+        if not fname or ".." in fname:
             self._serve_bytes(
-                json.dumps({"ok": True, "all_voted": all_voted}, ensure_ascii=False).encode("utf-8"),
-                "application/json; charset=utf-8"
-            )
-
-        # ── run_qa.py 실행 ──────────────────────────────────────────
-        elif path == "/api/run_qa":
-            import subprocess as sp
-            length = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
-            url = body.get("url", "").strip()
-            cases_dir = body.get("cases_dir", "").strip()  # e.g. "login"
-            # 입력 검증: URL은 http(s)로 시작, cases_dir은 영숫자/언더스코어/하이픈만
-            if url and not url.startswith(("http://", "https://")):
-                self._serve_bytes(
-                    b'{"ok":false,"error":"url must start with http:// or https://"}',
-                    "application/json; charset=utf-8")
-                return
-            if cases_dir and not re.match(r'^[\w\-]+$', cases_dir):
-                self._serve_bytes(
-                    b'{"ok":false,"error":"invalid cases_dir format"}',
-                    "application/json; charset=utf-8")
-                return
-            if not url or not cases_dir:
-                self._serve_bytes(
-                    b'{"ok":false,"error":"url and cases_dir required"}',
-                    "application/json; charset=utf-8")
-                return
-            cases_path = TESTCASES_DIR / cases_dir
-            if not cases_path.exists():
-                self._serve_bytes(
-                    json.dumps({"ok": False, "error": f"testcases/{cases_dir} not found"}, ensure_ascii=False).encode("utf-8"),
-                    "application/json; charset=utf-8")
-                return
-            log_path = LOGS_DIR / "run_qa.txt"
-            script = PROJECT_ROOT / "run_qa.py"
-            log_file = open(log_path, "w", encoding="utf-8")
-            proc = sp.Popen(
-                [PYTHON_EXE, "-u", str(script),
-                 "--url", url, "--cases", str(cases_path)],
-                cwd=str(PROJECT_ROOT),
-                stdout=log_file, stderr=sp.STDOUT,
-            )
-            # 자식 프로세스가 fd를 상속했으므로 부모에서 닫아도 안전
-            log_file.close()
-            print(f"[Dashboard] run_qa.py 실행 (PID: {proc.pid}, URL: {url}, cases: {cases_dir})")
+                b'{"ok":false,"error":"file parameter required"}',
+                "application/json; charset=utf-8")
+            return
+        fpath = IMPORT_DIR / fname
+        if not fpath.exists():
             self._serve_bytes(
-                json.dumps({"ok": True, "pid": proc.pid, "log": str(log_path)}, ensure_ascii=False).encode("utf-8"),
-                "application/json; charset=utf-8"
-            )
-
-        # ── run_qa_parallel.py 실행 ──────────────────────────────────
-        elif path == "/api/run_qa_parallel":
-            import subprocess as sp
-            log_path = LOGS_DIR / "run_parallel.txt"
-            script = PROJECT_ROOT / "run_qa_parallel.py"
-            log_file = open(log_path, "w", encoding="utf-8")
-            proc = sp.Popen(
-                [PYTHON_EXE, "-u", str(script)],
-                cwd=str(PROJECT_ROOT),
-                stdout=log_file, stderr=sp.STDOUT,
-            )
-            log_file.close()
-            print(f"[Dashboard] run_qa_parallel.py 실행 (PID: {proc.pid})")
+                json.dumps({"ok": False, "error": f"{fname} not found"},
+                           ensure_ascii=False).encode("utf-8"),
+                "application/json; charset=utf-8")
+            return
+        try:
+            sheets = _list_excel_sheets(fpath)
             self._serve_bytes(
-                json.dumps({"ok": True, "pid": proc.pid, "log": str(log_path)}, ensure_ascii=False).encode("utf-8"),
-                "application/json; charset=utf-8"
-            )
-
-        # ── 실행 로그 조회 (공통) ────────────────────────────────────
-        elif path == "/api/run_log":
-            length = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
-            log_name = body.get("log", "run_qa.txt")
-            # 보안: 상위 디렉토리 접근 방지
-            if ".." in log_name or "/" in log_name:
-                self._serve_bytes(b'{"ok":false,"log":""}', "application/json; charset=utf-8")
-                return
-            log_path = LOGS_DIR / log_name
-            if log_path.exists():
-                content = log_path.read_text(encoding="utf-8", errors="replace")
-                self._serve_bytes(
-                    json.dumps({"ok": True, "log": content}, ensure_ascii=False).encode("utf-8"),
-                    "application/json; charset=utf-8"
-                )
-            else:
-                self._serve_bytes(b'{"ok":false,"log":""}', "application/json; charset=utf-8")
-
-        # ── 파이프라인 state/pipeline.json 초기화 ──────────────────────────
-        elif path == "/api/pipeline/reset":
-            init_state = {
-                "url": "", "test_cases": [], "step": "init",
-                "dom_info": {}, "plan": [],
-                "generated_file_path": "tests/generated/test_generated.py",
-                "lint_result": {}, "review_summary": "",
-                "approval_status": "", "rejection_reason": "",
-                "rejection_count": 0, "execution_result": {},
-                "heal_count": 0, "heal_context": {}
-            }
-            STATE_PATH.write_text(
-                json.dumps(init_state, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
-            self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
-
-        # ── 병렬 파이프라인 state/parallel.json 초기화 ────────────────────
-        elif path == "/api/parallel/reset":
-            init_state = {"status": "", "total_count": 0, "targets": []}
-            PARALLEL_STATE_PATH.write_text(
-                json.dumps(init_state, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            # heal_context도 정리
-            heal_ctx = PROJECT_ROOT / "state" / "heal_context.json"
-            if heal_ctx.exists():
-                heal_ctx.unlink()
-            self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
-
-        # ── 빠른 실행 상태 초기화 ───────────────────────────────────
-        elif path == "/api/quick/reset":
-            if QUICK_STATE_PATH.exists():
-                QUICK_STATE_PATH.unlink()
-            self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
-
-        # ── 99_merge.py 실행 ─────────────────────────────────────────
-        elif path == "/api/run_merge":
-            import subprocess as sp
-            merge_script = PROJECT_ROOT / "parallel" / "99_merge.py"
-            if not merge_script.exists():
-                self._serve_bytes(b'{"ok":false,"error":"99_merge.py not found"}',
-                                  "application/json; charset=utf-8")
-                return
-            # 로그 파일로 출력 저장
-            log_path = LOGS_DIR / "merge.txt"
-            log_file = open(log_path, "w", encoding="utf-8")
-            proc = sp.Popen(
-                [PYTHON_EXE, "-u", str(merge_script)],
-                cwd=str(PROJECT_ROOT),
-                stdout=log_file, stderr=sp.STDOUT,
-            )
-            log_file.close()
-            print(f"[Dashboard] 99_merge.py 실행 (PID: {proc.pid}, 로그: {log_path})")
+                json.dumps({"ok": True, "sheets": sheets},
+                           ensure_ascii=False).encode("utf-8"),
+                "application/json; charset=utf-8")
+        except Exception as e:
             self._serve_bytes(
-                json.dumps({"ok": True, "message": "99_merge.py started", "pid": proc.pid,
-                             "log": str(log_path)}, ensure_ascii=False).encode("utf-8"),
-                "application/json; charset=utf-8"
-            )
+                json.dumps({"ok": False, "error": str(e)},
+                           ensure_ascii=False).encode("utf-8"),
+                "application/json; charset=utf-8")
 
-        # ── merge 로그 조회 ──────────────────────────────────────────
-        elif path == "/api/merge_log":
-            log_path = LOGS_DIR / "merge.txt"
-            if log_path.exists():
-                content = log_path.read_text(encoding="utf-8", errors="replace")
-                self._serve_bytes(
-                    json.dumps({"ok": True, "log": content}, ensure_ascii=False).encode("utf-8"),
-                    "application/json; charset=utf-8"
-                )
-            else:
-                self._serve_bytes(b'{"ok":false,"log":""}',
-                                  "application/json; charset=utf-8")
-
-        # ── 빠른 실행 (quick run) ──────────────────────────────────
-        elif path == "/api/run_quick":
-            import subprocess as sp
-            length = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
-            groups = body.get("groups", [])
-            if not groups:
-                self._serve_bytes(
-                    b'{"ok":false,"error":"groups required"}',
-                    "application/json; charset=utf-8")
-                return
-            # 그룹명 형식 검증 (경로 탈출 방지)
-            invalid = [g for g in groups if not re.match(r'^[\w\-]+$', g)]
-            if invalid:
-                self._serve_bytes(
-                    json.dumps({"ok": False, "error": f"잘못된 그룹명: {', '.join(invalid)}"},
-                               ensure_ascii=False).encode("utf-8"),
-                    "application/json; charset=utf-8")
-                return
-            # 폴더 존재 검증
-            missing = [g for g in groups if not (GENERATED_DIR / g).is_dir()]
-            if missing:
-                msg = json.dumps(
-                    {"ok": False, "error": f"존재하지 않는 폴더: {', '.join(missing)}"},
-                    ensure_ascii=False).encode("utf-8")
-                self._serve_bytes(msg, "application/json; charset=utf-8")
-                return
-            log_path = LOGS_DIR / "quick_run.txt"
-            merge_script = PROJECT_ROOT / "parallel" / "99_merge.py"
-            log_file = open(log_path, "w", encoding="utf-8")
-            no_heal = body.get("no_heal", False)
-            cmd = [PYTHON_EXE, "-u", str(merge_script), "--quick", "--group"] + groups
-            if no_heal:
-                cmd.append("--no-heal")
-            proc = sp.Popen(
-                cmd, cwd=str(PROJECT_ROOT),
-                stdout=log_file, stderr=sp.STDOUT,
-            )
-            log_file.close()
-            print(f"[Dashboard] 빠른 실행 (PID: {proc.pid}, groups: {groups})")
-            self._serve_bytes(
-                json.dumps({"ok": True, "pid": proc.pid,
-                             "log": str(log_path)}, ensure_ascii=False).encode("utf-8"),
-                "application/json; charset=utf-8"
-            )
-
-        # ── Excel Import 변환 ─────────────────────────────────────
-        elif path == "/api/import/convert":
-            import openpyxl
-            length = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
-            fname = body.get("file", "").strip()
-            sheet_names = body.get("sheets", [])
-            if not fname or not sheet_names:
-                self._serve_bytes(
-                    b'{"ok":false,"error":"file and sheets required"}',
-                    "application/json; charset=utf-8")
-                return
-            fpath = IMPORT_DIR / fname
-            if not fpath.exists():
-                self._serve_bytes(
-                    json.dumps({"ok": False, "error": f"{fname} not found"},
-                               ensure_ascii=False).encode("utf-8"),
-                    "application/json; charset=utf-8")
-                return
-            try:
-                wb = openpyxl.load_workbook(str(fpath), data_only=True)
-                results = []
-                for sn in sheet_names:
-                    if sn not in wb.sheetnames:
-                        results.append({"sheet": sn, "count": 0, "error": "시트 없음"})
-                        continue
-                    cases = _parse_excel_sheet(wb, sn)
-                    folder_name = re.sub(r'\s+', '_', sn.strip().lower())
-                    out_dir = TESTCASES_DIR / folder_name
-                    # 기존 파일 정리
-                    if out_dir.exists():
-                        for old in out_dir.glob("tc_*.md"):
-                            old.unlink()
-                    count = _write_tc_files(cases, out_dir)
-                    results.append({"sheet": sn, "count": count,
-                                    "folder": f"testcases/{folder_name}/"})
-                wb.close()
-                self._serve_bytes(
-                    json.dumps({"ok": True, "results": results},
-                               ensure_ascii=False).encode("utf-8"),
-                    "application/json; charset=utf-8")
-            except Exception as e:
-                self._serve_bytes(
-                    json.dumps({"ok": False, "error": str(e)},
-                               ensure_ascii=False).encode("utf-8"),
-                    "application/json; charset=utf-8")
-
-        # ── 전체 반려 ─────────────────────────────────────────────
-        elif path == "/api/discuss/reject":
-            length = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
-            reason = body.get("reason", "").strip()
-            if not DISCUSS_PATH.exists():
-                self._serve_bytes(
-                    json.dumps({"ok": False, "error": "state/discuss.json 없음"}, ensure_ascii=False).encode("utf-8"),
-                    "application/json; charset=utf-8")
-                return
-            discuss = json.loads(DISCUSS_PATH.read_text(encoding="utf-8"))
-            discuss["step"] = "rejected"
-            discuss["rejection_reason"] = reason
-            discuss["rejection_count"] = discuss.get("rejection_count", 0) + 1
-            DISCUSS_PATH.write_text(
-                json.dumps(discuss, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
-            self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
-
+    def _get_report_file(self, path: str):
+        fname = path[len("/reports/"):]
+        fpath = REPORTS_DIR / fname
+        if fpath.exists() and fpath.suffix == ".html":
+            content = fpath.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(content)))
+            self.send_header("X-XSS-Protection", "0")
+            self.send_header("Content-Security-Policy",
+                             "default-src 'self' https:; "
+                             "script-src 'unsafe-inline'; "
+                             "style-src 'unsafe-inline' https:; "
+                             "font-src 'self' https: data:; "
+                             "img-src 'self' data: blob:")
+            self.end_headers()
+            self.wfile.write(content)
         else:
             self.send_response(404)
             self.end_headers()
 
+    def _get_static_file(self, path: str):
+        rel = path[len("/static/"):]
+        if ".." in rel:
+            self.send_response(403)
+            self.end_headers()
+            return
+        fpath = HERE / "static" / rel
+        if fpath.exists() and fpath.is_file():
+            ext = fpath.suffix.lower()
+            mime_map = {
+                ".css": "text/css; charset=utf-8",
+                ".js": "application/javascript; charset=utf-8",
+                ".png": "image/png",
+                ".svg": "image/svg+xml",
+            }
+            content_type = mime_map.get(ext, "application/octet-stream")
+            self._serve_file(fpath, content_type)
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    # ── POST handlers ─────────────────────────────────────────────
+    def _post_reset(self):
+        empty = {"pipeline_url": "", "started_at": "", "sessions": []}
+        DIALOG_PATH.write_text(
+            json.dumps(empty, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
+
+    def _post_discuss_start(self):
+        import datetime
+        body = _read_body(self)
+        topic = body.get("topic", "").strip()
+        if not topic:
+            self._serve_bytes(b'{"ok":false,"error":"topic required"}',
+                              "application/json; charset=utf-8")
+            return
+
+        history = []
+        if DISCUSS_PATH.exists():
+            try:
+                prev = json.loads(DISCUSS_PATH.read_text(encoding="utf-8"))
+                history = prev.get("history", [])
+                if prev.get("step") in ("approved", "rejected", "discussed"):
+                    history.append({k: v for k, v in prev.items() if k != "history"})
+            except Exception:
+                pass
+
+        discuss = {
+            "topic": topic, "step": "pending", "conclusion": "",
+            "rejection_reason": "", "rejection_count": 0,
+            "created_at": datetime.datetime.now().isoformat(),
+            "history": history,
+        }
+        DISCUSS_PATH.write_text(
+            json.dumps(discuss, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+        # Claude Code UserPromptSubmit 훅(check_pending_discuss.py)이
+        # 다음 프롬프트 제출 시 자동으로 토론 시작을 Claude에게 주입한다.
+        self._serve_bytes(b'{"ok":true}',
+                          "application/json; charset=utf-8")
+
+    def _post_discuss_vote_item(self):
+        body = _read_body(self)
+        item_id = int(body.get("item_id", -1))
+        vote    = body.get("vote", "")  # "approve" | "reject"
+
+        if not DISCUSS_PATH.exists():
+            self._serve_bytes(
+                json.dumps({"ok": False, "error": "state/discuss.json 없음"}, ensure_ascii=False).encode("utf-8"),
+                "application/json; charset=utf-8")
+            return
+
+        discuss = json.loads(DISCUSS_PATH.read_text(encoding="utf-8"))
+        items = discuss.get("conclusion_items", [])
+        for item in items:
+            if item["id"] == item_id:
+                item["status"] = "approved" if vote == "approve" else "rejected"
+                break
+        discuss["conclusion_items"] = items
+
+        all_voted = bool(items) and all(i["status"] != "pending" for i in items)
+        if all_voted:
+            finalize_team_notes(discuss)
+            discuss["step"] = "approved"
+
+        DISCUSS_PATH.write_text(
+            json.dumps(discuss, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        self._serve_bytes(
+            json.dumps({"ok": True, "all_voted": all_voted}, ensure_ascii=False).encode("utf-8"),
+            "application/json; charset=utf-8"
+        )
+
+    def _post_discuss_reject(self):
+        body = _read_body(self)
+        reason = body.get("reason", "").strip()
+        if not DISCUSS_PATH.exists():
+            self._serve_bytes(
+                json.dumps({"ok": False, "error": "state/discuss.json 없음"}, ensure_ascii=False).encode("utf-8"),
+                "application/json; charset=utf-8")
+            return
+        discuss = json.loads(DISCUSS_PATH.read_text(encoding="utf-8"))
+        discuss["step"] = "rejected"
+        discuss["rejection_reason"] = reason
+        discuss["rejection_count"] = discuss.get("rejection_count", 0) + 1
+        DISCUSS_PATH.write_text(
+            json.dumps(discuss, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
+
+    def _post_run_qa(self):
+        import subprocess as sp
+        body = _read_body(self)
+        url = body.get("url", "").strip()
+        cases_dir = body.get("cases_dir", "").strip()  # e.g. "login"
+        # 입력 검증: URL은 http(s)로 시작, cases_dir은 영숫자/언더스코어/하이픈만
+        if url and not url.startswith(("http://", "https://")):
+            self._serve_bytes(
+                b'{"ok":false,"error":"url must start with http:// or https://"}',
+                "application/json; charset=utf-8")
+            return
+        if cases_dir and not re.match(r'^[\w\-]+$', cases_dir):
+            self._serve_bytes(
+                b'{"ok":false,"error":"invalid cases_dir format"}',
+                "application/json; charset=utf-8")
+            return
+        if not url or not cases_dir:
+            self._serve_bytes(
+                b'{"ok":false,"error":"url and cases_dir required"}',
+                "application/json; charset=utf-8")
+            return
+        cases_path = TESTCASES_DIR / cases_dir
+        if not cases_path.exists():
+            self._serve_bytes(
+                json.dumps({"ok": False, "error": f"testcases/{cases_dir} not found"}, ensure_ascii=False).encode("utf-8"),
+                "application/json; charset=utf-8")
+            return
+        log_path = LOGS_DIR / "run_qa.txt"
+        script = PROJECT_ROOT / "run_qa.py"
+        log_file = open(log_path, "w", encoding="utf-8")
+        proc = sp.Popen(
+            [PYTHON_EXE, "-u", str(script),
+             "--url", url, "--cases", str(cases_path)],
+            cwd=str(PROJECT_ROOT),
+            stdout=log_file, stderr=sp.STDOUT,
+        )
+        # 자식 프로세스가 fd를 상속했으므로 부모에서 닫아도 안전
+        log_file.close()
+        print(f"[Dashboard] run_qa.py 실행 (PID: {proc.pid}, URL: {url}, cases: {cases_dir})")
+        self._serve_bytes(
+            json.dumps({"ok": True, "pid": proc.pid, "log": str(log_path)}, ensure_ascii=False).encode("utf-8"),
+            "application/json; charset=utf-8"
+        )
+
+    def _post_run_qa_parallel(self):
+        import subprocess as sp
+        log_path = LOGS_DIR / "run_parallel.txt"
+        script = PROJECT_ROOT / "run_qa_parallel.py"
+        log_file = open(log_path, "w", encoding="utf-8")
+        proc = sp.Popen(
+            [PYTHON_EXE, "-u", str(script)],
+            cwd=str(PROJECT_ROOT),
+            stdout=log_file, stderr=sp.STDOUT,
+        )
+        log_file.close()
+        print(f"[Dashboard] run_qa_parallel.py 실행 (PID: {proc.pid})")
+        self._serve_bytes(
+            json.dumps({"ok": True, "pid": proc.pid, "log": str(log_path)}, ensure_ascii=False).encode("utf-8"),
+            "application/json; charset=utf-8"
+        )
+
+    def _post_run_log(self):
+        body = _read_body(self)
+        log_name = body.get("log", "run_qa.txt")
+        # 보안: 상위 디렉토리 접근 방지
+        if ".." in log_name or "/" in log_name:
+            self._serve_bytes(b'{"ok":false,"log":""}', "application/json; charset=utf-8")
+            return
+        log_path = LOGS_DIR / log_name
+        if log_path.exists():
+            content = log_path.read_text(encoding="utf-8", errors="replace")
+            self._serve_bytes(
+                json.dumps({"ok": True, "log": content}, ensure_ascii=False).encode("utf-8"),
+                "application/json; charset=utf-8"
+            )
+        else:
+            self._serve_bytes(b'{"ok":false,"log":""}', "application/json; charset=utf-8")
+
+    def _post_pipeline_reset(self):
+        init_state = {
+            "url": "", "test_cases": [], "step": "init",
+            "dom_info": {}, "plan": [],
+            "generated_file_path": "tests/generated/test_generated.py",
+            "lint_result": {}, "review_summary": "",
+            "approval_status": "", "rejection_reason": "",
+            "rejection_count": 0, "execution_result": {},
+            "heal_count": 0, "heal_context": {}
+        }
+        STATE_PATH.write_text(
+            json.dumps(init_state, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
+
+    def _post_parallel_reset(self):
+        init_state = {"status": "", "total_count": 0, "targets": []}
+        PARALLEL_STATE_PATH.write_text(
+            json.dumps(init_state, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        # heal_context도 정리
+        heal_ctx = PROJECT_ROOT / "state" / "heal_context.json"
+        if heal_ctx.exists():
+            heal_ctx.unlink()
+        self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
+
+    def _post_quick_reset(self):
+        if QUICK_STATE_PATH.exists():
+            QUICK_STATE_PATH.unlink()
+        self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
+
+    def _post_run_merge(self):
+        import subprocess as sp
+        merge_script = PROJECT_ROOT / "parallel" / "99_merge.py"
+        if not merge_script.exists():
+            self._serve_bytes(b'{"ok":false,"error":"99_merge.py not found"}',
+                              "application/json; charset=utf-8")
+            return
+        # 로그 파일로 출력 저장
+        log_path = LOGS_DIR / "merge.txt"
+        log_file = open(log_path, "w", encoding="utf-8")
+        proc = sp.Popen(
+            [PYTHON_EXE, "-u", str(merge_script)],
+            cwd=str(PROJECT_ROOT),
+            stdout=log_file, stderr=sp.STDOUT,
+        )
+        log_file.close()
+        print(f"[Dashboard] 99_merge.py 실행 (PID: {proc.pid}, 로그: {log_path})")
+        self._serve_bytes(
+            json.dumps({"ok": True, "message": "99_merge.py started", "pid": proc.pid,
+                         "log": str(log_path)}, ensure_ascii=False).encode("utf-8"),
+            "application/json; charset=utf-8"
+        )
+
+    def _post_merge_log(self):
+        log_path = LOGS_DIR / "merge.txt"
+        if log_path.exists():
+            content = log_path.read_text(encoding="utf-8", errors="replace")
+            self._serve_bytes(
+                json.dumps({"ok": True, "log": content}, ensure_ascii=False).encode("utf-8"),
+                "application/json; charset=utf-8"
+            )
+        else:
+            self._serve_bytes(b'{"ok":false,"log":""}',
+                              "application/json; charset=utf-8")
+
+    def _post_run_quick(self):
+        import subprocess as sp
+        body = _read_body(self)
+        groups = body.get("groups", [])
+        if not groups:
+            self._serve_bytes(
+                b'{"ok":false,"error":"groups required"}',
+                "application/json; charset=utf-8")
+            return
+        # 그룹명 형식 검증 (경로 탈출 방지)
+        invalid = [g for g in groups if not re.match(r'^[\w\-]+$', g)]
+        if invalid:
+            self._serve_bytes(
+                json.dumps({"ok": False, "error": f"잘못된 그룹명: {', '.join(invalid)}"},
+                           ensure_ascii=False).encode("utf-8"),
+                "application/json; charset=utf-8")
+            return
+        # 폴더 존재 검증
+        missing = [g for g in groups if not (GENERATED_DIR / g).is_dir()]
+        if missing:
+            msg = json.dumps(
+                {"ok": False, "error": f"존재하지 않는 폴더: {', '.join(missing)}"},
+                ensure_ascii=False).encode("utf-8")
+            self._serve_bytes(msg, "application/json; charset=utf-8")
+            return
+        log_path = LOGS_DIR / "quick_run.txt"
+        merge_script = PROJECT_ROOT / "parallel" / "99_merge.py"
+        log_file = open(log_path, "w", encoding="utf-8")
+        no_heal = body.get("no_heal", False)
+        cmd = [PYTHON_EXE, "-u", str(merge_script), "--quick", "--group"] + groups
+        if no_heal:
+            cmd.append("--no-heal")
+        proc = sp.Popen(
+            cmd, cwd=str(PROJECT_ROOT),
+            stdout=log_file, stderr=sp.STDOUT,
+        )
+        log_file.close()
+        print(f"[Dashboard] 빠른 실행 (PID: {proc.pid}, groups: {groups})")
+        self._serve_bytes(
+            json.dumps({"ok": True, "pid": proc.pid,
+                         "log": str(log_path)}, ensure_ascii=False).encode("utf-8"),
+            "application/json; charset=utf-8"
+        )
+
+    def _post_import_convert(self):
+        import openpyxl
+        body = _read_body(self)
+        fname = body.get("file", "").strip()
+        sheet_names = body.get("sheets", [])
+        if not fname or not sheet_names:
+            self._serve_bytes(
+                b'{"ok":false,"error":"file and sheets required"}',
+                "application/json; charset=utf-8")
+            return
+        fpath = IMPORT_DIR / fname
+        if not fpath.exists():
+            self._serve_bytes(
+                json.dumps({"ok": False, "error": f"{fname} not found"},
+                           ensure_ascii=False).encode("utf-8"),
+                "application/json; charset=utf-8")
+            return
+        try:
+            wb = openpyxl.load_workbook(str(fpath), data_only=True)
+            results = []
+            for sn in sheet_names:
+                if sn not in wb.sheetnames:
+                    results.append({"sheet": sn, "count": 0, "error": "시트 없음"})
+                    continue
+                cases = _parse_excel_sheet(wb, sn)
+                folder_name = re.sub(r'\s+', '_', sn.strip().lower())
+                out_dir = TESTCASES_DIR / folder_name
+                # 기존 파일 정리
+                if out_dir.exists():
+                    for old in out_dir.glob("tc_*.md"):
+                        old.unlink()
+                count = _write_tc_files(cases, out_dir)
+                results.append({"sheet": sn, "count": count,
+                                "folder": f"testcases/{folder_name}/"})
+            wb.close()
+            self._serve_bytes(
+                json.dumps({"ok": True, "results": results},
+                           ensure_ascii=False).encode("utf-8"),
+                "application/json; charset=utf-8")
+        except Exception as e:
+            self._serve_bytes(
+                json.dumps({"ok": False, "error": str(e)},
+                           ensure_ascii=False).encode("utf-8"),
+                "application/json; charset=utf-8")
+
+    # ── Infrastructure helpers ────────────────────────────────────
     def _serve_sse(self):
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", ALLOWED_ORIGIN)
         self.send_header("X-Accel-Buffering", "no")
         self.end_headers()
 
@@ -986,7 +1038,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def _serve_bytes(self, content: bytes, content_type: str):
         self.send_response(200)
         self.send_header("Content-Type", content_type)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", ALLOWED_ORIGIN)
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Content-Length", str(len(content)))
         self.end_headers()

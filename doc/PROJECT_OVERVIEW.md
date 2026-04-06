@@ -192,5 +192,6 @@ Claude가 멀티라운드 티키타카 진행 (최소 3라운드)
 
 Python 3.13 / Playwright (Chromium) / pytest / flake8 / Claude Code (API 없음)
 
-> 대시보드: Python ThreadingHTTPServer + SSE + Vanilla JS (포트 8765)
+> 대시보드: Python ThreadingHTTPServer + SSE + Vanilla JS (포트 8766, CORS는 localhost만 허용)
+> 루트 스크립트(run_qa.py 등)는 `_bootstrap.py`로 scripts/ 경로를 자동 설정
 > 상세 API·기능: [`SCRIPTS_GUIDE.md`](SCRIPTS_GUIDE.md) 참조

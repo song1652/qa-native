@@ -3,33 +3,26 @@ UserPromptSubmit 훅에서 실행됨.
 state/pipeline.json의 step=init이고 url이 있으면
 대시보드에서 run_qa.py가 실행된 것이므로 파이프라인 시작을 Claude에 요청한다.
 """
-import json
 import sys
-from _paths import PIPELINE_STATE, read_state
+from _paths import PIPELINE_STATE
+from hook_utils import check_state
 
-STATE_PATH = PIPELINE_STATE
 
-if not STATE_PATH.exists():
+def _pipeline_ready(s: dict) -> bool:
+    # url이 있어야 대시보드에서 실행한 것 (초기화 상태와 구분)
+    if not s.get("url", ""):
+        return False
+    # dom_info가 이미 있으면 01_analyze 완료된 것 → 중복 방지
+    if s.get("dom_info"):
+        return False
+    return True
+
+
+state = check_state(PIPELINE_STATE, key="step", value="init", extra_check=_pipeline_ready)
+if state is None:
     sys.exit(0)
 
-try:
-    state = read_state(STATE_PATH)
-except Exception:
-    sys.exit(0)
-
-# 대시보드에서 run_qa.py 실행 후 아직 01_analyze 안 된 경우만
-if state.get("step") != "init":
-    sys.exit(0)
-
-# url이 있어야 대시보드에서 실행한 것 (초기화 상태와 구분)
 url = state.get("url", "")
-if not url:
-    sys.exit(0)
-
-# dom_info가 이미 있으면 01_analyze 완료된 것 → 중복 방지
-if state.get("dom_info"):
-    sys.exit(0)
-
 case_count = len(state.get("test_cases", []))
 
 lines = [

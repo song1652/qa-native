@@ -5,7 +5,7 @@ Claude Code가 heal_context를 읽고 test_generated.py를 직접 패치한 뒤 
 
 종료 코드:
   EXIT_SUCCESS (0) = 모든 테스트 통과 (힐링 불필요)
-  EXIT_HEAL_NEEDED (1) = 실패 정보 저장 완료 → Claude Code가 패치 필요
+  EXIT_HEAL_NEEDED (10) = 실패 정보 저장 완료 → Claude Code가 패치 필요
   EXIT_HEAL_EXCEEDED (2) = 최대 힐링 횟수 초과 (기본 3회) → 파이프라인 중단
 """
 import re

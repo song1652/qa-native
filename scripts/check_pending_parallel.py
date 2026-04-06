@@ -3,25 +3,16 @@ UserPromptSubmit 훅에서 실행됨.
 state/parallel.json의 status=ready이면 subagent 실행 요청을
 stdout으로 출력해 Claude 컨텍스트에 주입한다.
 """
-import json
 import sys
-from _paths import PARALLEL_STATE, RUN_PARALLEL_LOG, read_state
+from _paths import PARALLEL_STATE, RUN_PARALLEL_LOG
+from hook_utils import check_state
 
-PARALLEL_STATE_PATH = PARALLEL_STATE
-
-if not PARALLEL_STATE_PATH.exists():
+state = check_state(PARALLEL_STATE, key="status", value="ready")
+if state is None:
     sys.exit(0)
 
-try:
-    data = read_state(PARALLEL_STATE_PATH)
-except Exception:
-    sys.exit(0)
-
-if data.get("status") != "ready":
-    sys.exit(0)
-
-total = data.get("total_count", 0)
-targets = data.get("targets", [])
+total = state.get("total_count", 0)
+targets = state.get("targets", [])
 
 # 로그 파일에서 PARALLEL_SUBAGENT_CONTEXTS 추출
 log_path = RUN_PARALLEL_LOG

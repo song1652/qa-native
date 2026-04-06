@@ -3,25 +3,16 @@ UserPromptSubmit 훅에서 실행됨.
 state/discuss.json의 step=pending이면 팀 토론 시작 요청을 stdout으로 출력해
 Claude 컨텍스트에 주입한다.
 """
-import json
 import sys
-from _paths import DISCUSS_STATE, read_state
+from _paths import DISCUSS_STATE
+from hook_utils import check_state
 
-DISCUSS_PATH = DISCUSS_STATE
-
-if not DISCUSS_PATH.exists():
+state = check_state(DISCUSS_STATE, key="step", value="pending")
+if state is None:
     sys.exit(0)
 
-try:
-    data = read_state(DISCUSS_PATH)
-except Exception:
-    sys.exit(0)
-
-if data.get("step") != "pending":
-    sys.exit(0)
-
-topic = data.get("topic", "")
-rejection_reason = data.get("rejection_reason", "")
+topic = state.get("topic", "")
+rejection_reason = state.get("rejection_reason", "")
 
 lines = [
     "[팀 토론 자동 시작] state/discuss.json에 pending 토론이 있습니다. 즉시 팀 토론을 진행해주세요.",

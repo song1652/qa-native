@@ -5,23 +5,16 @@ state/pipeline.json의 step=reviewed이고 execution_result가 없으면
 (승인 단계 제거 — 심의 완료 후 바로 실행)
 """
 import sys
-from _paths import PIPELINE_STATE, read_state
+from _paths import PIPELINE_STATE
+from hook_utils import check_state
 
-STATE_PATH = PIPELINE_STATE
-
-if not STATE_PATH.exists():
-    sys.exit(0)
-
-try:
-    state = read_state(STATE_PATH)
-except Exception:
-    sys.exit(0)
-
-# 코드 리뷰 완료 후 아직 실행 안 된 경우만
-if state.get("step") != "reviewed":
-    sys.exit(0)
-
-if state.get("execution_result"):
+state = check_state(
+    PIPELINE_STATE,
+    key="step",
+    value="reviewed",
+    extra_check=lambda s: not s.get("execution_result"),
+)
+if state is None:
     sys.exit(0)
 
 url = state.get("url", "")

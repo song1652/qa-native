@@ -65,10 +65,18 @@ async function renderDashboardOverview(main) {
           </div>`;
   }
 
-  // 실행 이력 (최근 10개)
+  // 실행 이력 — 연속 동일 그룹 실행은 마지막 결과만 표시
   let historyHtml = '';
   if (history.length > 0) {
-    const recent = history.slice(-10);
+    const finalOnly = [];
+    for (let i = 0; i < history.length; i++) {
+      const cur = history[i];
+      const next = history[i + 1];
+      const curKey = cur.pipeline + '|' + (cur.group || (cur.groups || []).sort().join(','));
+      const nextKey = next ? next.pipeline + '|' + (next.group || (next.groups || []).sort().join(',')) : null;
+      if (curKey !== nextKey) finalOnly.push(cur);
+    }
+    const recent = finalOnly.slice(-10);
     const bars = recent.map(h => {
       const r = h.pass_rate || 0;
       const color = r === 100 ? 'var(--approved-color)' : r >= 80 ? 'var(--pending-color)' : 'var(--revision-color)';

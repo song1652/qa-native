@@ -126,6 +126,20 @@
 
 ## 힐링 프로세스
 
-- `heal_count` (top-level): 단계별 누적 힐링 횟수. 최대 3회 제한.
-- `execution_result.heal_count`: 마지막 실행 시점의 힐링 횟수.
+- `heal_count` (top-level): 06_heal.py만 증가시킴 (05_execute.py는 읽기만 함). 최대 3회 제한.
+- `execution_result.heal_count`: 현재 state의 heal_count 값을 복사 (05_execute.py가 기록 시점의 스냅샷).
 - 초과 시 `step = "heal_failed"`, 종료코드 2로 파이프라인 중단.
+
+## step 전이 규칙
+
+`_constants.py`의 `VALID_TRANSITIONS` 맵에 정의. `assert_valid_transition()`으로 검증 가능.
+
+```
+init → analyzed → generated → reviewed → done
+                                          ↓
+                                     heal_needed → done (패치 성공)
+                                          ↓
+                                     heal_failed (3회 초과, 종료 상태)
+                                     
+timeout → done (재실행 가능)
+```

@@ -17,7 +17,9 @@ from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+_SCRIPTS_DIR = str(Path(__file__).parent.parent / "scripts")
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
 from _paths import (
     PROJECT_ROOT, PARALLEL_STATE, HEAL_CONTEXT_STATE, QUICK_STATE,
     read_state, write_state, append_run_history,
@@ -29,6 +31,7 @@ from heal_utils import (
     LESSONS_PATH,
 )
 from report_html import case_row as _case_row, build_report
+from result_parser import parse_results
 try:
     from parse_cases import load_cases as _load_cases
 except ImportError:
@@ -53,15 +56,6 @@ def _update_parallel_status(status: str, extra: dict | None = None) -> None:
 
 
 # ── pytest 실행 ──────────────────────────────────────────────────
-
-
-def parse_results(report: dict) -> dict:
-    """JSON 리포트 → {nodeid: passed} 매핑."""
-    results = {}
-    for t in report.get("tests", []):
-        nodeid = t.get("nodeid", "")
-        results[nodeid] = t.get("outcome") == "passed"
-    return results
 
 
 def build_heal_context(report: dict, heal_count: int) -> dict | None:

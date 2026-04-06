@@ -1,7 +1,9 @@
 # 디렉토리 구조
 
 ```
-scripts/            단계별 실행 스크립트 (LLM 없음, 순수 Python)
+_bootstrap.py       프로젝트 진입점 공통 경로 설정 (루트 스크립트가 import)
+
+scripts/            단계별 실행 스크립트 (LLM 없음, 순수 Python, 패키지 구조)
   01_analyze.py     DOM 추출 (단일 브라우저, 서브페이지 Semaphore(8) 병렬, React 컴포넌트 추출, DOM 캐시 TTL 7일)
   02_generate.py    코드 뼈대 생성
   02a_dialog.py     Plan 대화 세션 초기화
@@ -15,14 +17,17 @@ scripts/            단계별 실행 스크립트 (LLM 없음, 순수 Python)
   team_discuss.py   팀 토론 초기화
   parse_cases.py    tc_*.md 파싱
   _generate_plan.py 테스트 케이스별 실행 계획 생성
-  _python.py        .venv 경로 자동 감지
-  _paths.py         중앙 경로 상수 (state/, logs/)
-  _constants.py     파이프라인 종료 코드 상수
+  _python.py        .venv 경로 자동 감지 (PROJECT_ROOT를 _paths.py에서 import)
+  _paths.py         중앙 경로 상수 (state/, logs/) + read_state/write_state 원자적 I/O
+  _constants.py     파이프라인 종료 코드 상수 + VALID_TRANSITIONS 맵 + assert_valid_transition()
+  __init__.py       scripts 패키지 초기화 (외부 import 가능)
   heal_utils.py     힐링 공용 유틸리티 (classify_error, extract_key_lines 등)
-  report_html.py    HTML 리포트 생성 (pytest 결과 파싱)
+  result_parser.py  pytest JSON 리포트 파싱 공통 모듈 (05_execute.py, 99_merge.py 공유)
+  hook_utils.py     훅 스크립트 공통 유틸리티 (check_state() 함수)
+  report_html.py    HTML 리포트 생성 (build_report, case_row — 단일/병렬 공통)
   team_approve.py   팀 토론 승인 (터미널용)
   sync_test_data.py test_data.json 동기화
-  check_pending_*.py  훅 스크립트 (approve/discuss/impl/parallel/pipeline)
+  check_pending_*.py  훅 스크립트 (hook_utils.check_state() 공통 사용)
 
 agents/             사수-부사수 에이전트 시스템
   team_charter.md   팀 헌장 (협업 규칙, 역할 정의)
