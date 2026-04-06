@@ -68,6 +68,9 @@ function renderQuickRun(main) {
           <button class="action-btn action-btn-primary" id="quick-run-btn" onclick="runQuickTest()" ${!groups.length ? 'disabled' : ''}>
             ${_quickRunState.running ? '실행 중...' : '테스트 실행'}
           </button>
+          <label style="font-size:12px;color:var(--text-dim);cursor:pointer;display:flex;align-items:center;gap:4px;">
+            <input type="checkbox" id="quick-no-heal"> 힐링 생략
+          </label>
           ${!groups.length ? '<span style="font-size:11px;color:var(--danger);">tests/generated/ 에 생성된 테스트가 없습니다</span>' : ''}
         </div>
       </div>
@@ -113,7 +116,7 @@ async function runQuickTest() {
     const res = await fetch('/api/run_quick', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ groups }),
+      body: JSON.stringify({ groups, no_heal: !!document.getElementById('quick-no-heal')?.checked }),
     });
     const data = await res.json();
     if (data.ok) {

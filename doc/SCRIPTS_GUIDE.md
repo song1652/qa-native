@@ -99,6 +99,8 @@ python parallel/99_merge.py
 python parallel/99_merge.py --group mysite
 # 빠른 실행 모드 (state/quick.json에 결과 저장, parallel_state 미변경)
 python parallel/99_merge.py --quick --group mysite
+# 힐링 생략 (실패해도 힐링 없이 바로 리포트 생성)
+python parallel/99_merge.py --quick --group mysite --no-heal
 ```
 
 **옵션:**
@@ -106,10 +108,11 @@ python parallel/99_merge.py --quick --group mysite
 |---|---|
 | `--group`, `-g` | 실행할 폴더명 (예: `mysite`). 생략 시 전체 실행 |
 | `--quick` | 빠른 실행 모드. 결과를 `state/quick.json`에 저장 (`state/parallel.json` 미변경) |
+| `--no-heal` | 힐링 생략. 실패해도 `heal_context.json`을 생성하지 않고 바로 리포트 생성. 상태는 `done`으로 설정 |
 
 **동작:**
 1. `tests/generated/` 폴더 pytest 일괄 실행 (병렬 8 workers, timeout=900s)
-2. **실패 시**: `state/heal_context.json` 생성 → Claude Code가 traceback 분석 후 패치 → 재실행 (최대 3회)
+2. **실패 시**: `state/heal_context.json` 생성 → Claude Code가 traceback 분석 후 패치 → 재실행 (최대 3회). `--no-heal` 시 이 단계를 건너뜀
 3. 전체 통과 시: `tests/reports/parallel_index_{날짜시간}.html` 리포트 생성
 4. `--group` 지정 시 리포트에 해당 그룹만 포함 (미선택 그룹 제외)
 
@@ -131,7 +134,7 @@ python agents/dashboard/serve.py
 |---|---|
 | **단일 파이프라인 실행** | 단일 파이프라인 탭 → 페이지 선택 → URL 자동 표시 → 케이스 폴더 선택 → "run_qa.py 실행" 버튼 |
 | **병렬 파이프라인 실행** | 병렬 파이프라인 탭 → "run_qa_parallel.py 실행" 버튼 (pages.json + testcases/ 자동 스캔) |
-| **빠른 실행** | 빠른 실행 탭 → tests/generated/ 폴더 체크박스 선택 → "테스트 실행" 버튼 (전체 파이프라인 불필요) |
+| **빠른 실행** | 빠른 실행 탭 → tests/generated/ 폴더 체크박스 선택 → "힐링 생략" 체크(선택) → "테스트 실행" 버튼 (전체 파이프라인 불필요) |
 | **99_merge.py 실행** | 병렬 파이프라인 탭 → 워커 완료 후 "99_merge.py 실행" 버튼 |
 | 단일 파이프라인 진행 상태 | 리뷰 완료 후 자동 실행 (승인 단계 없음) |
 | 실행 로그 실시간 확인 | 실행 버튼 클릭 후 하단 로그 박스에 3초 간격 폴링 표시 |
@@ -153,7 +156,7 @@ python agents/dashboard/serve.py
 | `/api/run_qa` | POST | 단일 파이프라인 실행 (`url`, `cases_dir` 필요) |
 | `/api/run_qa_parallel` | POST | 병렬 파이프라인 실행 |
 | `/api/run_merge` | POST | 99_merge.py 실행 |
-| `/api/run_quick` | POST | 빠른 실행 — 선택 그룹만 pytest 실행 (`groups` 배열 필요) |
+| `/api/run_quick` | POST | 빠른 실행 — 선택 그룹만 pytest 실행 (`groups` 배열 필요, `no_heal` 옵션) |
 | `/api/run_log` | POST | 실행 로그 조회 (`log` 파일명 지정) |
 | `/api/pipeline_state` | GET | 단일 파이프라인 state/pipeline.json 조회 |
 | `/api/batch_state` | GET | 병렬 파이프라인 상태 조회 |

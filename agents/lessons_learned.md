@@ -23,6 +23,8 @@
 
 ## Assertion 오류
 
+- **Assertion**: `assert new_style != orig_style, (` — 실제 페이지 텍스트/상태로 기댓값 수정
+
 - **Assertion**: `expect(page).to_have_url(re.compile(r"/products"), timeout=10000)` — 실제 페이지 텍스트/상태로 기댓값 수정
 
 - **정렬 테이블 클릭 타겟**: JS 기반 정렬 테이블은 `th`가 아닌 내부 `span`/`a` 요소를 클릭. 정렬 후 DOM 업데이트 대기 필요

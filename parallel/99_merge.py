@@ -265,6 +265,10 @@ def main():
         "--quick", action="store_true",
         help="빠른 실행 모드: state/quick.json에 결과 저장 (parallel_state 미변경)"
     )
+    parser.add_argument(
+        "--no-heal", action="store_true",
+        help="힐링 단계 생략: 실패해도 heal_context를 생성하지 않음"
+    )
     args = parser.parse_args()
     import time as _time
     _start_time = _time.monotonic()
@@ -374,7 +378,10 @@ def main():
     failed_count = pytest_summary.get("failed", 0) + pytest_summary.get("error", 0)
     has_issues = pytest_exit_code != 0 or failed_count > 0
     if has_issues:
-        if heal_count >= MAX_HEAL:
+        if args.no_heal:
+            print(f"\n[99] 실패 {failed_count}건 — 힐링 생략 (--no-heal)")
+            HEAL_CONTEXT_STATE.unlink(missing_ok=True)
+        elif heal_count >= MAX_HEAL:
             print(f"\n[99] 최대 힐링 횟수({MAX_HEAL}회) 초과 — 수동 수정이 필요합니다.")
             HEAL_CONTEXT_STATE.unlink(missing_ok=True)
         else:
@@ -386,7 +393,7 @@ def main():
         HEAL_CONTEXT_STATE.unlink(missing_ok=True)
 
     # 4. HTML 리포트 (힐링 완료 후에만 생성: 전체 통과 또는 최대 힐링 초과)
-    is_final_run = (not has_issues) or heal_count >= MAX_HEAL
+    is_final_run = (not has_issues) or heal_count >= MAX_HEAL or args.no_heal
     index_path = None
     if is_final_run:
         report_dir = PROJECT_ROOT / "tests" / "reports"
@@ -442,6 +449,8 @@ def main():
     }
     if failed == 0:
         run_state["status"] = "done"
+    elif args.no_heal:
+        run_state["status"] = "done"
     elif heal_count >= MAX_HEAL:
         run_state["status"] = "heal_failed"
     else:
@@ -453,7 +462,7 @@ def main():
     groups_list = list(group_results.keys()) if group_results else (args.group or [])
     append_run_history({
         "timestamp": now,
-        "pipeline": "parallel",
+        "pipeline": "quick" if quick_mode else "parallel",
         "groups": groups_list,
         "passed": passed,
         "failed": failed,

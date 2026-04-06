@@ -40,7 +40,7 @@ async function renderDashboardOverview(main) {
   const totalPassed = lastRun ? (lastRun.passed || 0) : 0;
   const totalFailed = lastRun ? (lastRun.failed || 0) : 0;
   const passRate = totalTests > 0 ? Math.round(totalPassed / totalTests * 100) : 0;
-  const lastRunLabel = lastRun ? (lastRun.pipeline === 'parallel' ? '병렬' : '단일') + ' · ' + (lastRun.timestamp || '').split(' ')[1] || '' : '';
+  const lastRunLabel = lastRun ? ({parallel:'병렬', quick:'빠른 실행', single:'단일'}[lastRun.pipeline] || lastRun.pipeline) + ' · ' + (lastRun.timestamp || '').split(' ')[1] || '' : '';
 
   // 그룹별 커버리지
   const groups = pagesData.groups || [];
@@ -75,9 +75,10 @@ async function renderDashboardOverview(main) {
       const ts = (h.timestamp || '').split(' ')[1] || '';
       const shortTs = ts.substring(0, 5);
       const rInt = Math.round(r);
+      const pLabel = {parallel:'병렬', quick:'빠른', single:'단일'}[h.pipeline] || h.pipeline || '';
       return `<div class="trend-col">
             <div class="trend-pct" style="color:${color}">${rInt}%</div>
-            <div class="trend-bar" style="height:${Math.max(r, 5)}%;background:${color}" title="${h.timestamp} — ${r}% (${h.passed}/${h.total})"></div>
+            <div class="trend-bar" style="height:${Math.max(r, 5)}%;background:${color}" title="${h.timestamp} — ${pLabel} ${r}% (${h.passed}/${h.total})"></div>
             <div class="trend-label">${shortTs}</div>
           </div>`;
     }).join('');

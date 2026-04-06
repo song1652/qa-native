@@ -845,7 +845,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             log_path = LOGS_DIR / "quick_run.txt"
             merge_script = PROJECT_ROOT / "parallel" / "99_merge.py"
             log_file = open(log_path, "w", encoding="utf-8")
+            no_heal = body.get("no_heal", False)
             cmd = [PYTHON_EXE, "-u", str(merge_script), "--quick", "--group"] + groups
+            if no_heal:
+                cmd.append("--no-heal")
             proc = sp.Popen(
                 cmd, cwd=str(PROJECT_ROOT),
                 stdout=log_file, stderr=sp.STDOUT,
