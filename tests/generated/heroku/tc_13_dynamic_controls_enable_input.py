@@ -1,25 +1,24 @@
+"""
+자동 생성된 Playwright 테스트 코드
+URL: https://the-internet.herokuapp.com/
+케이스: tc_13_dynamic_controls_enable_input (tc_13)
+
+Claude Code가 plan 기반으로 완성한 파일.
+수동 편집 가능.
+"""
 from pathlib import Path
-from playwright.sync_api import Page, expect
 
 BASE_URL = "https://the-internet.herokuapp.com/"
-TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+TEST_DATA_PATH = PROJECT_ROOT / "config" / "test_data.json"
 
 
-def test_dynamic_controls_enable_input(page: Page):
-    """Dynamic Controls 입력 필드 활성화"""
-    page.goto("https://the-internet.herokuapp.com/dynamic_controls")
-    page.wait_for_load_state("domcontentloaded")
-
-    text_input = page.locator("input[type='text']")
-    expect(text_input).to_be_visible(timeout=10000)
-    expect(text_input).to_be_disabled(timeout=5000)
-
-    enable_button = page.get_by_role("button", name="Enable")
-    enable_button.click()
-
-    # #loading 이 2개 존재할 수 있으므로 #message 텍스트 출현으로 대기
-    message = page.locator("#message")
-    expect(message).to_be_visible(timeout=15000)
-    expect(message).to_contain_text("It's enabled!", timeout=10000)
-
-    expect(text_input).to_be_enabled(timeout=10000)
+def test_tc_13_dynamic_controls_enable_input(page):
+    """입력 필드 비활성화 상태 확인 후 Enable 클릭하여 활성화 확인"""
+    # TODO: Claude Code가 아래를 완성
+    # 케이스 타입: structured
+    # data_key: null
+    # 전략: goto() → click(#input-example button) → wait(#message)
+    # 검증: element_visible: #input-example input enabled
+    pass

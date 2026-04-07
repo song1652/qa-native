@@ -52,19 +52,18 @@ API 호출 없이 Claude Code 자체가 LLM 역할을 수행하는 QA 자동화 
 
 | 단계 | OMC 스킬 | 적용 방법 |
 |------|----------|----------|
-| 코드 완성 (02_generate 이후) | `/oh-my-claudecode:team` | 테스트 파일을 공유 풀에 등록, N개 agent가 네이티브 팀 도구로 병렬 작성 |
-| 린트 수정 (03_lint 이후) | `/oh-my-claudecode:team` | agent로 lint 이슈 일괄 수정 |
+| 코드 완성 (02_generate 이후) | `/oh-my-claudecode:ultrapilot` | 파일 소유권 파티셔닝으로 N개 agent가 병렬 작성 |
+| 린트 수정 (03_lint 이후) | Agent tool 직접 병렬 호출 | lint 이슈 파일별로 Agent 동시 실행 |
 | 힐링 루프 (05_execute 실패 시) | `/oh-my-claudecode:ultraqa` | test→verify→fix→repeat 자동 사이클. 전체 통과까지 자동 반복 |
 
 ### OMC 사용법
 
-**코드 완성 — team**
+**코드 완성 — ultrapilot**
 ```
 02_generate.py 실행 후 scaffold가 생성되면:
-/oh-my-claudecode:team 6:executor "tests/generated/{group}/tc_*.py 파일의 TODO를 Playwright 코드로 완성"
-- 풀: scaffold 파일 목록
-- agent 수: 6~8
-- 컨텍스트: dom_info + sub_dom_keys(캐시 로드) + lessons_learned + SKILL.md
+/oh-my-claudecode:ultrapilot "tests/generated/{group}/tc_*.py 파일의 TODO를 Playwright 코드로 완성"
+- 파일 소유권: scaffold 파일을 agent별로 파티셔닝
+- 컨텍스트: dom_info + sub_doms(컨텍스트 포함) + lessons_learned + SKILL.md
 ```
 
 **힐링 루프 — ultraqa**
@@ -80,10 +79,10 @@ API 호출 없이 Claude Code 자체가 LLM 역할을 수행하는 QA 자동화 
 - 힐링 패치마다 lessons_learned.md에 교훈 기록 (자동 로그는 heal_utils.py가 _auto.md에 기록)
 ```
 
-**린트 수정 — team**
+**린트 수정 — Agent 병렬 호출**
 ```
 03_lint.py 실행 후 이슈가 있으면:
-/oh-my-claudecode:team "flake8 이슈 전체 수정"
+lint 이슈가 있는 파일 목록을 Agent tool로 동시 실행하여 수정
 - 대상 파일: lint 이슈가 있는 파일 목록
 ```
 

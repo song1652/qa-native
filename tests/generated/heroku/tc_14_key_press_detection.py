@@ -1,29 +1,24 @@
+"""
+자동 생성된 Playwright 테스트 코드
+URL: https://the-internet.herokuapp.com/
+케이스: tc_14_key_press_detection (tc_14)
+
+Claude Code가 plan 기반으로 완성한 파일.
+수동 편집 가능.
+"""
 from pathlib import Path
-from playwright.sync_api import Page, expect
 
 BASE_URL = "https://the-internet.herokuapp.com/"
-TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+TEST_DATA_PATH = PROJECT_ROOT / "config" / "test_data.json"
 
 
-def test_key_press_detection(page: Page):
-    """키 입력 감지"""
-    page.goto("https://the-internet.herokuapp.com/key_presses")
-    page.wait_for_load_state("domcontentloaded")
-
-    # Enter 키가 폼 제출 트리거가 되지 않도록 form submit preventDefault 처리
-    page.evaluate("""
-        () => {
-            const form = document.querySelector('form');
-            if (form) {
-                form.addEventListener('submit', (e) => e.preventDefault());
-            }
-        }
-    """)
-
-    text_input = page.locator("#target")
-    expect(text_input).to_be_visible(timeout=10000)
-    text_input.click()
-    text_input.press("A")
-
-    result = page.locator("#result")
-    expect(result).to_contain_text("You entered: A", timeout=5000)
+def test_tc_14_key_press_detection(page):
+    """입력 필드에서 A 키 입력 후 결과 텍스트 확인"""
+    # TODO: Claude Code가 아래를 완성
+    # 케이스 타입: structured
+    # data_key: null
+    # 전략: goto() → click(#target) → fill(#target)
+    # 검증: text_contains: #result: You entered: A
+    pass

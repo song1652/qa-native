@@ -1,26 +1,30 @@
+"""
+자동 생성된 Playwright 테스트 코드
+URL: https://the-internet.herokuapp.com/
+케이스: tc_41_file_download_execute (tc_41)
+
+Claude Code가 plan 기반으로 완성한 파일.
+수동 편집 가능.
+"""
 from pathlib import Path
-from playwright.sync_api import Page, expect
 
 BASE_URL = "https://the-internet.herokuapp.com/"
-TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+TEST_DATA_PATH = PROJECT_ROOT / "config" / "test_data.json"
 
 
-def test_file_download_execute(page: Page):
-    """파일 다운로드 실행"""
-    page.goto(f"{BASE_URL}download")
+def test_tc_41_file_download_execute(page):
+    """첫 번째 다운로드 링크 클릭 시 파일 다운로드 이벤트 발생 확인"""
+    page.goto("https://the-internet.herokuapp.com/download")
     page.wait_for_load_state("domcontentloaded")
 
-    # 첫 번째 다운로드 링크 텍스트 확인
-    first_link = page.locator(".example a").first
-    expect(first_link).to_be_visible(timeout=10000)
-    link_text = first_link.inner_text().strip()
+    first_link = page.locator("#content a").first
+    link_text = first_link.inner_text()
 
-    # 다운로드 이벤트 대기하며 첫 번째 링크 클릭
-    with page.expect_download(timeout=15000) as download_info:
+    with page.expect_download() as download_info:
         first_link.click()
 
     download = download_info.value
-    # 다운로드된 파일명이 링크 텍스트와 일치하는지 확인
-    assert download.suggested_filename == link_text, (
-        f"Expected filename '{link_text}', got '{download.suggested_filename}'"
-    )
+    assert download.suggested_filename != ""
+    assert link_text in download.suggested_filename

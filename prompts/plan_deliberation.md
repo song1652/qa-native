@@ -11,6 +11,7 @@ senior_role: {ctx.senior_role}
 junior_role: {ctx.junior_role}
 lessons_learned: {ctx.lessons_learned}
 dom_info: {ctx.dom_info}
+sub_doms: {ctx.sub_doms}
 test_cases: {ctx.test_cases}
 
 출력 형식:

@@ -1,29 +1,30 @@
-from pathlib import Path
-from playwright.sync_api import Page, expect
+"""
+자동 생성된 Playwright 테스트 코드
+URL: https://the-internet.herokuapp.com/
+케이스: tc_36_dynamic_content_refresh_change (tc_36)
+
+Claude Code가 plan 기반으로 완성한 파일.
+수동 편집 가능.
+"""
+from playwright.sync_api import expect
 
 BASE_URL = "https://the-internet.herokuapp.com/"
-TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
 
 
-def test_dynamic_content_refresh_change(page: Page):
-    """동적 콘텐츠 새로고침 후 변경 확인"""
-    page.goto(f"{BASE_URL}dynamic_content")
-    page.wait_for_load_state("domcontentloaded")
-
-    # 첫 번째 콘텐츠 행의 텍스트 읽기
-    rows = page.locator("#content .row .large-10")
+def test_tc_36_dynamic_content_refresh_change(page):
+    """새로고침 후 동적 콘텐츠 변경 가능성 확인 (구조 유지)"""
+    page.goto("https://the-internet.herokuapp.com/dynamic_content")
+    rows = page.locator("#content .row")
     expect(rows.first).to_be_visible(timeout=10000)
-    row_count_before = rows.count()
-
-    # 페이지 새로고침
+    before_count = rows.count()
     page.reload()
-    page.wait_for_load_state("domcontentloaded")
-
-    # 새로고침 후 페이지 구조 유지 확인 (3개 행)
-    rows_after = page.locator("#content .row .large-10")
+    rows_after = page.locator("#content .row")
     expect(rows_after.first).to_be_visible(timeout=10000)
-    count_after = rows_after.count()
-    assert count_after >= 1, f"Expected at least 1 content row, got {count_after}"
-    assert row_count_before == count_after, (
-        f"Row count changed: before={row_count_before}, after={count_after}"
+    after_count = rows_after.count()
+    # Structure should be maintained: same number of rows
+    assert after_count == before_count, (
+        f"Row count changed after refresh: {before_count} -> {after_count}"
     )
+    # row 0 is layout header, rows 1-3 are content
+    content_rows = after_count - 1
+    assert content_rows >= 3, f"Expected at least 3 content rows after refresh, got {content_rows}"

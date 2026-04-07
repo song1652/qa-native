@@ -1,21 +1,26 @@
+"""
+자동 생성된 Playwright 테스트 코드
+URL: https://the-internet.herokuapp.com/
+케이스: tc_50_infinite_scroll_initial_content (tc_50)
+
+Claude Code가 plan 기반으로 완성한 파일.
+수동 편집 가능.
+"""
 from pathlib import Path
-from playwright.sync_api import Page
 
 BASE_URL = "https://the-internet.herokuapp.com/"
-TEST_DATA_PATH = (
-    Path(__file__).resolve().parent.parent.parent.parent
-    / "config" / "test_data.json"
-)
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+TEST_DATA_PATH = PROJECT_ROOT / "config" / "test_data.json"
 
 
-def test_infinite_scroll_initial_content(page: Page) -> None:
+def test_tc_50_infinite_scroll_initial_content(page):
+    """무한 스크롤 페이지 초기 콘텐츠 블록 최소 1개 존재 확인"""
     page.goto("https://the-internet.herokuapp.com/infinite_scroll")
     page.wait_for_load_state("domcontentloaded")
 
-    page.wait_for_selector(".jscroll-added", timeout=10000)
+    # Wait for initial content to appear
+    page.wait_for_selector(".jscroll-added", timeout=15000)
 
-    blocks = page.locator(".jscroll-added")
-    count = blocks.count()
-    assert count >= 1, (
-        f"Expected at least 1 initial content block, got {count}"
-    )
+    count = page.locator(".jscroll-added").count()
+    assert count >= 1

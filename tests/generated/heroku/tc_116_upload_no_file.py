@@ -1,24 +1,26 @@
+"""
+자동 생성된 Playwright 테스트 코드
+URL: https://the-internet.herokuapp.com/
+케이스: tc_116_upload_no_file (tc_116)
+
+Claude Code가 plan 기반으로 완성한 파일.
+수동 편집 가능.
+"""
 from pathlib import Path
-from playwright.sync_api import Page, expect
+from playwright.sync_api import expect
 
 BASE_URL = "https://the-internet.herokuapp.com/"
-TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+TEST_DATA_PATH = PROJECT_ROOT / "config" / "test_data.json"
 
 
-def test_upload_no_file(page: Page):
-    """TC-116: 파일 선택 없이 업로드 시도 - 오류 또는 서버 에러 표시"""
-    page.goto("https://the-internet.herokuapp.com/upload")
+def test_tc_116_upload_no_file(page):
+    """파일 미선택 상태에서 Upload 클릭 시 에러 발생 확인"""
+    page.goto(BASE_URL + "upload")
     page.wait_for_load_state("domcontentloaded")
-
     page.locator("#file-submit").click()
-
-    # 파일 미선택 업로드 시 Internal Server Error 또는 에러 응답 확인
-    # 응답이 올 때까지 대기
-    page.wait_for_load_state("domcontentloaded", timeout=10000)
-
+    # Server returns Internal Server Error when no file is selected
+    expect(page.locator("body")).to_be_visible(timeout=10000)
     body_text = page.locator("body").inner_text()
-    assert (
-        "Internal Server Error" in body_text
-        or "error" in body_text.lower()
-        or page.url != "https://the-internet.herokuapp.com/upload"
-    ), f"Expected error indication after upload with no file, got body: {body_text[:200]}"
+    assert "Internal Server Error" in body_text or "error" in body_text.lower()

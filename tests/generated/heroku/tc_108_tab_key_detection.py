@@ -1,17 +1,24 @@
+"""
+자동 생성된 Playwright 테스트 코드
+URL: https://the-internet.herokuapp.com/
+케이스: tc_108_tab_key_detection (tc_108)
+
+Claude Code가 plan 기반으로 완성한 파일.
+수동 편집 가능.
+"""
 from pathlib import Path
-from playwright.sync_api import Page, expect
+from playwright.sync_api import expect
 
 BASE_URL = "https://the-internet.herokuapp.com/"
-TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+TEST_DATA_PATH = PROJECT_ROOT / "config" / "test_data.json"
 
 
-def test_tab_key_detection(page: Page):
-    # key_presses 페이지에서 Tab 키 입력 시 감지 확인
-    page.goto("https://the-internet.herokuapp.com/key_presses")
+def test_tc_108_tab_key_detection(page):
+    """입력 영역에서 Tab 키 입력 후 You entered: TAB 확인"""
+    page.goto(BASE_URL + "key_presses")
     page.wait_for_load_state("domcontentloaded")
-
-    input_field = page.locator("#target")
-    input_field.click()
+    page.locator("#target").click()
     page.keyboard.press("Tab")
-
     expect(page.locator("#result")).to_contain_text("You entered: TAB", timeout=5000)

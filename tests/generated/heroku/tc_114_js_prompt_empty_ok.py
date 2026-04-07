@@ -1,21 +1,24 @@
+"""
+자동 생성된 Playwright 테스트 코드
+URL: https://the-internet.herokuapp.com/
+케이스: tc_114_js_prompt_empty_ok (tc_114)
+
+Claude Code가 plan 기반으로 완성한 파일.
+수동 편집 가능.
+"""
 from pathlib import Path
-from playwright.sync_api import Page, expect
+from playwright.sync_api import expect
 
 BASE_URL = "https://the-internet.herokuapp.com/"
-TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+TEST_DATA_PATH = PROJECT_ROOT / "config" / "test_data.json"
 
 
-def test_js_prompt_empty_ok(page: Page):
-    """TC-114: JS Prompt 빈값 확인 - 텍스트 입력 없이 OK 클릭"""
-    page.goto("https://the-internet.herokuapp.com/javascript_alerts")
+def test_tc_114_js_prompt_empty_ok(page):
+    """JS Prompt에서 빈 텍스트로 OK 클릭 후 결과에 You entered: 확인"""
+    page.goto(BASE_URL + "javascript_alerts")
     page.wait_for_load_state("domcontentloaded")
-
-    def handle_dialog(dialog):
-        dialog.accept("")
-
-    page.on("dialog", handle_dialog)
-
-    page.get_by_role("button", name="Click for JS Prompt").click()
-
-    result = page.locator("#result")
-    expect(result).to_contain_text("You entered:", timeout=10000)
+    page.on("dialog", lambda d: d.accept(""))
+    page.locator("button[onclick='jsPrompt()']").click()
+    expect(page.locator("#result")).to_contain_text("You entered:", timeout=10000)

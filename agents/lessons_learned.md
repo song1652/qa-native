@@ -14,6 +14,7 @@
 - **hover는 page.hover() 대신 locator().hover()**: `page.hover("div.figure:nth-child(N)")` 방식은 :nth-child 선택이 컨테이너 context 없이 실패 가능. `page.locator("div.figure").nth(N).hover()` 패턴 사용
 - **dynamic_controls 재추가 후 #checkbox는 input 자체**: 최초 상태는 `#checkbox div` > `input`, 재추가 후 `#checkbox`가 input element. `#checkbox input` 셀렉터 불가 → `#checkbox-example input[type=checkbox]` 사용
 - **shadow DOM textContent는 CSS 포함**: `shadowRoot.textContent`는 style 태그 내 CSS 텍스트까지 포함. slot 내용 검증은 `element.innerText` 또는 `element.textContent`(light DOM) 사용
+- **shadowRoot.innerText는 undefined**: `shadowRoot`에 `innerText` 프로퍼티 없음. `shadowRoot.textContent` 사용 (CSS 포함 감수)
 - **shadow DOM nth-of-type vs querySelectorAll**: `my-paragraph:nth-of-type(2)` 셀렉터가 작동 안 할 수 있음. `document.querySelectorAll('my-paragraph')[1]`로 인덱스 접근
 - **특정 ID 존재 가정 금지**: 외부 사이트에 `#content` 등 특정 요소가 있을 거라 가정하지 말 것. URL 검증 + `body` 가시성으로 충분
 - **추측 셀렉터 사용 금지**: 호스팅 플랫폼 기반 사이트는 고유 셀렉터 패턴 있음. `dom_info` 없이 `input[name='m_id']` 등 추측 금지
@@ -106,7 +107,8 @@
 - **drag-and-drop DragEvent 방식**: `CustomEvent + initCustomEvent()` 방식은 column-b를 "undefined"로 만듦. `document.createEvent('DragEvent') + initEvent() + Object.defineProperty(e, 'dataTransfer', {value: dt})` 방식 사용
 - **exit intent 모달**: `#modal` 셀렉터 없음, 실제는 `#ouibounce-modal`. 마우스 이벤트로 트리거 안 됨 → `_ouibounce.fire()` 직접 호출
 - **floating menu viewport 체크 금지**: `position: absolute`이므로 스크롤 후 `rect.top < 0`. 뷰포트 좌표 검증 대신 DOM 존재 + 링크 포함 여부로 검증
-- **jqueryui menu get_by_role 금지**: 서브메뉴 항목은 hover 전까지 `display:none`. `get_by_role("menuitem", name=...)` 불가 → `page.locator("#menu > li.ui-menu-item").nth(1).hover()` 후 `page.locator("#menu a", has_text=...)` 사용
+- **jqueryui menu get_by_role 금지**: 서브메뉴 항목은 hover 전까지 `display:none`. `get_by_role("menuitem", name=...)` 불가 → `page.locator("#menu > li.ui-menu-item").nth(1).hover()` 후 `page.locator("#menu a", has_text=...)` 사용. nth(0)은 "Disabled", nth(1)이 "Enabled"
+- **JS 에러 감지는 pageerror 이벤트**: `page.on("console")` + `msg.type == "error"`는 JS 런타임 에러를 잡지 못함. `page.on("pageerror", handler)` 사용
 - **jqueryui PDF 클릭**: PDF 링크는 파일 다운로드 → `net::ERR_ABORTED` 발생. `expect_navigation` 대신 href 속성 검증
 - **shadow DOM 두 번째 요소**: `shadowRoot.textContent`에 CSS 스타일 포함. 실제 slot 내용은 host element의 `innerHTML`에서 확인
 - **shifting content list**: `<li>` 없음, `<br><br>` 구분 텍스트. `li` 셀렉터 대신 `.large-6` 컨텐츠 영역 텍스트 검증

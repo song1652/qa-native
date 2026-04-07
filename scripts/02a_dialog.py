@@ -8,7 +8,7 @@ import json
 import sys
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
-from _paths import PIPELINE_STATE, read_state
+from _paths import PIPELINE_STATE, read_state, resolve_sub_doms
 
 
 def read_file(path):
@@ -41,11 +41,24 @@ def main():
         futures = {k: ex.submit(read_file, v) for k, v in paths.items()}
         ctx = {k: f.result() for k, f in futures.items()}
 
+    # 서브페이지 DOM 캐시 일괄 로드 (agent가 개별 파일 읽기 불필요)
+    sub_doms_raw = resolve_sub_doms(state)
+    # 경량화: 셀렉터 관련 필드만 추출
+    sub_doms = {}
+    for url, dom in sub_doms_raw.items():
+        sub_doms[url] = {
+            k: dom.get(k)
+            for k in ("title", "url", "inputs", "buttons", "components",
+                       "idElements", "forms_count")
+            if dom.get(k) is not None
+        }
+
     # 심의 agent에 전달할 컨텍스트 출력
     context_payload = {
         "stage": "planning",
         "url": state["url"],
         "dom_info": state["dom_info"],
+        "sub_doms": sub_doms,
         "test_cases": state["test_cases"],
         "team_charter": ctx["team_charter"],
         "senior_role": ctx["senior_role"],
@@ -57,6 +70,8 @@ def main():
     print(f"  URL: {state['url']}")
     print(f"  DOM 입력필드: {len(state['dom_info'].get('inputs', []))}개  "
           f"버튼: {len(state['dom_info'].get('buttons', []))}개")
+    if sub_doms:
+        print(f"  서브페이지 DOM: {len(sub_doms)}개 (컨텍스트에 포함)")
     print(f"  테스트 케이스: {len(state['test_cases'])}개")
     print()
     print("=== DELIBERATION_CONTEXT_START ===")

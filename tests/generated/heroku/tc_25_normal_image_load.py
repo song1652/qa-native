@@ -1,18 +1,20 @@
-from pathlib import Path
-from playwright.sync_api import Page, expect
+"""
+자동 생성된 Playwright 테스트 코드
+URL: https://the-internet.herokuapp.com/
+케이스: tc_25_normal_image_load (tc_25)
 
+Claude Code가 plan 기반으로 완성한 파일.
+수동 편집 가능.
+"""
 BASE_URL = "https://the-internet.herokuapp.com/"
-TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
 
 
-def test_normal_image_load(page: Page):
+def test_tc_25_normal_image_load(page):
+    """정상 로드된 이미지가 최소 1개 존재하는지 확인"""
     page.goto("https://the-internet.herokuapp.com/broken_images")
-    page.wait_for_load_state("domcontentloaded")
-
-    content = page.locator("div.example")
-    expect(content).to_be_visible(timeout=10000)
-
-    loaded_count = page.evaluate(
-        "() => Array.from(document.querySelectorAll('div.example img')).filter(img => img.naturalWidth > 0).length"
-    )
-    assert loaded_count >= 1, f"Expected at least 1 normally loaded image, found {loaded_count}"
+    page.wait_for_load_state("networkidle")
+    normal_count = page.evaluate("""() => {
+        const imgs = Array.from(document.querySelectorAll('div.example img'));
+        return imgs.filter(img => img.naturalWidth > 0).length;
+    }""")
+    assert normal_count >= 1, f"Expected at least 1 normal image, got {normal_count}"

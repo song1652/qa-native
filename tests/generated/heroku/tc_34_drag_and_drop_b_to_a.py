@@ -1,48 +1,45 @@
-from pathlib import Path
-from playwright.sync_api import Page, expect
-
-BASE_URL = "https://the-internet.herokuapp.com/"
-TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
-
-_DND_SCRIPT = """
-(args) => {
-    const src = document.querySelector(args[0]);
-    const dst = document.querySelector(args[1]);
-    const dt = {
-        _data: {},
-        setData: function(k, v) { this._data[k] = v; },
-        getData: function(k) { return this._data[k] || ''; },
-        effectAllowed: 'all',
-        dropEffect: 'move'
-    };
-    function fire(el, name) {
-        const e = document.createEvent('DragEvent');
-        e.initEvent(name, true, true);
-        Object.defineProperty(e, 'dataTransfer', { value: dt });
-        el.dispatchEvent(e);
-    }
-    fire(src, 'dragstart');
-    fire(dst, 'dragenter');
-    fire(dst, 'dragover');
-    fire(dst, 'drop');
-    fire(src, 'dragend');
-}
 """
+자동 생성된 Playwright 테스트 코드
+URL: https://the-internet.herokuapp.com/
+케이스: tc_34_drag_and_drop_b_to_a (tc_34)
+
+Claude Code가 plan 기반으로 완성한 파일.
+수동 편집 가능.
+"""
+BASE_URL = "https://the-internet.herokuapp.com/"
 
 
-def test_drag_and_drop_b_to_a(page: Page) -> None:
+def test_tc_34_drag_and_drop_b_to_a(page):
+    """컬럼 B를 A로 드래그 앤 드롭 (JS 시뮬레이션) 후 위치 교환 확인"""
     page.goto("https://the-internet.herokuapp.com/drag_and_drop")
-    page.wait_for_load_state("domcontentloaded")
+    page.wait_for_selector("#column-b", state="visible")
 
-    col_a = page.locator("#column-a")
-    col_b = page.locator("#column-b")
-    expect(col_a).to_be_visible(timeout=10000)
-    expect(col_b).to_be_visible(timeout=10000)
+    page.evaluate("""() => {
+        function simulateDragDrop(src, dst) {
+            var dt = {
+                data: {},
+                setData: function(k, v) { this.data[k] = v; },
+                getData: function(k) { return this.data[k]; }
+            };
+            function fireEvent(el, type) {
+                var e = document.createEvent('DragEvent');
+                e.initEvent(type, true, true);
+                Object.defineProperty(e, 'dataTransfer', { value: dt });
+                el.dispatchEvent(e);
+            }
+            fireEvent(src, 'dragstart');
+            fireEvent(dst, 'dragenter');
+            fireEvent(dst, 'dragover');
+            fireEvent(dst, 'drop');
+            fireEvent(src, 'dragend');
+        }
+        var src = document.querySelector('#column-b');
+        var dst = document.querySelector('#column-a');
+        simulateDragDrop(src, dst);
+    }""")
 
-    page.evaluate(_DND_SCRIPT, ["#column-b", "#column-a"])
     page.wait_for_timeout(500)
-
-    col_a_header = page.locator("#column-a header")
-    col_b_header = page.locator("#column-b header")
-    expect(col_a_header).to_have_text("B", timeout=5000)
-    expect(col_b_header).to_have_text("A", timeout=5000)
+    col_a_text = page.locator("#column-a header").inner_text()
+    col_b_text = page.locator("#column-b header").inner_text()
+    assert col_a_text.strip() == "B", f"Expected column-a to show B, got: {col_a_text}"
+    assert col_b_text.strip() == "A", f"Expected column-b to show A, got: {col_b_text}"

@@ -1,17 +1,23 @@
-from playwright.sync_api import Page, expect
+"""
+자동 생성된 Playwright 테스트 코드
+URL: https://the-internet.herokuapp.com/
+케이스: tc_86_checkbox_1_toggle (tc_86)
+
+Claude Code가 plan 기반으로 완성한 파일.
+수동 편집 가능.
+"""
+from playwright.sync_api import expect
 
 BASE_URL = "https://the-internet.herokuapp.com/"
 
 
-def test_checkbox_1_toggle(page: Page):
-    page.goto(BASE_URL + "checkboxes")
+def test_tc_86_checkbox_1_toggle(page):
+    """첫 번째 체크박스 초기 해제 확인 후 클릭하여 체크 상태 확인"""
+    page.goto("https://the-internet.herokuapp.com/checkboxes")
     page.wait_for_load_state("domcontentloaded")
 
-    checkboxes = page.locator("form#checkboxes input[type='checkbox']")
-    first_checkbox = checkboxes.nth(0)
+    checkbox1 = page.locator("#checkboxes input").nth(0)
+    expect(checkbox1).not_to_be_checked()
 
-    expect(first_checkbox).not_to_be_checked(timeout=5000)
-
-    first_checkbox.click()
-
-    expect(first_checkbox).to_be_checked(timeout=5000)
+    checkbox1.click()
+    expect(checkbox1).to_be_checked()

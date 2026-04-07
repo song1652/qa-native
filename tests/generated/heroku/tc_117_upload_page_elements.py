@@ -1,23 +1,24 @@
+"""
+자동 생성된 Playwright 테스트 코드
+URL: https://the-internet.herokuapp.com/
+케이스: tc_117_upload_page_elements (tc_117)
+
+Claude Code가 plan 기반으로 완성한 파일.
+수동 편집 가능.
+"""
 from pathlib import Path
-from playwright.sync_api import Page, expect
+from playwright.sync_api import expect
 
 BASE_URL = "https://the-internet.herokuapp.com/"
-TEST_DATA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "test_data.json"
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+TEST_DATA_PATH = PROJECT_ROOT / "config" / "test_data.json"
 
 
-def test_upload_page_elements(page: Page):
-    """TC-117: 업로드 페이지 요소 확인 - file input, upload 버튼, drag & drop 영역"""
-    page.goto("https://the-internet.herokuapp.com/upload")
+def test_tc_117_upload_page_elements(page):
+    """업로드 페이지에서 #file-upload, #file-submit, #drag-drop-upload 요소 존재 확인"""
+    page.goto(BASE_URL + "upload")
     page.wait_for_load_state("domcontentloaded")
-
-    # 파일 선택 input 확인
-    file_input = page.locator("#file-upload")
-    expect(file_input).to_be_attached(timeout=10000)
-
-    # Upload 버튼 확인
-    upload_btn = page.locator("#file-submit")
-    expect(upload_btn).to_be_visible(timeout=10000)
-
-    # 드래그 앤 드롭 영역 확인
-    drag_drop = page.locator("#drag-drop-upload")
-    expect(drag_drop).to_be_visible(timeout=10000)
+    expect(page.locator("#file-upload")).to_be_visible(timeout=5000)
+    expect(page.locator("#file-submit")).to_be_visible(timeout=5000)
+    expect(page.locator("#drag-drop-upload")).to_be_visible(timeout=5000)
