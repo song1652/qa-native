@@ -330,8 +330,8 @@ python scripts/05_execute.py
 
 | 단계 | 스킬 | 효과 |
 |------|------|------|
-| 코드 완성 (scaffold → 실제 코드) | `/oh-my-claudecode:swarm` | N개 agent가 공유 풀에서 파일을 가져가며 병렬 작성. 수동 분배 불필요 |
-| 린트 수정 | `/oh-my-claudecode:ecomode` | Haiku/Sonnet으로 단순 수정 처리. 토큰 비용 절감 |
+| 코드 완성 (scaffold → 실제 코드) | `/oh-my-claudecode:team` | N개 agent가 네이티브 팀 도구로 병렬 작성. 수동 분배 불필요 |
+| 린트 수정 | `/oh-my-claudecode:team` | agent로 lint 이슈 일괄 수정 |
 | 힐링 루프 | `/oh-my-claudecode:ultraqa` | test→fix→repeat 자동 사이클. 전체 통과까지 자동 반복 |
 
 상세 사용법은 `CLAUDE.md`의 "OMC 스킬 적용" 섹션 참조.

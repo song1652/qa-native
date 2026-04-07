@@ -153,8 +153,7 @@ Claude가 멀티라운드 티키타카 진행 (최소 3라운드)
 | `heal-patterns/SKILL.md` | 힐링 오류 유형별 패치 전략 |
 
 **OMC 스킬 통합:**
-- **swarm** — 코드 생성 단계(02_generate.py)에서 다중 케이스 병렬 작성
-- **ecomode** — 린트 수정(03_lint.py)에서 효율적 포맷 처리
+- **team** — 코드 생성 단계(02_generate.py)에서 다중 케이스 병렬 작성, 린트 수정(03_lint.py)에서 일괄 수정
 - **ultraqa** — 힐링 루프(06_heal.py)에서 최대 3회 자동 패치 시도
 
 동적 빈도 데이터는 `state/heal_stats.json`에 기록. `06_heal.py`가 실패 시 자동 업데이트하고, `06a_dialog.py`가 Top 5 빈출 패턴을 DELIBERATION_CONTEXT에 주입.

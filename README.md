@@ -3,7 +3,7 @@
 > **독자**: 사람 — 신규 진입점. 설치·실행 방법과 내부 문서 링크 모음.
 
 API 비용 없이 Claude Code 토큰만으로 동작하는 QA 자동화 시스템.
-최신 성과: **demoqa 120개 테스트 100% 통과** — OMC 스킬(swarm, ecomode, ultraqa) 통합 기반.
+최신 성과: **demoqa 120개 테스트 100% 통과** — OMC 스킬(team, ultraqa) 통합 기반.
 
 ---
 
