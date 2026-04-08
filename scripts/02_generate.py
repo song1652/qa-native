@@ -1,16 +1,17 @@
 """
-Step 2 — 테스트 코드 뼈대 생성 (템플릿 기반)
-LLM 없음. plan을 읽어 코드 뼈대를 생성.
-Claude Code가 이 뼈대를 완성해 tests/generated/test_generated.py에 직접 작성.
+Step 2 — 테스트 코드 뼈대 생성 (파일별 scaffold)
+LLM 없음. plan을 읽어 케이스별 개별 파일로 뼈대를 생성.
+Claude Code가 각 뼈대를 완성해 tests/generated/{group}/ 에 저장.
 
 뼈대 생성 후 Claude Code에게:
   "02_generate.py가 생성한 뼈대를 기반으로
-   tests/generated/test_generated.py를 완성해줘.
+   tests/generated/{group}/ 아래 각 파일을 완성해줘.
    실제 셀렉터와 assertion을 plan의 내용대로 채워넣어."
 """
-import json
+import re
 import sys
 from pathlib import Path
+from _paths import PIPELINE_STATE, read_state, write_state
 
 
 CONFTEST_TEMPLATE = '''import pytest
@@ -51,26 +52,27 @@ def pytest_runtest_makereport(item, call):
                 pass
 '''
 
-TEST_FILE_HEADER = '''"""
+PER_CASE_SCAFFOLD = '''"""
 자동 생성된 Playwright 테스트 코드
 URL: {url}
-생성 케이스: {case_count}개
+케이스: {case_name} ({case_id})
 
 Claude Code가 plan 기반으로 완성한 파일.
 수동 편집 가능.
 """
-import pytest
-from playwright.sync_api import expect
+from pathlib import Path
 
 BASE_URL = "{url}"
-'''
 
-TEST_CASE_SCAFFOLD = '''
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+TEST_DATA_PATH = PROJECT_ROOT / "config" / "test_data.json"
 
-def test_{func_name}(page):
+
+def {func_name}(page):
     """{description}"""
     # TODO: Claude Code가 아래를 완성
     # 케이스 타입: {case_type}
+    # data_key: {data_key}
     # 전략: {steps_hint}
     # 검증: {assertion_hint}
     pass
@@ -78,67 +80,106 @@ def test_{func_name}(page):
 
 
 def slugify(text: str) -> str:
-    import re
     text = text.lower().strip()
-    text = re.sub(r'[^\w\s가-힣]', '', text)
+    text = re.sub(r'[^a-z0-9\s_]', '', text)
     text = re.sub(r'[\s]+', '_', text)
-    return text[:50]
+    text = text.strip('_')
+    return text[:50] if text else "unnamed"
 
 
 def main():
-    state_path = Path("state.json")
+    state_path = PIPELINE_STATE
     if not state_path.exists():
-        print("[오류] state.json 없음.")
+        print("[오류] state/pipeline.json 없음.")
         sys.exit(1)
 
-    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state = read_state(state_path)
 
     if not state.get("plan"):
         print("[오류] plan 없음. Claude Code가 전략 수립을 먼저 완료해야 합니다.")
         sys.exit(1)
 
     plan = state["plan"]
-    url  = state["url"]
+    url = state["url"]
+    group_dir = state.get("group_dir", "default")
 
-    # conftest.py 생성
+    # conftest.py 생성 (이미 있으면 건너뜀)
     conftest_path = Path("tests/conftest.py")
-    conftest_path.write_text(CONFTEST_TEMPLATE, encoding="utf-8")
-    print(f"[02] conftest.py 생성: {conftest_path}")
+    if not conftest_path.exists():
+        conftest_path.parent.mkdir(parents=True, exist_ok=True)
+        conftest_path.write_text(CONFTEST_TEMPLATE, encoding="utf-8")
+        print(f"[02] conftest.py 생성: {conftest_path}")
+    else:
+        print(f"[02] conftest.py 이미 존재 — 건너뜀: {conftest_path}")
 
-    # 테스트 파일 뼈대 생성
-    out_dir = Path("tests/generated")
+    # 출력 디렉토리 생성
+    out_dir = Path("tests/generated") / group_dir
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = Path(state["generated_file_path"])
 
-    scaffold = TEST_FILE_HEADER.format(url=url, case_count=len(plan))
+    # __init__.py (pytest 모듈 충돌 방지)
+    for init_dir in [Path("tests/generated"), out_dir]:
+        init_file = init_dir / "__init__.py"
+        if not init_file.exists():
+            init_file.write_text("", encoding="utf-8")
 
-    for case in plan:
+    # 케이스별 scaffold 파일 생성
+    generated_files = []
+    for idx, case in enumerate(plan):
+        raw_name = case.get("case_name", f"case_{idx}")
+        func_name = slugify(raw_name)
+        # test_ 접두사 중복 방지: case_name이 이미 test_로 시작하면 그대로 사용
+        if not func_name.startswith("test_"):
+            func_name = f"test_{func_name}"
+        case_id = case.get("case_id", f"tc_{idx + 1:02d}")
+        case_num = case_id.replace("tc_", "") if case_id.startswith("tc_") else f"{idx + 1:02d}"
+
+        # 파일명: test_ 접두사 + tc_XX_ 접두사 중복 방지
+        file_slug = func_name[5:] if func_name.startswith("test_") else func_name
+        # case_name이 "tc_01_xxx" 형태면 "tc_01_" 부분 제거
+        file_slug = re.sub(r'^tc_\d+_', '', file_slug)
+        filename = f"tc_{case_num}_{file_slug}.py"
+        out_path = out_dir / filename
+
         steps_hint = " → ".join(
-            f"{s.get('action','?')}({s.get('selector','?')})"
+            f"{s.get('action', '?')}({s.get('selector', '?')})"
             for s in case.get("steps", [])
         )
         assertion = case.get("assertion", {})
         if isinstance(assertion, list):
-            assertion_hint = " + ".join(f"{a.get('type','?')}: {a.get('expected','?')}" for a in assertion)
+            assertion_hint = " + ".join(
+                f"{a.get('type', '?')}: {a.get('expected', '?')}" for a in assertion
+            )
         else:
-            assertion_hint = f"{assertion.get('type','?')}: {assertion.get('expected','?')}"
+            assertion_hint = (
+                f"{assertion.get('type', '?')}: {assertion.get('expected', '?')}"
+            )
 
-        scaffold += TEST_CASE_SCAFFOLD.format(
-            func_name=slugify(case.get("case_name", f"case_{plan.index(case)}")),
+        scaffold = PER_CASE_SCAFFOLD.format(
+            url=url,
+            case_name=case.get("case_name", f"case_{idx}"),
+            case_id=case_id,
+            func_name=func_name,
             description=case.get("description", case.get("case_name", "")),
             case_type=case.get("case_type", ""),
+            data_key=case.get("data_key", "null"),
             steps_hint=steps_hint,
             assertion_hint=assertion_hint,
         )
 
-    out_path.write_text(scaffold, encoding="utf-8")
+        out_path.write_text(scaffold, encoding="utf-8")
+        generated_files.append(str(out_path))
 
-    state["step"] = "scaffolded"
-    state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    # state 업데이트
+    state["step"] = "generated"
+    state["generated_file_path"] = str(out_dir) + "/"
+    state["generated_files"] = generated_files
+    write_state(state_path, state)
 
-    print(f"[02] 뼈대 생성 완료: {out_path}  ({len(plan)}개 케이스)")
+    print(f"[02] 파일별 뼈대 생성 완료: {out_dir}/  ({len(plan)}개 파일)")
+    for f in generated_files:
+        print(f"     {f}")
     print()
-    print("[다음] Claude Code가 뼈대를 완성합니다.")
+    print("[다음] Claude Code가 각 뼈대를 완성합니다.")
     print("       실제 셀렉터와 assertion을 plan 내용대로 채워넣습니다.")
 
 

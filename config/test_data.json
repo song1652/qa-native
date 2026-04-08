@@ -1,9 +1,18 @@
 {
-  "login": {
-    "valid_user": { "username": "tomsmith", "password": "SuperSecretPassword!" }
-  },
-  "saintcore": {
-    "valid_user": { "username": "skj942", "password": "danawa1631" },
-    "invalid_user": { "username": "skj942", "password": "wrongpassword123" }
+  "heroku": {
+    "valid_user": {
+      "username": "tomsmith",
+      "password": "SuperSecretPassword!"
+    },
+    "invalid_user": {
+      "username": "wronguser",
+      "password": "wrongpassword"
+    },
+    "js_prompt": {
+      "text": "Hello Playwright"
+    },
+    "forgot_email": {
+      "email": "test@example.com"
+    }
   }
 }

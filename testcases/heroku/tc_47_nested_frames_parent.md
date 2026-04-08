@@ -1,0 +1,19 @@
+---
+id: tc_47_nested_frames_parent
+data_key: null
+priority: medium
+tags: [positive, content, nested_frames]
+type: structured
+---
+# 중첩 프레임 부모 프레임 확인
+
+## Precondition
+- https://the-internet.herokuapp.com/nested_frames 접속 상태
+
+## Steps
+1. 상단 프레임셋 확인
+2. 상단 프레임 내 LEFT, MIDDLE, RIGHT 프레임 존재 확인
+
+## Expected
+- 상단 프레임에 3개의 하위 프레임이 존재한다
+- MIDDLE 프레임에 "MIDDLE" 텍스트가 표시된다

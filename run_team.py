@@ -9,8 +9,10 @@ import json
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).parent
-DISCUSS_STATE_PATH = PROJECT_ROOT / "discuss_state.json"
+import _bootstrap  # noqa: F401 — scripts/ 경로 설정
+from _paths import DISCUSS_STATE, STATE_DIR
+
+DISCUSS_STATE_PATH = DISCUSS_STATE
 
 
 def main():
@@ -29,7 +31,7 @@ def main():
             print("[오류] 주제를 입력해야 합니다.")
             sys.exit(1)
 
-    # discuss_state.json 초기화
+    # state/discuss.json 초기화
     discuss_state = {
         "topic": topic,
         "step": "init",
@@ -54,7 +56,7 @@ def main():
     print("     출력의 DELIBERATION_CONTEXT JSON을 추출해 심의 agent 호출")
     print()
     print("  2. [심의 Agent] 사수/부사수 토론 실행")
-    print("     → discuss_state.json에 conclusion 저장")
+    print("     → state/discuss.json에 conclusion 저장")
     print("     → agents/dialog.json 마지막 session 업데이트")
     print()
     print("  3. python scripts/team_approve.py")

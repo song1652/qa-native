@@ -1,0 +1,20 @@
+---
+id: tc_15_file_upload
+data_key: null
+priority: medium
+tags: [positive, content]
+type: structured
+---
+# 파일 업로드
+
+## Precondition
+- https://the-internet.herokuapp.com/upload 접속 상태
+
+## Steps
+1. 임시 텍스트 파일 생성 (test_upload.txt)
+2. 파일 선택 input에 파일 설정
+3. "Upload" 버튼 클릭
+
+## Expected
+- 업로드 완료 후 "File Uploaded!" 제목이 표시된다
+- 업로드된 파일명 "test_upload.txt"가 표시된다

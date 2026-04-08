@@ -7,9 +7,9 @@ import sys
 from pathlib import Path
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
+from _paths import DISCUSS_STATE, PROJECT_ROOT, read_state
 
-PROJECT_ROOT = Path(__file__).parent.parent
-DISCUSS_STATE_PATH = PROJECT_ROOT / "discuss_state.json"
+DISCUSS_STATE_PATH = DISCUSS_STATE
 DIALOG_PATH = PROJECT_ROOT / "agents" / "dialog.json"
 
 
@@ -20,10 +20,10 @@ def read_file(path):
 
 def main():
     if not DISCUSS_STATE_PATH.exists():
-        print("[오류] discuss_state.json 없음. run_team.py를 먼저 실행하세요.")
+        print("[오류] state/discuss.json 없음. run_team.py를 먼저 실행하세요.")
         sys.exit(1)
 
-    discuss = json.loads(DISCUSS_STATE_PATH.read_text(encoding="utf-8"))
+    discuss = read_state(DISCUSS_STATE_PATH)
     topic = discuss.get("topic", "")
     rejection_reason = discuss.get("rejection_reason", "")
 

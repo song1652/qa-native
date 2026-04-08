@@ -13,6 +13,7 @@ QA-Native 파이프라인용 테스트 케이스 작성 가이드입니다.
 - **위치**: `testcases/{그룹명}/tc_{번호}_{설명}.md`
 - **1파일 = 1케이스**: 파일 하나에 테스트 케이스 하나
 - **그룹명**: 기능 단위 폴더 (예: `login`, `mypage`, `signup`)
+- **템플릿**: [`templates/tc-template.md`](../templates/tc-template.md) 참조
 
 ```
 testcases/
@@ -22,22 +23,38 @@ testcases/
     tc_03_empty_username.md
   mypage/
     tc_01_profile_view.md
+  demoqa/
+    tc_01_textbox_fill_all_fields.md
+    tc_02_textbox_empty_submit.md
+    ... (120개)
 ```
+
+**실제 프로젝트 사례**: `testcases/demoqa/`에는 120개의 테스트케이스 존재.
+각 파일이 독립적인 Python 테스트 파일(tc_01.py, tc_02.py, ...)로 변환되어 `tests/generated/demoqa/`에 저장됨.
 
 ---
 
 ## 케이스 파일 형식
 
+YAML frontmatter + Markdown 본문으로 구성한다.
+
 ```markdown
+---
+id: tc_01
+data_key: valid_user
+priority: high
+tags: [positive, smoke]
+type: structured
+---
 # 케이스 제목
 
 ## Precondition
 0. 시작 조건
 
 ## Steps
-1. 첫 번째 액션
-2. 두 번째 액션
-3. 세 번째 액션
+1. username 필드에 test_data[valid_user].username 입력
+2. password 필드에 test_data[valid_user].password 입력
+3. Login 버튼 클릭
 
 ## Expected
 - 기대 결과
@@ -45,12 +62,56 @@ testcases/
 
 ---
 
+## Frontmatter 필드
+
+파일 최상단 `---` 블록 안에 메타데이터를 기록한다.
+
+| 필드 | 필수 | 값 | 설명 |
+|------|------|-----|------|
+| `id` | **필수** | `tc_{번호}` | 케이스 고유 식별자 (그룹 내 순번) |
+| `data_key` | **필수** | [`test_data.json`](../config/test_data.json) 키 \| `null` | 입력값 참조 키. 입력 불필요 시 `null` |
+| `priority` | **필수** | `high` \| `medium` \| `low` | 우선순위 |
+| `tags` | **필수** | 배열 `[유형, 분류]` | 테스트 유형 태그 |
+| `type` | **필수** | `structured` \| `natural` | 케이스 형식 |
+
+### 유형 태그 (tags)
+
+| 태그 | 설명 |
+|------|------|
+| `positive` | 정상 동작 확인 |
+| `negative` | 비정상 입력/실패 시나리오 |
+| `smoke` | 핵심 기능 빠르게 확인 |
+| `auth` | 인증/로그인 관련 |
+| `validation` | 입력값 검증 |
+| `security` | 보안 취약점 확인 |
+| `edge_case` | 경계값/특수 상황 |
+| `session` | 세션 관리 |
+| `navigation` | 페이지 이동 |
+| `content` | 콘텐츠/텍스트 확인 |
+
+### data_key 규칙
+- [`config/test_data.json`](../config/test_data.json)의 키와 1:1 매핑
+- Steps에서 `test_data[{data_key}].{속성}` 형식으로 참조
+- 입력값이 필요 없는 케이스는 `null`
+
+---
+
+## 우선순위 (Priority)
+
+| 등급 | 기준 |
+|------|------|
+| **high** | 핵심 기능 — 서비스 접근, 로그인, 주요 플로우 |
+| **medium** | 보조 기능 — 유효성 검증, 에러 처리 |
+| **low** | 엣지케이스 — 특수문자, 경계값, 대소문자 등 |
+
+---
+
 ## 언어 규칙
 
 - **기본 언어**: 한글
 - **영어 사용**: UI 요소명, 버튼명, 입력값, 기술 용어
-  - O: `Login 버튼 클릭`, `username 필드에 tomsmith 입력`
-  - X: `로그인 버튼 클릭`, `사용자이름 필드에 tomsmith 입력`
+  - O: `Login 버튼 클릭`, `username 필드에 test_data[valid_user].username 입력`
+  - X: `로그인 버튼 클릭`, `사용자이름 필드에 값 입력`
 - **화면 표시 텍스트 번역 금지**: 실제 UI에 보이는 문자 그대로 사용
   - O: `You logged into a secure area!`, `Your password is invalid!`
   - X: `로그인 성공 메시지`, `비밀번호가 틀립니다`
@@ -103,15 +164,17 @@ testcases/
 
 - `1.`, `2.`, `3.` 번호로 순서 명시
 - 각 step = **단일 액션** (입력 or 클릭 or 이동 하나씩)
+- 입력값은 `test_data[{data_key}].{속성}` 형식으로 참조 (하드코딩 금지)
 
 ```markdown
 ## Steps
-1. username 필드에 tomsmith 입력    ← Good
-2. password 필드에 Password! 입력
+1. username 필드에 test_data[valid_user].username 입력    ← Good
+2. password 필드에 test_data[valid_user].password 입력
 3. Login 버튼 클릭
 
 ## Steps
-1. 로그인 정보 입력 후 Login 클릭   ← Bad (복수 액션을 하나에 묶음)
+1. username 필드에 testuser 입력   ← Bad (하드코딩)
+2. 로그인 정보 입력 후 Login 클릭   ← Bad (복수 액션을 하나에 묶음)
 ```
 
 ---
@@ -136,14 +199,21 @@ testcases/
 ## 실제 케이스 예시
 
 ```markdown
+---
+id: tc_01
+data_key: valid_user
+priority: high
+tags: [positive, smoke]
+type: structured
+---
 # 정상 로그인 성공
 
 ## Precondition
 0. 로그인 페이지 접속 상태
 
 ## Steps
-1. username 필드에 tomsmith 입력
-2. password 필드에 SuperSecretPassword! 입력
+1. username 필드에 test_data[valid_user].username 입력
+2. password 필드에 test_data[valid_user].password 입력
 3. Login 버튼 클릭
 
 ## Expected
@@ -151,14 +221,21 @@ testcases/
 ```
 
 ```markdown
+---
+id: tc_08
+data_key: sql_injection
+priority: medium
+tags: [security, negative]
+type: structured
+---
 # SQL Injection 시도 차단 확인
 
 ## Precondition
 0. 로그인 페이지 접속 상태
 
 ## Steps
-1. username 필드에 ' OR '1'='1 입력
-2. password 필드에 anything 입력
+1. username 필드에 test_data[sql_injection].username 입력
+2. password 필드에 test_data[sql_injection].password 입력
 3. Login 버튼 클릭
 
 ## Expected
@@ -167,41 +244,19 @@ testcases/
 
 ---
 
-## 병렬 실행을 위한 targets.json
-
-여러 케이스를 병렬로 실행하려면 `targets.json`을 작성합니다.
-
-**폴더 지정 (권장)** — 폴더 안의 `*.md` 파일 전체를 자동 확장:
-
-```json
-[
-  {"url": "https://example.com/login", "cases": "testcases/login"}
-]
-```
-
-**파일 직접 지정** — 특정 케이스만 선택:
-
-```json
-[
-  {"url": "https://example.com/login", "cases": "testcases/login/tc_01_login_success.md"},
-  {"url": "https://example.com/login", "cases": "testcases/login/tc_02_wrong_password.md"}
-]
-```
-
-- 같은 URL에 케이스가 여러 개면 → 같은 그룹으로 묶여 리포트에 한 섹션으로 표시
-- `cases` 경로는 프로젝트 루트 기준 상대 경로
-- 자세한 실행 방법은 `doc/EXECUTION_GUIDE.md` 참고
-
----
-
 ## Quality Checklist
 
 케이스 작성 완료 전 확인사항:
 
 - [ ] 파일명이 `tc_{번호}_{설명}.md` 형식으로 작성됨
-- [ ] 제목이 테스트 목적을 명확하게 표현함
+- [ ] **YAML frontmatter**가 파일 최상단에 있음 (`---` 블록)
+- [ ] frontmatter 필수 필드 5개: `id`, `data_key`, `priority`, `tags`, `type`
+- [ ] **priority**가 `high` / `medium` / `low` 중 하나
+- [ ] **data_key**가 [`config/test_data.json`](../config/test_data.json) 키와 일치 (또는 `null`)
+- [ ] Steps 입력값이 `test_data[{data_key}].{속성}` 형식 (하드코딩 금지)
+- [ ] 제목이 테스트 목적을 명확하게 표현함 (15자 이내)
 - [ ] `Precondition`이 `0.` 으로 시작함
 - [ ] `Steps`가 `1.`, `2.` 번호 순서대로, 단일 액션씩 작성됨
-- [ ] `Expected`가 `-` 항목으로 구체적 텍스트/상태를 명시함
+- [ ] `Expected`가 `-` 항목으로 구체적 텍스트/상태를 명시함 ("정상 동작" 금지)
 - [ ] 화면 UI 텍스트가 영어 원문 그대로 사용됨
 - [ ] 하나의 파일에 하나의 케이스만 있음

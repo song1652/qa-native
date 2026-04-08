@@ -1,0 +1,44 @@
+{
+  "_comment": "코드 리뷰 good/bad 예시",
+  "good_review": {
+    "comment": "lessons_learned 패턴 반영됨. 셀렉터가 dom_info와 일치. test_data 참조 올바름.",
+    "code_snippet": "checkbox = page.locator('#checkbox-example input[type=checkbox]')\nexpect(checkbox).to_be_visible(timeout=10000)",
+    "why_good": [
+      "dom_info에서 확인된 셀렉터 사용",
+      "timeout을 matcher 메서드에 전달 (expect() 자체가 아님)",
+      "lessons_learned의 'dynamic_controls 재추가' 패턴 반영"
+    ]
+  },
+  "bad_reviews": [
+    {
+      "issue": "셀렉터 추측",
+      "code": "page.locator('input[name=user]')",
+      "fix": "dom_info의 실제 셀렉터로 교체. #username 등 ID 우선",
+      "severity": "HIGH"
+    },
+    {
+      "issue": "test_data 하드코딩",
+      "code": "page.fill('#username', 'tomsmith')",
+      "fix": "test_data.json에서 읽기: data['valid_user']['username']",
+      "severity": "HIGH"
+    },
+    {
+      "issue": "공유 헬퍼 import",
+      "code": "from helpers import login",
+      "fix": "각 파일 자체 완결. 헬퍼 파일 생성/import 금지",
+      "severity": "CRITICAL"
+    },
+    {
+      "issue": "ENV: 프리픽스 미처리",
+      "code": "password = test_data['password']  # 값이 'ENV:QA_PASSWORD'",
+      "fix": "os.environ.get('QA_PASSWORD') 사용, 미설정 시 pytest.skip()",
+      "severity": "HIGH"
+    },
+    {
+      "issue": "미사용 import (F401)",
+      "code": "import re  # 코드에서 re 미사용",
+      "fix": "사용하지 않는 import 제거",
+      "severity": "LOW"
+    }
+  ]
+}

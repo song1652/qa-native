@@ -1,0 +1,20 @@
+---
+id: tc_56_large_dom_page_load
+data_key: null
+priority: medium
+tags: [positive, content, large_dom]
+type: structured
+---
+# 대규모 DOM 페이지 로드
+
+## Precondition
+- https://the-internet.herokuapp.com/large 접속 상태
+
+## Steps
+1. 페이지 로드 완료 대기
+2. 페이지 제목 확인
+3. 테이블 존재 확인
+
+## Expected
+- "Large & Deep DOM" 제목이 표시된다
+- 대규모 테이블이 로드된다

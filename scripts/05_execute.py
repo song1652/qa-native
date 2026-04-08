@@ -1,101 +1,310 @@
 """
 Step 5 — 테스트 실행
-LLM 없음. pytest 실행 후 결과를 state.json에 저장.
+LLM 없음. pytest 실행 후 결과를 state/pipeline.json에 저장.
+커스텀 다크 테마 HTML 리포트 생성 (report_html.py 공통 모듈 사용).
 """
 import ast
 import json
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from datetime import datetime
+
+from _python import PYTHON_EXE
+from _paths import PIPELINE_STATE, PROJECT_ROOT, read_state, write_state, append_run_history
+from result_parser import parse_results
+from structured_log import slog
+from report_html import case_row as _case_row, build_report
+
+TESTCASES_DIR = PROJECT_ROOT / "testcases"
+SCREENSHOTS_DIR = PROJECT_ROOT / "tests" / "screenshots"
+
+
+# ── 케이스 메타데이터 로드 ───────────────────────────────────────
+
+
+def _load_cases_for_group(group_name: str) -> list:
+    """testcases/{group_name}/ 에서 케이스 메타데이터 로드."""
+    try:
+        from parse_cases import load_cases as _load_cases
+    except ImportError:
+        return []
+    group_dir = TESTCASES_DIR / group_name
+    if group_dir.is_dir():
+        return _load_cases(str(group_dir))
+    return []
+
+
+# ── 테스트 함수 수 계산 ─────────────────────────────────────────
 
 
 def count_test_functions(file_path: str) -> tuple[int, bool]:
     """테스트 함수 수와 의존성 여부 반환."""
+    p = Path(file_path)
     try:
-        tree = ast.parse(Path(file_path).read_text(encoding="utf-8"))
+        if p.is_dir():
+            total = 0
+            for f in sorted(p.glob("*.py")):
+                if f.name in ("__init__.py", "conftest.py"):
+                    continue
+                tree = ast.parse(f.read_text(encoding="utf-8"))
+                total += sum(1 for n in tree.body
+                             if isinstance(n, ast.FunctionDef) and n.name.startswith("test_"))
+            return total, False
+        tree = ast.parse(p.read_text(encoding="utf-8"))
         funcs = [n for n in tree.body
                  if isinstance(n, ast.FunctionDef) and n.name.startswith("test_")]
-        # 함수가 여러 개면 순서 의존 가능성 → loadfile
         return len(funcs), len(funcs) > 1
     except Exception:
         return 1, False
 
 
+# ── 그룹명 추출 ────────────────────────────────────────────────
+
+
+def _extract_group_name(state: dict) -> str:
+    """pipeline.json에서 그룹명(테스트케이스 폴더명) 추출."""
+    if state.get("group_dir"):
+        return state["group_dir"]
+
+    cases_path = state.get("cases_path", "")
+    if cases_path:
+        p = Path(cases_path)
+        if p.is_dir():
+            return p.name
+        return p.parent.name
+
+    file_path = state.get("generated_file_path", "")
+    if file_path:
+        p = Path(file_path)
+        parts = p.parts
+        if "generated" in parts:
+            idx = list(parts).index("generated")
+            if idx + 2 < len(parts):
+                return parts[idx + 1]
+
+    url = state.get("url", "")
+    if url:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        path_parts = [p for p in parsed.path.split("/") if p]
+        if path_parts:
+            return path_parts[-1]
+        return parsed.netloc.split(".")[0] if parsed.netloc else "test"
+
+    return "test"
+
+
+# ── 리포트용 rows_html 생성 ────────────────────────────────────
+
+
+def _build_rows_html(test_results: dict, test_cases: list, group_name: str) -> str:
+    """테스트 결과와 케이스 메타데이터를 매칭하여 rows_html 생성."""
+    rows_html = ""
+    if test_cases:
+        group_passed = all(test_results.values()) if test_results else False
+        for case_idx, case in enumerate(test_cases):
+            uid = f"{group_name}_{case_idx}"
+            test_items = list(test_results.items())
+            if case_idx < len(test_items):
+                is_passed = test_items[case_idx][1]
+            else:
+                is_passed = group_passed
+            rows_html += _case_row(case, uid, is_passed)
+    else:
+        for idx, (nodeid, is_passed) in enumerate(test_results.items()):
+            uid = f"{group_name}_{idx}"
+            simple_case = {
+                "title": nodeid.split("::")[-1].replace("_", " ").title() if "::" in nodeid else nodeid,
+                "precondition": "",
+                "steps": [],
+                "expected": "",
+            }
+            rows_html += _case_row(simple_case, uid, is_passed)
+
+    if not rows_html:
+        rows_html = '<p class="empty-msg">케이스 정보 없음</p>'
+    return rows_html
+
+
+# ── 메인 ────────────────────────────────────────────────────────
+
+
 def main():
-    state_path = Path("state.json")
+    no_report = "--no-report" in sys.argv
+
+    state_path = PIPELINE_STATE
     if not state_path.exists():
-        print("[오류] state.json 없음.")
+        print("[오류] state/pipeline.json 없음.")
         sys.exit(1)
 
-    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state = read_state(state_path)
 
-    if state.get("approval_status") != "approved":
-        print("[오류] 미승인 상태. 04_approve.py를 먼저 실행하세요.")
-        sys.exit(1)
+    # heal_count는 06_heal.py에서만 증가시킴 (이중 증가 방지)
 
     file_path = state.get("generated_file_path", "tests/generated/test_generated.py")
     if not Path(file_path).exists():
         print(f"[오류] 테스트 파일 없음: {file_path}")
         sys.exit(1)
 
-    # 리포트 경로
+    if SCREENSHOTS_DIR.exists():
+        shutil.rmtree(SCREENSHOTS_DIR, ignore_errors=True)
+
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_dir = Path("tests/reports")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    report_dir = PROJECT_ROOT / "tests" / "reports"
     report_dir.mkdir(parents=True, exist_ok=True)
-    report_path = str(report_dir / f"report_{ts}.html")
+    report_path = report_dir / f"report_{ts}.html"
 
     n_funcs, has_dependent = count_test_functions(file_path)
     parallel_opts = []
     if n_funcs > 1:
         dist_mode = "loadfile" if has_dependent else "load"
-        n_workers = min(n_funcs, 4)
+        n_workers = min(n_funcs, 8)
         parallel_opts = [f"-n{n_workers}", f"--dist={dist_mode}"]
         print(f"[05] 테스트 실행 중: {file_path}  ({n_funcs}개 함수, 병렬 workers={n_workers}, dist={dist_mode})")
     else:
         print(f"[05] 테스트 실행 중: {file_path}")
+    slog("step_start", step="05_execute", file_path=file_path,
+         n_funcs=n_funcs, no_report=no_report)
     print()
 
-    result = subprocess.run(
-        [
-            sys.executable, "-m", "pytest", file_path,
-            f"--html={report_path}",
-            "--self-contained-html",
-            "-v",
-            "--tb=short",
-        ] + parallel_opts,
-        capture_output=False,   # 실시간 출력
-        text=True,
-    )
+    json_report_path = Path(tempfile.gettempdir()) / f"qa_single_report_{ts}.json"
 
-    # 결과 파싱 (재실행으로 요약만 수집)
-    summary_result = subprocess.run(
-        [sys.executable, "-m", "pytest", file_path, "--tb=no", "-q"],
-        capture_output=True, text=True, encoding="utf-8", errors="replace"
-    )
-    summary_lines = [
-        l for l in (summary_result.stdout or "").splitlines()
-        if any(k in l for k in ("passed", "failed", "error", "warning"))
-    ]
-    summary = summary_lines[-1].strip() if summary_lines else "결과 없음"
+    try:
+        result = subprocess.run(
+            [
+                PYTHON_EXE, "-m", "pytest", file_path,
+                "--json-report",
+                f"--json-report-file={json_report_path}",
+                "-v",
+                "--tb=short",
+            ] + parallel_opts,
+            capture_output=False,
+            text=True,
+            timeout=900,
+        )
+    except subprocess.TimeoutExpired:
+        print("\n[05] pytest 실행 타임아웃 (900초 초과)")
+        state["step"] = "timeout"
+        state["execution_result"] = {
+            "passed": 0, "failed": 0, "total": 0,
+            "exit_code": -1, "summary": "타임아웃 (900초 초과)",
+            "executed_at": now, "heal_count": state.get("heal_count", 0),
+        }
+        write_state(state_path, state)
+        sys.exit(1)
+
+    report = {}
+    if json_report_path.exists():
+        try:
+            report = json.loads(json_report_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    pytest_summary = report.get("summary", {})
+    test_results = parse_results(report)
+
+    passed_count = pytest_summary.get("passed", 0)
+    failed_count = pytest_summary.get("failed", 0) + pytest_summary.get("error", 0)
+
+    if not test_results:
+        passed_count = 0 if result.returncode != 0 else 1
+        failed_count = 1 if result.returncode != 0 else 0
+
+    group_name = _extract_group_name(state)
+
+    test_cases = state.get("test_cases", [])
+    if not test_cases:
+        test_cases = _load_cases_for_group(group_name)
+
+    # report_html.build_report 사용 (병렬 리포트와 동일 형식)
+    if not no_report:
+        rows_html = _build_rows_html(test_results, test_cases, group_name)
+        g_pass_cnt = sum(1 for v in test_results.values() if v)
+        g_total_cnt = len(test_results)
+        all_pass = failed_count == 0
+
+        groups_data = [{
+            "label": group_name,
+            "rows_html": rows_html,
+            "pass_cnt": g_pass_cnt,
+            "total_cnt": g_total_cnt,
+            "all_pass": all_pass,
+            "has_tests": bool(test_results),
+        }]
+        html_content = build_report(
+            groups_data=groups_data,
+            summary=pytest_summary,
+            created_at=now,
+            subtitle="Test Report",
+        )
+        report_path.write_text(html_content, encoding="utf-8")
+
+    total = passed_count + failed_count
+    pass_rate = round(passed_count / total * 100, 1) if total else 0
+    summary = f"{passed_count} passed, {failed_count} failed" if total else "결과 없음"
+
+    group_results = {}
+    if test_results:
+        gr = {"passed": 0, "failed": 0, "tests": []}
+        for nodeid, is_passed in test_results.items():
+            if is_passed:
+                gr["passed"] += 1
+            else:
+                gr["failed"] += 1
+            gr["tests"].append({
+                "nodeid": nodeid,
+                "name": nodeid.split("::")[-1] if "::" in nodeid else nodeid,
+                "passed": is_passed,
+            })
+        group_results[group_name] = gr
 
     execution_result = {
-        "passed":      result.returncode == 0,
+        "passed":      passed_count,
+        "failed":      failed_count,
+        "total":       total,
+        "pass_rate":   pass_rate,
         "exit_code":   result.returncode,
         "summary":     summary,
-        "report_path": report_path,
-        "executed_at": datetime.now().isoformat(),
+        "report_path": str(report_path) if not no_report else "",
+        "report_name": report_path.name if not no_report else "",
+        "group_results": group_results,
+        "executed_at": now,
+        "heal_count":  state.get("heal_count", 0),
+        "json_report_path": str(json_report_path),
     }
 
     state["execution_result"] = execution_result
     state["step"] = "done"
-    state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_state(state_path, state)
+    slog("step_end", step="05_execute", passed=passed_count,
+         failed=failed_count, total=total, pass_rate=pass_rate)
+
+    append_run_history({
+        "timestamp": now,
+        "pipeline": "single",
+        "group": state.get("group_dir", "unknown"),
+        "passed": passed_count,
+        "failed": failed_count,
+        "total": total,
+        "pass_rate": pass_rate,
+        "heal_count": state.get("heal_count", 0),
+        "first_pass": state.get("heal_count", 0) == 0 and failed_count == 0,
+        "duration_sec": None,
+    })
 
     print()
     print("=" * 55)
-    status = "성공" if execution_result["passed"] else "실패"
+    all_pass = failed_count == 0
+    status = "성공" if all_pass else "실패"
     print(f"  테스트 {status}: {summary}")
-    print(f"  HTML 리포트: {report_path}")
+    if not no_report:
+        print(f"  HTML 리포트: {report_path}")
+    else:
+        print("  (힐링 중 — 리포트 생성 건너뜀)")
     print("=" * 55)
 
 

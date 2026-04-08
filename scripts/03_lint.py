@@ -7,25 +7,42 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from _python import PYTHON_EXE
+from _paths import PIPELINE_STATE, read_state, write_state
 
 
 def main():
-    state_path = Path("state.json")
+    state_path = PIPELINE_STATE
     if not state_path.exists():
-        print("[오류] state.json 없음.")
+        print("[오류] state/pipeline.json 없음.")
         sys.exit(1)
 
-    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state = read_state(state_path)
     file_path = state.get("generated_file_path", "tests/generated/test_generated.py")
 
-    if not Path(file_path).exists():
-        print(f"[오류] 테스트 파일 없음: {file_path}")
+    p = Path(file_path)
+    if not p.exists():
+        print(f"[오류] 테스트 경로 없음: {file_path}")
         sys.exit(1)
 
-    print(f"[03] lint 검사 중: {file_path}")
+    # 디렉토리면 내부 *.py 파일 전체 lint
+    if p.is_dir():
+        target_files = [
+            str(f) for f in sorted(p.glob("*.py"))
+            if f.name not in ("__init__.py", "conftest.py")
+        ]
+    else:
+        target_files = [file_path]
+
+    if not target_files:
+        print(f"[오류] lint 대상 파일 없음: {file_path}")
+        sys.exit(1)
+
+    print(f"[03] lint 검사 중: {len(target_files)}개 파일")
 
     result = subprocess.run(
-        [sys.executable, "-m", "flake8", file_path, "--max-line-length=120", "--statistics"],
+        [PYTHON_EXE, "-m", "flake8"] + target_files
+        + ["--max-line-length=120", "--statistics"],
         capture_output=True, text=True
     )
 
@@ -34,14 +51,14 @@ def main():
 
     lint_result = {
         "passed":      result.returncode == 0,
-        "issue_count": len([l for l in issue_lines if file_path in l]),
+        "issue_count": len(issue_lines),
         "issues":      issues_raw if issues_raw else "이슈 없음",
         "file":        file_path,
     }
 
     state["lint_result"] = lint_result
-    state["step"] = "linted"
-    state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    state["step"] = "reviewed"
+    write_state(state_path, state)
 
     status = "통과" if lint_result["passed"] else f"이슈 {lint_result['issue_count']}건"
     print(f"[03] lint {status}")

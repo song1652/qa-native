@@ -1,0 +1,19 @@
+---
+id: tc_28_challenging_dom_canvas
+data_key: null
+priority: low
+tags: [positive, content, challenging_dom]
+type: structured
+---
+# Challenging DOM Canvas 존재 확인
+
+## Precondition
+- https://the-internet.herokuapp.com/challenging_dom 접속 상태
+
+## Steps
+1. canvas 요소 존재 확인
+2. canvas의 id 속성 확인
+
+## Expected
+- canvas 요소가 페이지에 존재한다
+- canvas에 id 속성이 있다

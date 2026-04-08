@@ -1,0 +1,29 @@
+{
+  "_comment": "BAD plan 예시 — 흔한 실수 모음",
+  "_mistakes": [
+    "셀렉터 추측 (dom_info 미참조)",
+    "test_data 하드코딩",
+    "한글 함수명",
+    "assertion 누락",
+    "steps가 구체적이지 않음"
+  ],
+  "plan": [
+    {
+      "case_name": "tc_01_로그인_성공",
+      "_problem": "한글 함수명 → test_{english_snake_case} 규칙 위반",
+      "case_type": "natural",
+      "description": "로그인 테스트",
+      "_problem2": "description이 너무 모호함",
+      "steps": [
+        {"action": "goto", "selector": null, "value": "BASE_URL"},
+        {"action": "fill", "selector": "input[name='user']", "value": "tomsmith"},
+        {"_problem": "셀렉터를 dom_info 없이 추측 + 값을 하드코딩"}
+      ],
+      "assertion": {
+        "type": "text_contains",
+        "expected": "You logged into a secure area!",
+        "_problem": "외부 사이트 응답 메시지를 하드코딩 → 변경 시 깨짐"
+      }
+    }
+  ]
+}

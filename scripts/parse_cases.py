@@ -12,6 +12,41 @@ import re
 from pathlib import Path
 
 
+def _parse_frontmatter(text: str) -> tuple[dict, str]:
+    """
+    YAML frontmatter(--- 블록)를 파싱해 메타데이터 dict와 본문을 반환.
+
+    Returns:
+        (metadata_dict, body_text)
+    """
+    if not text.startswith("---"):
+        return {}, text
+
+    end = text.find("---", 3)
+    if end == -1:
+        return {}, text
+
+    fm_block = text[3:end].strip()
+    body = text[end + 3:].strip()
+
+    meta = {}
+    for line in fm_block.splitlines():
+        line = line.strip()
+        if not line or ":" not in line:
+            continue
+        key, val = line.split(":", 1)
+        key = key.strip()
+        val = val.strip()
+        # 배열 파싱: [a, b, c]
+        if val.startswith("[") and val.endswith("]"):
+            meta[key] = [v.strip() for v in val[1:-1].split(",")]
+        elif val.lower() == "null":
+            meta[key] = None
+        else:
+            meta[key] = val
+    return meta, body
+
+
 def parse_md(text: str) -> list:
     """
     Markdown 파일을 test_cases 리스트로 파싱.
@@ -31,8 +66,11 @@ def parse_md(text: str) -> list:
 
         ---   (케이스 구분자)
     """
+    # frontmatter 추출
+    meta, body = _parse_frontmatter(text)
+
     cases = []
-    blocks = re.split(r"^\s*---+\s*$", text, flags=re.MULTILINE)
+    blocks = re.split(r"^\s*---+\s*$", body, flags=re.MULTILINE)
 
     for block in blocks:
         block = block.strip()
@@ -53,13 +91,21 @@ def parse_md(text: str) -> list:
             if re.match(r"^\d+\.", line.strip())
         ] if steps_raw else []
 
-        cases.append({
+        case = {
             "title": title,
             "precondition": precondition.strip(),
             "steps": steps,
             "expected": expected.strip(),
-            "format": "structured",
-        })
+            "format": meta.get("type", "structured"),
+        }
+        # frontmatter 메타데이터 포함
+        if meta:
+            case["id"] = meta.get("id")
+            case["data_key"] = meta.get("data_key")
+            case["priority"] = meta.get("priority")
+            case["tags"] = meta.get("tags", [])
+
+        cases.append(case)
 
     return cases
 
@@ -95,6 +141,37 @@ def parse_json(text: str) -> list:
     return normalized
 
 
+def validate_data_keys(cases: list, group: str, test_data_path: str | Path = None) -> list:
+    """
+    케이스들의 data_key가 test_data.json에 존재하는지 검증.
+    Returns: 누락된 data_key 리스트
+    """
+    if test_data_path is None:
+        test_data_path = Path(__file__).resolve().parent.parent / "config" / "test_data.json"
+
+    test_data_path = Path(test_data_path)
+    if not test_data_path.exists():
+        return []
+
+    with open(test_data_path, encoding="utf-8") as f:
+        all_data = json.load(f)
+
+    group_data = all_data.get(group, {})
+    missing = []
+
+    for case in cases:
+        dk = case.get("data_key")
+        if dk is None:
+            continue
+        if dk not in group_data:
+            missing.append(dk)
+
+    if missing:
+        print(f"[경고] test_data.json에 누락된 data_key ({group}): {', '.join(missing)}")
+
+    return missing
+
+
 def load_cases(path: str | Path) -> list:
     """
     파일 또는 디렉토리 경로에 따라 자동으로 파서를 선택해 test_cases를 반환.
@@ -112,8 +189,8 @@ def load_cases(path: str | Path) -> list:
 
     if p.is_dir():
         all_cases = []
-        # .md, .json 파일들을 찾아서 정렬 (순서 보장)
-        files = sorted(list(p.glob("*.md")) + list(p.glob("*.json")))
+        # tc_*.md / tc_*.json 파일만 (targets.json 등 비케이스 파일 제외)
+        files = sorted(list(p.glob("tc_*.md")) + list(p.glob("tc_*.json")))
         for f in files:
             all_cases.extend(load_cases(f))
         return all_cases

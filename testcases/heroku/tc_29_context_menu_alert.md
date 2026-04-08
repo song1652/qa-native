@@ -1,0 +1,20 @@
+---
+id: tc_29_context_menu_alert
+data_key: null
+priority: medium
+tags: [positive, interaction, context_menu]
+type: structured
+---
+# 우클릭 컨텍스트 메뉴 Alert 발생
+
+## Precondition
+- https://the-internet.herokuapp.com/context_menu 접속 상태
+
+## Steps
+1. 핫스팟 영역(#hot-spot) 확인
+2. 핫스팟 영역에서 우클릭(contextmenu 이벤트) 수행
+3. Alert 다이얼로그 확인
+
+## Expected
+- Alert 다이얼로그가 표시된다
+- Alert 메시지에 "You selected a context menu" 텍스트가 포함된다

@@ -1,786 +1,138 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>팀 토론 모니터</title>
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html { height: 100%; overflow: hidden; }
-
-:root {
-  --bg: #0d1117;
-  --surface: #161b22;
-  --surface2: #1c2128;
-  --border: #30363d;
-  --senior-bg: #1c2d4a;
-  --senior-border: #1f4580;
-  --senior-accent: #58a6ff;
-  --junior-bg: #1a2e1e;
-  --junior-border: #1d5230;
-  --junior-accent: #3fb950;
-  --delib-bg: #2a1f3d;
-  --delib-border: #6e40c9;
-  --delib-accent: #d2a8ff;
-  --approved-bg: #1a2e1e;
-  --approved-color: #3fb950;
-  --approved-border: #238636;
-  --revision-bg: #2d1212;
-  --revision-color: #f85149;
-  --revision-border: #da3633;
-  --pending-bg: #2d2200;
-  --pending-color: #d29922;
-  --pending-border: #9e6a03;
-  --text: #c9d1d9;
-  --text-dim: #8b949e;
-  --radius: 10px;
-}
-
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: -apple-system, 'Segoe UI', sans-serif;
-  font-size: 14px;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-}
-
-/* ── Header ── */
-.header {
-  flex-shrink: 0;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 0 24px;
-  height: 52px;
-  display: flex; align-items: center; gap: 12px;
-}
-.header-title { font-size: 15px; font-weight: 600; color: #e6edf3; white-space: nowrap; }
-.live-indicator { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); }
-.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--approved-color); animation: blink 2s ease-in-out infinite; }
-@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
-.reset-btn {
-  font-size: 11px; font-weight: 600;
-  padding: 5px 12px; border-radius: 8px;
-  background: transparent; color: var(--text-dim);
-  border: 1px solid var(--border);
-  cursor: pointer; font-family: inherit;
-  transition: all 0.15s;
-}
-.reset-btn:hover { background: var(--revision-bg); color: var(--revision-color); border-color: var(--revision-border); }
-.header-step {
-  font-size: 11px; font-weight: 600;
-  padding: 3px 10px; border-radius: 12px;
-  background: var(--pending-bg); color: var(--pending-color);
-  border: 1px solid var(--pending-border);
-  white-space: nowrap;
-}
-.header-step.done { background: var(--approved-bg); color: var(--approved-color); border-color: var(--approved-border); }
-.header-meta { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
-
-/* ── Layout ── */
-.body-wrap {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-  min-height: 0;
-}
-
-/* ── Sidebar (worker list) ── */
-.sidebar {
-  width: 210px;
-  flex-shrink: 0;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-.sidebar-scroll {
-  flex: 1;
-  overflow-y: auto;
-  min-height: 0;
-}
-.sidebar-bottom {
-  flex-shrink: 0;
-  border-top: 1px solid var(--border);
-  padding: 10px 12px 14px;
-  background: var(--surface);
-}
-.sidebar-section {
-  padding: 10px 0;
-}
-.sidebar-label {
-  font-size: 10px; font-weight: 600; color: var(--text-dim);
-  text-transform: uppercase; letter-spacing: 1px;
-  padding: 4px 14px 6px;
-}
-.sidebar-item {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 14px;
-  cursor: pointer;
-  font-size: 13px; color: var(--text-dim);
-  border-left: 3px solid transparent;
-  transition: all 0.15s;
-}
-.sidebar-item:hover { background: var(--surface2); color: var(--text); }
-.sidebar-item.active {
-  background: var(--surface2);
-  color: var(--text);
-  border-left-color: var(--senior-accent);
-}
-.sidebar-dot {
-  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
-  background: var(--border);
-}
-.sidebar-dot.active-run { background: var(--pending-color); box-shadow: 0 0 4px var(--pending-color); }
-.sidebar-dot.done { background: var(--approved-color); }
-.sidebar-dot.pending { background: var(--border); }
-.sidebar-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-.sidebar-step { font-size: 10px; color: var(--text-dim); }
-
-/* ── Content area ── */
-.content-wrap {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  min-height: 0;
-}
-.content-scroll {
-  flex: 1;
-  overflow-y: auto;
-  min-height: 0;
-  padding: 24px;
-}
-.content-scroll > .session {
-  margin-bottom: 16px;
-}
-.content-scroll > .session:last-child {
-  margin-bottom: 0;
-}
-
-/* ── Session card ── */
-.session {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-.session-header {
-  display: flex; align-items: center; gap: 10px;
-  padding: 12px 18px;
-  background: var(--surface);
-  cursor: pointer;
-  user-select: none;
-}
-.session-header:hover { background: var(--surface2); }
-.session-stage { font-size: 14px; font-weight: 600; flex: 1; }
-.session-meta { font-size: 12px; color: var(--text-dim); }
-.session-toggle { font-size: 12px; color: var(--text-dim); }
-.status-badge {
-  font-size: 11px; font-weight: 600;
-  padding: 3px 12px; border-radius: 12px;
-}
-.status-in_progress { background: var(--pending-bg); color: var(--pending-color); border: 1px solid var(--pending-border); }
-.status-approved     { background: var(--approved-bg); color: var(--approved-color); border: 1px solid var(--approved-border); }
-.status-revision_needed { background: var(--revision-bg); color: var(--revision-color); border: 1px solid var(--revision-border); }
-
-/* ── Messages ── */
-.messages { padding: 20px; display: flex; flex-direction: column; gap: 18px; background: var(--bg); }
-.messages.collapsed { display: none; }
-
-.msg { display: flex; flex-direction: column; gap: 6px; }
-.msg-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim); }
-.role-badge { font-size: 11px; font-weight: 700; padding: 2px 10px; border-radius: 10px; }
-.role-senior { background: var(--senior-bg); color: var(--senior-accent); border: 1px solid var(--senior-border); }
-.role-junior { background: var(--junior-bg); color: var(--junior-accent); border: 1px solid var(--junior-border); }
-.role-deliberation { background: var(--delib-bg); color: var(--delib-accent); border: 1px solid var(--delib-border); }
-
-.msg-bubble {
-  padding: 14px 16px;
-  border-radius: var(--radius);
-  line-height: 1.65;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-size: 13.5px;
-}
-.bubble-senior      { background: var(--senior-bg); border: 1px solid var(--senior-border); }
-.bubble-junior      { background: var(--junior-bg); border: 1px solid var(--junior-border); }
-.bubble-deliberation { background: var(--delib-bg); border: 1px solid var(--delib-border); }
-
-.msg-status-tag {
-  align-self: flex-start;
-  font-size: 11px; font-weight: 600;
-  padding: 2px 10px; border-radius: 10px;
-  margin-top: 2px;
-}
-
-/* ── Plan toggle ── */
-.plan-toggle {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: 12px; color: var(--junior-accent);
-  cursor: pointer; margin-top: 6px;
-  padding: 4px 12px; border-radius: 8px;
-  border: 1px solid var(--junior-border);
-  background: transparent; font-family: inherit;
-}
-.plan-toggle:hover { background: var(--junior-bg); }
-.plan-body {
-  margin-top: 8px; padding: 14px; border-radius: 8px;
-  background: #0a0e14; border: 1px solid var(--border);
-  font-size: 12.5px; font-family: 'Consolas', 'Courier New', monospace;
-  white-space: pre-wrap; word-break: break-all;
-  color: #a8d8a8; display: none;
-  max-height: 400px; overflow-y: auto;
-}
-.plan-body.open { display: block; }
-
-/* ── Empty state ── */
-.empty { text-align: center; padding: 80px 0; color: var(--text-dim); }
-.empty-icon { font-size: 40px; margin-bottom: 16px; }
-.empty h2 { font-size: 17px; font-weight: 600; margin-bottom: 8px; color: var(--text); }
-.empty p { font-size: 13px; }
-.waiting-msg { text-align: center; padding: 24px; color: var(--text-dim); font-size: 13px; }
-
-.new-topic-input {
-  width: 100%; padding: 8px 10px;
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: 8px; color: var(--text);
-  font-size: 12px; font-family: inherit;
-  resize: none; line-height: 1.5;
-  transition: border-color .15s;
-}
-.new-topic-input:focus { outline: none; border-color: var(--delib-border); }
-.new-topic-btn {
-  width: 100%; padding: 7px;
-  background: var(--delib-bg); color: var(--delib-accent);
-  border: 1px solid var(--delib-border); border-radius: 8px;
-  font-size: 12px; font-weight: 600; font-family: inherit;
-  cursor: pointer; transition: all .15s;
-}
-.new-topic-btn:hover { background: #3d2a5c; }
-.new-topic-btn:disabled { opacity: .5; cursor: not-allowed; }
-.topic-status { font-size: 11px; color: var(--text-dim); text-align: center; min-height: 16px; }
-.topic-status.ok  { color: var(--approved-color); }
-.topic-status.err { color: var(--revision-color); }
-
-/* ── 항목별 투표 섹션 ── */
-.vote-section {
-  padding: 16px 20px;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
-}
-.vote-section-header {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 12px;
-}
-.vote-section-label { font-size: 12px; color: var(--text-dim); }
-.vote-progress { font-size: 11px; font-weight: 700; color: var(--text-dim); }
-.vote-item {
-  border: 1px solid var(--border); border-radius: 8px;
-  margin-bottom: 8px; overflow: hidden; transition: border-color .2s;
-  cursor: pointer;
-}
-.vote-item:last-child { margin-bottom: 0; }
-.vote-item[data-status="approved"] { border-color: var(--approved-border); }
-.vote-item[data-status="rejected"] { border-color: var(--revision-border); }
-.vote-item-top {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 14px; background: var(--surface2);
-}
-.vote-item-title { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); }
-.vote-item-body {
-  padding: 10px 14px; font-size: 12px; color: var(--text-dim);
-  background: var(--bg); white-space: pre-wrap; line-height: 1.6;
-  display: block;
-}
-.vote-item.collapsed .vote-item-body { display: none; }
-.vote-tag {
-  font-size: 11px; font-weight: 600; padding: 2px 10px; border-radius: 10px;
-}
-.vote-tag-approve { background: var(--approved-bg); color: var(--approved-color); border: 1px solid var(--approved-border); }
-.vote-tag-reject  { background: var(--revision-bg);  color: var(--revision-color); border: 1px solid var(--revision-border); }
-.vote-btn-y {
-  padding: 5px 14px; border-radius: 6px; font-size: 12px; font-weight: 600;
-  background: transparent; color: var(--approved-color);
-  border: 1px solid var(--approved-border);
-  cursor: pointer; font-family: inherit; transition: background .15s;
-}
-.vote-btn-y:hover { background: var(--approved-bg); }
-.vote-btn-n {
-  padding: 5px 14px; border-radius: 6px; font-size: 12px; font-weight: 600;
-  background: transparent; color: var(--text-dim);
-  border: 1px solid var(--border);
-  cursor: pointer; font-family: inherit; transition: all .15s;
-}
-.vote-btn-n:hover { background: var(--revision-bg); color: var(--revision-color); border-color: var(--revision-border); }
-
-/* ── 승인 액션 바 ── */
-.approve-bar {
-  display: flex; align-items: center; gap: 10px;
-  padding: 14px 20px;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
-}
-.approve-bar-label { flex: 1; font-size: 12px; color: var(--text-dim); }
-.btn-approve {
-  padding: 7px 20px; border-radius: 8px; font-size: 13px; font-weight: 600;
-  background: var(--approved-bg); color: var(--approved-color);
-  border: 1px solid var(--approved-border);
-  cursor: pointer; font-family: inherit; transition: all .15s;
-}
-.btn-approve:hover { background: #1f3d24; }
-.btn-reject {
-  padding: 7px 20px; border-radius: 8px; font-size: 13px; font-weight: 600;
-  background: transparent; color: var(--text-dim);
-  border: 1px solid var(--border);
-  cursor: pointer; font-family: inherit; transition: all .15s;
-}
-.btn-reject:hover { background: var(--revision-bg); color: var(--revision-color); border-color: var(--revision-border); }
-.reject-reason-wrap { display: none; padding: 0 20px 14px; background: var(--surface); }
-.reject-reason-input {
-  width: 100%; padding: 8px 10px;
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: 8px; color: var(--text); font-size: 12px; font-family: inherit;
-  margin-bottom: 8px;
-}
-.reject-reason-input:focus { outline: none; border-color: var(--revision-border); }
-.btn-reject-confirm {
-  padding: 6px 16px; border-radius: 8px; font-size: 12px; font-weight: 600;
-  background: var(--revision-bg); color: var(--revision-color);
-  border: 1px solid var(--revision-border);
-  cursor: pointer; font-family: inherit;
-}
-.btn-reject-cancel {
-  padding: 6px 16px; border-radius: 8px; font-size: 12px;
-  background: transparent; color: var(--text-dim);
-  border: 1px solid var(--border);
-  cursor: pointer; font-family: inherit; margin-left: 6px;
-}
-
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QA 컨트롤 센터</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/variables.css">
+  <link rel="stylesheet" href="/static/css/layout.css">
+  <link rel="stylesheet" href="/static/css/components.css">
+  <link rel="stylesheet" href="/static/css/views/pipeline.css">
+  <link rel="stylesheet" href="/static/css/views/parallel.css">
+  <link rel="stylesheet" href="/static/css/views/quick-run.css">
+  <link rel="stylesheet" href="/static/css/views/reports.css">
+  <link rel="stylesheet" href="/static/css/views/team.css">
+  <link rel="stylesheet" href="/static/css/views/overview.css">
+  <link rel="stylesheet" href="/static/css/views/import.css">
+  <link rel="stylesheet" href="/static/css/animations.css">
 </head>
+
 <body>
 
-<div class="header">
-  <div class="live-indicator">
-    <div class="live-dot"></div>
-    LIVE
-  </div>
-  <div class="header-title">팀 토론 모니터</div>
-  <div style="flex:1"></div>
-  <button class="reset-btn" onclick="resetDialog()" id="reset-btn">대화 초기화</button>
-  <div class="header-meta" id="header-meta"></div>
-</div>
+  <div style="position:fixed;width:500px;height:500px;background:rgba(139,92,246,0.12);border-radius:50%;filter:blur(120px);top:-5%;left:-5%;z-index:-1;pointer-events:none;animation:float 12s infinite ease-in-out;"></div>
+  <div style="position:fixed;width:600px;height:600px;background:rgba(88,40,180,0.08);border-radius:50%;filter:blur(120px);bottom:-10%;right:-5%;z-index:-1;pointer-events:none;animation:float 14s infinite ease-in-out;animation-delay:-3s;"></div>
+  <div style="position:fixed;width:350px;height:350px;background:rgba(109,40,217,0.06);border-radius:50%;filter:blur(100px);top:40%;left:40%;z-index:-1;pointer-events:none;animation:float 16s infinite ease-in-out;animation-delay:-6s;"></div>
 
-<div class="body-wrap">
-  <!-- 사이드바 (워커 목록) -->
-  <div class="sidebar" id="sidebar">
-    <div class="sidebar-scroll">
-      <div class="sidebar-section" id="team-section">
-        <div class="sidebar-label">팀 토론</div>
-        <div style="padding: 6px 12px 10px;">
-          <div style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">새 토론 주제</div>
-          <textarea class="new-topic-input" id="new-topic-input"
-            placeholder="주제를 입력하세요..." rows="3"></textarea>
-          <button class="new-topic-btn" id="new-topic-btn" onclick="submitTopic()">토론 시작</button>
-          <div class="topic-status" id="topic-status"></div>
+  <div class="toast-container" id="toast-container"></div>
+  <div class="header">
+    <div class="live-indicator">
+      <div class="live-dot"></div>
+      LIVE
+    </div>
+    <div class="header-title" onclick="selectView('')" style="cursor:pointer;">QA CONTROL CENTER</div>
+    <div style="flex:1"></div>
+    <button class="reset-btn" onclick="resetDialog()" id="reset-btn">대화 초기화</button>
+    <div class="header-meta" id="header-meta"></div>
+  </div>
+
+  <div class="body-wrap">
+    <!-- 사이드바 -->
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-scroll">
+        <!-- 파이프라인 섹션 -->
+        <div class="sidebar-section">
+          <div class="sidebar-label">파이프라인</div>
+          <div class="sidebar-item" id="tab-single_pipeline" onclick="selectView('single_pipeline')">
+            <div class="sidebar-dot" id="dot-single"></div>
+            <span class="sidebar-name">단일 파이프라인</span>
+          </div>
+          <div class="sidebar-item" id="tab-parallel_pipeline" onclick="selectView('parallel_pipeline')">
+            <div class="sidebar-dot" id="dot-parallel"></div>
+            <span class="sidebar-name">병렬 파이프라인</span>
+          </div>
+          <div class="sidebar-item" id="tab-quick_run" onclick="selectView('quick_run')">
+            <div class="sidebar-dot" id="dot-quick"></div>
+            <span class="sidebar-name">빠른 실행</span>
+          </div>
         </div>
-        <div id="team-tabs"></div>
+
+        <!-- 테스트 리포트 섹션 -->
+        <div class="sidebar-section">
+          <div class="sidebar-label">테스트 리포트</div>
+          <div class="sidebar-item" id="tab-reports" onclick="selectView('reports')">
+            <div class="sidebar-dot"></div>
+            <span class="sidebar-name">리포트 목록</span>
+          </div>
+        </div>
+
+        <!-- 팀 토론 섹션 -->
+        <div class="sidebar-section" id="team-section">
+          <div class="sidebar-label">팀 토론</div>
+          <div style="padding: 6px 12px 10px;">
+            <div
+              style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">
+              새 토론 주제</div>
+            <textarea class="new-topic-input" id="new-topic-input" placeholder="주제를 입력하세요..." rows="3"></textarea>
+            <button class="new-topic-btn" id="new-topic-btn" onclick="submitTopic()">토론 시작</button>
+            <div class="topic-status" id="topic-status"></div>
+            <div style="font-size:10px;color:var(--text-dim);margin-top:6px;line-height:1.5;"></div>
+          </div>
+          <div id="team-tabs"></div>
+        </div>
+
+        <!-- Import 섹션 -->
+        <div class="sidebar-section" id="import-section">
+          <div class="sidebar-label">Import</div>
+          <div style="padding: 6px 12px 10px;">
+            <div
+              style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">
+              Excel → 테스트케이스</div>
+            <select class="run-form-select" id="import-file-select" onchange="onImportFileSelect()"
+              style="width:100%;margin-bottom:6px;">
+              <option value="">파일 선택...</option>
+            </select>
+            <div id="import-sheet-list" class="import-sheet-list"></div>
+            <button class="import-convert-btn" id="import-convert-btn" onclick="runImportConvert()" disabled>변환</button>
+            <div class="import-status" id="import-status"></div>
+            <div id="import-results"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 오른쪽 콘텐츠 -->
+    <div class="content-wrap">
+      <div class="content-scroll" id="main">
+        <div class="empty">
+          <div class="empty-icon">&#x1F3AF;</div>
+          <h2>QA 컨트롤 센터</h2>
+          <p>왼쪽 패널에서 항목을 선택하세요</p>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- 오른쪽 콘텐츠 -->
-  <div class="content-wrap">
-    <div class="content-scroll" id="main">
-      <div class="empty">
-        <div class="empty-icon">💬</div>
-        <h2>토론 대기 중</h2>
-        <p>왼쪽 패널에서 주제를 입력하고 토론을 시작하세요</p>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script>
-const ROLE_LABEL = {
-  senior:      '👔 사수',
-  junior:      '🙋 부사수',
-  deliberation:'🤝 심의',
-};
-const ROLE_CLASS = {
-  senior:       'role-senior',
-  junior:       'role-junior',
-  deliberation: 'role-deliberation',
-};
-const BUBBLE_CLASS = {
-  senior:       'bubble-senior',
-  junior:       'bubble-junior',
-  deliberation: 'bubble-deliberation',
-};
-const STATUS_LABEL = {
-  in_progress:     '🔄 진행 중',
-  discussed:       '💬 결론 도출 — 승인 대기',
-  approved:        '✓ 승인됨',
-  revision_needed: '↩ 수정 요청',
-  rejected:        '↩ 반려됨',
-};
-const STATUS_CLASS = {
-  in_progress:     'status-in_progress',
-  discussed:       'status-in_progress',
-  approved:        'status-approved',
-  revision_needed: 'status-revision_needed',
-  rejected:        'status-revision_needed',
-};
-const MSG_STATUS_STYLE = {
-  approved:        'background:#1a2e1e;color:#3fb950;border:1px solid #238636',
-  revision_needed: 'background:#2d1212;color:#f85149;border:1px solid #da3633',
-};
-
-
-let lastJson = '';
-let refreshCount = 0;
-let collapsedSessions = {};   // tabId → Set of collapsed indices
-let currentTab = '';
-let lastData = null;
-
-function esc(s) {
-  return String(s || '')
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function fmtTime(iso) {
-  if (!iso) return '';
-  try { return new Date(iso).toLocaleTimeString('ko-KR', {hour12:false}); } catch { return ''; }
-}
-
-function renderMessage(msg, tabId, sessIdx, msgIdx) {
-  const roleLabel  = ROLE_LABEL[msg.from]  || msg.from;
-  const roleClass  = ROLE_CLASS[msg.from]  || '';
-  const bubbleClass= BUBBLE_CLASS[msg.from]|| '';
-  const uid = `${tabId}_${sessIdx}_${msgIdx}`;
-
-  let planToggle = '';
-  const plan = msg.metadata && msg.metadata.proposed_plan;
-  if (plan) {
-    const planJson = esc(JSON.stringify(plan, null, 2));
-    planToggle = `
-      <button class="plan-toggle" onclick="togglePlan('${uid}')">▶ proposed_plan 보기</button>
-      <div class="plan-body" id="plan-${uid}">${planJson}</div>`;
-  }
-
-  let statusTag = '';
-  if (msg.status && MSG_STATUS_STYLE[msg.status]) {
-    const label = msg.status === 'approved' ? '✓ 승인' : '↩ 수정 요청';
-    statusTag = `<span class="msg-status-tag" style="${MSG_STATUS_STYLE[msg.status]}">${label}</span>`;
-  }
-
-  return `
-    <div class="msg">
-      <div class="msg-meta">
-        <span class="role-badge ${roleClass}">${roleLabel}</span>
-        <span>${fmtTime(msg.timestamp)}</span>
-      </div>
-      <div class="msg-bubble ${bubbleClass}">${esc(msg.content)}</div>
-      ${planToggle}${statusTag}
-    </div>`;
-}
-
-function renderSession(session, tabId, idx) {
-  const stageLabel  = session.stage_label || session.stage;
-  const statusLabel = STATUS_LABEL[session.status] || session.status;
-  const statusClass = STATUS_CLASS[session.status] || '';
-  const key = `${tabId}_${idx}`;
-  const collapsed = (collapsedSessions[tabId] || new Set()).has(idx);
-
-  const msgsHtml = session.messages && session.messages.length
-    ? session.messages.map((m, mi) => renderMessage(m, tabId, idx, mi)).join('')
-    : `<div class="waiting-msg">대화 대기 중...</div>`;
-
-  // 팀 토론 세션이 discussed 상태면 항목별 투표 섹션 표시
-  const isDiscussed = session.stage === 'team_discussion' && session.status === 'discussed';
-  let approveBar = '';
-  if (isDiscussed) {
-    const items = lastData && lastData.discuss_state && lastData.discuss_state.conclusion_items;
-    approveBar = items ? renderVoteSection(key, items) : `
-      <div class="approve-bar" id="approve-bar-${key}">
-        <span class="approve-bar-label">결론 항목 파싱 중... 잠시 후 새로고침하세요</span>
-      </div>`;
-  }
-
-  return `
-    <div class="session" id="sess-${key}">
-      <div class="session-header" onclick="toggleSession('${tabId}',${idx})">
-        <span class="session-stage">${stageLabel}</span>
-        <span class="status-badge ${statusClass}">${statusLabel}</span>
-        <span class="session-toggle" id="stgl-${key}">${collapsed?'▶':'▼'}</span>
-      </div>
-      <div class="messages${collapsed?' collapsed':''}" id="msgs-${key}">
-        ${msgsHtml}
-      </div>
-      ${approveBar}
-    </div>`;
-}
-
-function togglePlan(uid) {
-  const body = document.getElementById('plan-' + uid);
-  if (!body) return;
-  const open = body.classList.toggle('open');
-  const btn = body.previousElementSibling;
-  if (btn) btn.textContent = (open ? '▼' : '▶') + ' proposed_plan 보기';
-}
-
-function toggleSession(tabId, idx) {
-  const key = `${tabId}_${idx}`;
-  const msgs = document.getElementById('msgs-' + key);
-  if (!msgs) return;
-  const collapsed = msgs.classList.toggle('collapsed');
-  const tgl = document.getElementById('stgl-' + key);
-  if (tgl) tgl.textContent = collapsed ? '▶' : '▼';
-  if (!collapsedSessions[tabId]) collapsedSessions[tabId] = new Set();
-  if (collapsed) collapsedSessions[tabId].add(idx);
-  else collapsedSessions[tabId].delete(idx);
-}
-
-function updateStageBar(sessions) {
-  // stage bar removed — no-op
-}
-
-function selectTab(tabId) {
-  currentTab = tabId;
-  document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
-  const el = document.getElementById('tab-' + tabId);
-  if (el) el.classList.add('active');
-  if (lastData) renderContent(lastData);
-}
-
-
-function teamTabId(idx) { return 'team_' + idx; }
-
-function renderContent(data) {
-  const main = document.getElementById('main');
-  let sessions = [];
-
-  if (currentTab.startsWith('team_')) {
-    const idx = parseInt(currentTab.replace('team_', ''));
-    const ts = data.team_sessions || [];
-    sessions = ts[idx] ? [ts[idx]] : [];
-  }
-
-  if (!sessions.length) {
-    main.innerHTML = `
-      <div class="empty">
-        <div class="empty-icon">💬</div>
-        <h2>토론 대기 중</h2>
-        <p>왼쪽 패널에서 주제를 입력하고 토론을 시작하세요</p>
-      </div>`;
-    return;
-  }
-
-  main.innerHTML = sessions.map((s, i) => renderSession(s, currentTab, i)).join('');
-
-  const lastSession = sessions[sessions.length - 1];
-  if (lastSession && lastSession.status === 'in_progress') {
-    const key = `${currentTab}_${sessions.length - 1}`;
-    const el = document.getElementById('sess-' + key);
-    if (el) el.scrollIntoView({behavior:'smooth', block:'nearest'});
-  }
-}
-
-function updateSidebar(data) {
-  const teamTabs = document.getElementById('team-tabs');
-  const teamSessions = data.team_sessions || [];
-
-  // 현재 탭이 없으면 첫 번째 팀 세션을 자동 선택
-  if (!currentTab && teamSessions.length > 0) {
-    currentTab = teamTabId(0);
-  }
-
-  if (teamSessions.length > 0) {
-    teamTabs.innerHTML = teamSessions.map((s, idx) => {
-      const tid = teamTabId(idx);
-      const dotCls = s.status === 'approved' ? 'done'
-        : s.status === 'in_progress' ? 'active-run' : 'pending';
-      const isActive = currentTab === tid;
-      const label = s.topic || s.stage_label || '토론';
-      return `
-        <div class="sidebar-item${isActive?' active':''}" id="tab-${tid}"
-             onclick="selectTab('${tid}')">
-          <div class="sidebar-dot ${dotCls}"></div>
-          <span class="sidebar-name" title="${esc(label)}">${esc(label)}</span>
-        </div>`;
-    }).join('');
-  } else {
-    teamTabs.innerHTML = '<div style="padding:6px 14px;font-size:12px;color:var(--text-dim);">토론 없음</div>';
-  }
-}
-
-function updateHeader(data) {
-  // step 배지 없음 — 메타 정보만 업데이트
-}
-
-function renderVoteSection(key, items) {
-  const total = items.length;
-  const done  = items.filter(i => i.status !== 'pending').length;
-
-  const itemsHtml = items.map(item => {
-    let actionHtml;
-    if (item.status === 'approved') {
-      actionHtml = `<span class="vote-tag vote-tag-approve">✓ 승인</span>`;
-    } else if (item.status === 'rejected') {
-      actionHtml = `<span class="vote-tag vote-tag-reject">✗ 반려</span>`;
-    } else {
-      actionHtml = `
-        <button class="vote-btn-n" onclick="event.stopPropagation();voteItem('${key}',${item.id},'reject')">✗</button>
-        <button class="vote-btn-y" onclick="event.stopPropagation();voteItem('${key}',${item.id},'approve')">✓ 승인</button>`;
-    }
-    return `
-      <div class="vote-item" id="vi-${key}-${item.id}" data-status="${esc(item.status)}"
-           onclick="toggleVoteItem('${key}',${item.id})">
-        <div class="vote-item-top">
-          <span class="vote-item-title">${esc(item.title)}</span>
-          <div id="va-${key}-${item.id}">${actionHtml}</div>
-        </div>
-        <div class="vote-item-body">${esc(item.text)}</div>
-      </div>`;
-  }).join('');
-
-  return `
-    <div class="vote-section">
-      <div class="vote-section-header">
-        <span class="vote-section-label">항목별 검토 — 클릭하면 내용을 접습니다</span>
-        <span class="vote-progress" id="vp-${key}">${done} / ${total} 완료</span>
-      </div>
-      <div id="vitems-${key}">${itemsHtml}</div>
-    </div>`;
-}
-
-function toggleVoteItem(key, id) {
-  const el = document.getElementById(`vi-${key}-${id}`);
-  if (el) el.classList.toggle('collapsed');
-}
-
-async function voteItem(key, itemId, vote) {
-  const actEl = document.getElementById(`va-${key}-${itemId}`);
-  const itemEl = document.getElementById(`vi-${key}-${itemId}`);
-  if (actEl) actEl.innerHTML = '<span style="font-size:11px;color:var(--text-dim)">⏳</span>';
-
-  try {
-    const res = await fetch('/api/discuss/vote_item', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({item_id: itemId, vote}),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      if (actEl) actEl.innerHTML = `<span style="color:var(--revision-color);font-size:11px">오류</span>`;
-      return;
-    }
-    const status = vote === 'approve' ? 'approved' : 'rejected';
-    if (itemEl) itemEl.dataset.status = status;
-    if (actEl) {
-      actEl.innerHTML = status === 'approved'
-        ? `<span class="vote-tag vote-tag-approve">✓ 승인</span>`
-        : `<span class="vote-tag vote-tag-reject">✗ 반려</span>`;
-    }
-    // 진행률 업데이트
-    const progEl = document.getElementById(`vp-${key}`);
-    if (progEl) {
-      const all = document.querySelectorAll(`#vitems-${key} .vote-item`);
-      const doneCnt = Array.from(all).filter(el => el.dataset.status !== 'pending').length;
-      progEl.textContent = `${doneCnt} / ${all.length} 완료`;
-    }
-    if (data.all_voted) {
-      setTimeout(() => { lastJson = ''; refresh(); }, 600);
-    }
-  } catch(e) {
-    if (actEl) actEl.innerHTML = `<span style="color:var(--revision-color);font-size:11px">오류: ${e.message}</span>`;
-  }
-}
-
-async function submitTopic() {
-  const input = document.getElementById('new-topic-input');
-  const btn   = document.getElementById('new-topic-btn');
-  const status = document.getElementById('topic-status');
-  const topic = input.value.trim();
-  if (!topic) { status.textContent = '주제를 입력해주세요.'; status.className = 'topic-status err'; return; }
-
-  btn.disabled = true;
-  status.textContent = '전송 중...';
-  status.className = 'topic-status';
-
-  try {
-    const res = await fetch('/api/discuss/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ topic }),
-    });
-    const data = await res.json();
-    if (data.ok) {
-      status.textContent = '✓ 주제 등록됨 — Claude Code 터미널에서 자동으로 토론이 시작됩니다';
-      status.className = 'topic-status ok';
-      input.value = '';
-    } else {
-      status.textContent = data.error || '전송 실패';
-      status.className = 'topic-status err';
-    }
-  } catch(e) {
-    status.textContent = '서버 연결 오류';
-    status.className = 'topic-status err';
-  }
-  btn.disabled = false;
-}
-
-async function resetDialog() {
-  if (!confirm('대화 기록을 초기화하시겠습니까?')) return;
-  try {
-    await fetch('/api/reset', { method: 'POST' });
-    lastJson = '';
-    await refresh();
-  } catch(e) {
-    alert('초기화 실패: 서버를 확인하세요.');
-  }
-}
-
-function applyData(text) {
-  if (text === lastJson) return;
-  lastJson = text;
-  lastData = JSON.parse(text);
-  refreshCount++;
-  const now = new Date().toLocaleTimeString('ko-KR', {hour12:false});
-  document.getElementById('header-meta').textContent = `${now} · ${refreshCount}회`;
-  updateSidebar(lastData);
-  updateHeader(lastData);
-  renderContent(lastData);
-}
-
-async function refresh() {
-  try {
-    const res = await fetch('/api/dialogs?' + Date.now());
-    if (!res.ok) return;
-    applyData(await res.text());
-  } catch (e) {}
-}
-
-// SSE — 파일 변경 즉시 반영
-function connectSSE() {
-  const es = new EventSource('/api/events');
-  es.onmessage = e => applyData(e.data);
-  es.onerror = () => {
-    es.close();
-    // SSE 끊기면 폴링으로 fallback 후 5초 뒤 재연결 시도
-    setTimeout(connectSSE, 5000);
-  };
-}
-
-connectSSE();
-// 폴링은 SSE 장애 시 fallback용으로만 유지
-setInterval(refresh, 5000);
-</script>
+  <!-- JS: constants → state → utils → api → components → views → router → app -->
+  <script src="/static/js/constants.js"></script>
+  <script src="/static/js/state.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/components/sidebar.js"></script>
+  <script src="/static/js/components/test-list.js"></script>
+  <script src="/static/js/components/group-result.js"></script>
+  <script src="/static/js/views/overview.js"></script>
+  <script src="/static/js/views/pipeline.js"></script>
+  <script src="/static/js/views/parallel.js"></script>
+  <script src="/static/js/views/quick-run.js"></script>
+  <script src="/static/js/views/reports.js"></script>
+  <script src="/static/js/views/team.js"></script>
+  <script src="/static/js/views/import.js"></script>
+  <script src="/static/js/router.js"></script>
+  <script src="/static/js/app.js"></script>
 </body>
+
 </html>

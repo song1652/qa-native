@@ -8,21 +8,28 @@ import json
 import sys
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
+from _paths import PIPELINE_STATE, read_state
 
 
 def read_file(path):
     p = Path(path)
+    if p.is_dir():
+        parts = []
+        for f in sorted(p.glob("*.py")):
+            if f.name not in ("__init__.py", "conftest.py"):
+                parts.append(f"# === {f.name} ===\n{f.read_text(encoding='utf-8')}")
+        return "\n\n".join(parts)
     return p.read_text(encoding="utf-8") if p.exists() else ""
 
 
 def main():
-    state_path = Path("state.json")
+    state_path = PIPELINE_STATE
 
     if not state_path.exists():
-        print("[오류] state.json 없음.")
+        print("[오류] state/pipeline.json 없음.")
         sys.exit(1)
 
-    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state = read_state(state_path)
     generated_path = state.get("generated_file_path", "tests/generated/test_generated.py")
 
     if not state.get("lint_result"):

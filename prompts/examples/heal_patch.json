@@ -1,0 +1,45 @@
+{
+  "_comment": "힐링 패치 예시 — 오류 유형별 before/after",
+  "examples": [
+    {
+      "error_type": "Locator",
+      "traceback": "expect(page.locator('#checkbox input')).to_be_visible()",
+      "diagnosis": "#checkbox가 재추가 후 input element 자체가 됨. #checkbox input 셀렉터 불일치",
+      "before": "checkbox = page.locator('#checkbox input')",
+      "after": "checkbox = page.locator('#checkbox-example input[type=checkbox]')",
+      "lesson": "dynamic_controls 재추가 후 #checkbox는 input 자체"
+    },
+    {
+      "error_type": "Assertion",
+      "traceback": "assert position == 'fixed', f'Expected #menu to be fixed, got: {position}'",
+      "diagnosis": "floating_menu의 #menu는 position: absolute (fixed 아님)",
+      "before": "assert position == 'fixed'",
+      "after": "expect(page.locator('#menu')).to_be_visible()",
+      "lesson": "CSS position 검증 대신 뷰포트 내 visible 여부로 검증"
+    },
+    {
+      "error_type": "JS평가",
+      "traceback": "Page.evaluate: SyntaxError: Illegal return statement",
+      "diagnosis": "page.evaluate()에 arrow function 없이 return 사용",
+      "before": "page.evaluate('return document.title')",
+      "after": "page.evaluate('() => document.title')",
+      "lesson": "page.evaluate()에 return 사용 시 반드시 () => { ... } 래핑"
+    },
+    {
+      "error_type": "Timeout",
+      "traceback": "TimeoutError: Timeout 30000ms exceeded",
+      "diagnosis": "광고 iframe이 요소를 가려 클릭 불가",
+      "before": "page.click('#submit-btn')",
+      "after": "page.evaluate(\"document.querySelectorAll('ins.adsbygoogle, iframe[src*=google]').forEach(e => e.remove())\")\npage.click('#submit-btn')",
+      "lesson": "광고가 많은 사이트는 goto 후 반드시 광고 제거"
+    },
+    {
+      "error_type": "Python런타임",
+      "traceback": "KeyError: 'forgot_email'",
+      "diagnosis": "test_data.json 접근 시 그룹 키 누락",
+      "before": "data = test_data['forgot_email']",
+      "after": "data = test_data['heroku']['forgot_email']",
+      "lesson": "test_data.json은 그룹 키 포함하여 접근"
+    }
+  ]
+}

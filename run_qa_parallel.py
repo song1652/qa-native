@@ -1,93 +1,353 @@
 """
-QA 병렬 자동화 진입점.
+QA 병렬 자동화 진입점 (간소화).
 
-URL별로 독립된 worker 환경을 구성하고,
-Claude Code의 Agent tool이 각 URL을 동시에 처리하도록 지시한다.
+testcases/ 폴더를 스캔하고 URL별 DOM 분석 후,
+Claude Code subagent에 전달할 컨텍스트를 출력한다.
+worker 디렉토리 없이 subagent가 tests/generated/에 직접 저장.
 
 사용법:
-  # URL 자동 감지 (config/pages.json + testcases/ 폴더 스캔)
+  # 전체 자동 스캔 (config/pages.json + testcases/ 폴더)
   python run_qa_parallel.py
 
-  # 특정 targets.json 지정
-  python run_qa_parallel.py --targets testcases/targets_demo.json
+  # 특정 폴더만
+  python run_qa_parallel.py --folders login saintcore
 
-targets.json 형식 (url 생략 시 config/pages.json에서 자동 조회):
-  [
-    { "url": "https://site.com/login", "cases": "testcases/login" },
-    { "cases": "testcases/checkout" }   ← url 생략 가능
-  ]
+  # targets.json 지정
+  python run_qa_parallel.py --targets testcases/targets_demo.json
 """
+import argparse
+import asyncio
 import json
-import subprocess
 import sys
 from pathlib import Path
+from datetime import datetime
 
-PROJECT_ROOT = Path(__file__).parent
+import _bootstrap  # noqa: F401 — scripts/ 경로 설정
+from parse_cases import load_cases
+from _paths import PROJECT_ROOT, PARALLEL_STATE, STATE_DIR, read_state, write_state
+
+# 01_analyze.py의 analyze() 직접 import
+from importlib import import_module as _im
+
 PAGES_JSON = PROJECT_ROOT / "config" / "pages.json"
+TEST_DATA_JSON = PROJECT_ROOT / "config" / "test_data.json"
+PARALLEL_STATE_PATH = PARALLEL_STATE
+
+
+def _save_state(state: dict) -> None:
+    """state/parallel.json에 상태 저장 (기존 상태와 원자적 병합, 파일 잠금 적용)."""
+    existing = read_state(PARALLEL_STATE_PATH)
+    existing.update(state)
+    write_state(PARALLEL_STATE_PATH, existing)
+
+
+def load_pages() -> dict:
+    if PAGES_JSON.exists():
+        return json.loads(PAGES_JSON.read_text(encoding="utf-8"))
+    return {}
+
+
+def load_test_data() -> dict:
+    if TEST_DATA_JSON.exists():
+        return json.loads(TEST_DATA_JSON.read_text(encoding="utf-8"))
+    return {}
+
+
+def resolve_url(folder_name: str, pages: dict) -> str | None:
+    """pages.json에서 URL을 조회. string/object 형식 모두 지원."""
+    entry = pages.get(folder_name)
+    if entry is None:
+        return None
+    if isinstance(entry, str):
+        return entry
+    if isinstance(entry, dict):
+        return entry.get("url")
+    return None
+
+
+def resolve_page_meta(folder_name: str, pages: dict) -> dict:
+    """pages.json에서 메타데이터 조회. string 형식은 빈 메타 반환."""
+    entry = pages.get(folder_name)
+    if isinstance(entry, dict):
+        return {k: v for k, v in entry.items() if k != "url"}
+    return {}
+
+
+def read_file_safe(path: Path) -> str:
+    if path.exists():
+        return path.read_text(encoding="utf-8")
+    return ""
+
+
+def analyze_url(url: str) -> dict:
+    """01_analyze.py의 analyze() 함수를 직접 호출해 DOM 분석."""
+    spec = _im("importlib.util").find_spec(
+        "01_analyze",
+        [str(PROJECT_ROOT / "scripts")],
+    )
+    if spec is None:
+        # fallback: 직접 import
+        analyze_mod_path = PROJECT_ROOT / "scripts" / "01_analyze.py"
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "analyze_mod", str(analyze_mod_path)
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    else:
+        import importlib.util
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    main_dom, _sub_doms = asyncio.run(mod.analyze_all(url, []))
+    return main_dom
+
+
+def resolve_targets(args, pages: dict) -> list[dict]:
+    """실행 대상 목록 생성. 각 항목: {url, cases_paths, group_dir, group_label, batch_info, batch_files}"""
+    targets = []
+
+    if args.targets:
+        targets_path = Path(args.targets)
+        if not targets_path.exists():
+            print(f"[오류] targets 파일 없음: {args.targets}")
+            sys.exit(1)
+        raw = json.loads(targets_path.read_text(encoding="utf-8"))
+        for t in raw:
+            url = t.get("url")
+            cases = t["cases"]
+            if not url:
+                folder = Path(cases).name
+                url = pages.get(folder) or pages.get(Path(cases).parent.name)
+            if not url:
+                print(f"[건너뜀] URL 없음: {cases}")
+                continue
+            targets.append({"url": url, "cases": cases})
+        return _expand_targets(targets)
+
+    # 폴더 자동 스캔
+    testcases_root = PROJECT_ROOT / "testcases"
+    if not testcases_root.exists():
+        print("[오류] testcases/ 폴더 없음.")
+        sys.exit(1)
+
+    folder_filter = args.folders if args.folders else None
+
+    for folder in sorted(testcases_root.iterdir()):
+        if not folder.is_dir() or folder.name.startswith("."):
+            continue
+        if folder_filter and folder.name not in folder_filter:
+            continue
+        url = resolve_url(folder.name, pages)
+        if not url:
+            print(f"[건너뜀] '{folder.name}' — config/pages.json에 URL 없음")
+            continue
+        targets.append({
+            "url": url,
+            "cases": str(folder),
+            "base_group": folder.name,
+        })
+
+    if not targets:
+        print("[오류] 실행할 대상 없음. config/pages.json에 URL을 등록하세요.")
+        sys.exit(1)
+
+    return _expand_targets(targets)
+
+
+BATCH_SIZE = 8  # 폴더 내 배치 크기 (1 배치 = 1 subagent)
+
+
+def _expand_targets(targets: list[dict]) -> list[dict]:
+    """폴더 내 tc_*.md 파일을 배치 단위 타겟으로 확장.
+
+    각 배치는 최대 BATCH_SIZE개의 tc 파일을 포함하며,
+    하나의 subagent가 배치 내 파일들을 동시에 처리한다.
+    """
+    expanded = []
+    for target in targets:
+        cases_path = Path(target["cases"])
+        if not cases_path.is_absolute():
+            cases_path = PROJECT_ROOT / cases_path
+
+        base_group = target.get("base_group")
+        if not base_group:
+            parent = cases_path.parent.name
+            base_group = parent if parent not in ("testcases", "config", ".") else cases_path.stem
+
+        if cases_path.is_dir():
+            md_files = sorted(cases_path.glob("tc_*.md"))
+            if not md_files:
+                md_files = sorted(cases_path.glob("*.md"))
+            if not md_files:
+                print(f"[경고] 폴더에 .md 파일 없음: {cases_path}")
+                continue
+
+            # 배치로 묶기
+            for batch_idx in range(0, len(md_files), BATCH_SIZE):
+                batch = md_files[batch_idx:batch_idx + BATCH_SIZE]
+                batch_num = batch_idx // BATCH_SIZE + 1
+                total_batches = (len(md_files) + BATCH_SIZE - 1) // BATCH_SIZE
+                expanded.append({
+                    "url": target["url"],
+                    "cases_paths": [md for md in batch],
+                    "group_dir": base_group,
+                    "group_label": f"{base_group}_batch{batch_num}",
+                    "batch_info": f"{batch_num}/{total_batches}",
+                    "batch_files": [md.stem for md in batch],
+                })
+        else:
+            expanded.append({
+                "url": target["url"],
+                "cases_paths": [cases_path],
+                "group_dir": base_group,
+                "group_label": cases_path.stem,
+                "batch_info": "1/1",
+                "batch_files": [cases_path.stem],
+            })
+
+    return expanded
 
 
 def main():
-    import argparse
-    parser = argparse.ArgumentParser(description="QA 병렬 파이프라인 시작")
+    parser = argparse.ArgumentParser(description="QA 병렬 파이프라인 (간소화)")
     parser.add_argument("--targets", default=None,
                         help="targets.json 경로. 생략 시 testcases/ 폴더 자동 스캔.")
+    parser.add_argument("--folders", nargs="*", default=None,
+                        help="특정 폴더만 실행 (예: login saintcore)")
     args = parser.parse_args()
 
+    pages = load_pages()
+    test_data = load_test_data()
+
     print("=" * 60)
-    print("  QA 병렬 파이프라인 시작")
+    print("  QA 병렬 파이프라인 시작 (간소화)")
     print("=" * 60)
 
-    # pages.json 로드해서 등록된 URL 표시
-    if PAGES_JSON.exists():
-        pages = json.loads(PAGES_JSON.read_text(encoding="utf-8"))
-        active = {k: v for k, v in pages.items() if v}
-        print(f"  config/pages.json — {len(active)}개 페이지 등록됨")
-        for name, url in active.items():
-            print(f"    [{name}] {url}")
+    # 상태 파일 초기화
+    parallel_dir = PROJECT_ROOT / "parallel"
+    parallel_dir.mkdir(exist_ok=True)
+    STATE_DIR.mkdir(exist_ok=True)
+    _save_state({"status": "init", "created_at": datetime.now().isoformat()})
+
+    # 등록된 페이지 표시
+    active = {k: v for k, v in pages.items() if v}
+    print(f"  config/pages.json — {len(active)}개 페이지 등록")
+    for name, entry in active.items():
+        url = entry.get("url") if isinstance(entry, dict) else entry
+        spa = " (SPA)" if isinstance(entry, dict) and entry.get("spa") else ""
+        print(f"    [{name}] {url}{spa}")
     print()
 
-    # 00_split.py 호출 → worker 디렉토리 생성 + DOM 분석
-    split_script = PROJECT_ROOT / "parallel" / "00_split.py"
-    split_cmd = [sys.executable, str(split_script)]
-    if args.targets:
-        split_cmd += ["--targets", args.targets]
+    # 1. 대상 목록 생성
+    targets = resolve_targets(args, pages)
+    print(f"[준비] {len(targets)}개 대상 확인")
 
-    result = subprocess.run(split_cmd, capture_output=False)
-    if result.returncode != 0:
-        print("[오류] 배치 분할 실패.")
-        sys.exit(1)
+    # 2. URL별 DOM 분석 (캐시)
+    _save_state({"status": "analyzing",
+                 "created_at": datetime.now().isoformat(),
+                 "total_count": len(targets)})
+    unique_urls = list(dict.fromkeys(t["url"] for t in targets))
+    dom_cache: dict[str, dict] = {}
 
-    # batch_state.json 읽어 worker 목록 출력
-    batch_state_path = Path("parallel/batch_state.json")
-    if not batch_state_path.exists():
-        print("[오류] batch_state.json 생성 실패.")
-        sys.exit(1)
+    try:
+        for url in unique_urls:
+            print(f"[DOM] 분석 중: {url}")
+            dom_cache[url] = analyze_url(url)
+            dom = dom_cache[url]
+            if "error" in dom:
+                print(f"  [경고] DOM 분석 실패: {dom['error']}")
+            else:
+                print(f"  완료 — 입력:{len(dom.get('inputs',[]))} 버튼:{len(dom.get('buttons',[]))}")
+    except Exception as e:
+        _save_state({"status": "error", "error": str(e)})
+        print(f"[오류] DOM 분석 중 실패: {e}")
+        raise
 
-    batch_state = json.loads(batch_state_path.read_text(encoding="utf-8"))
-    workers = batch_state["workers"]
+    # 3. 공통 컨텍스트는 파일 경로로 참조 (토큰 절감: 서브에이전트마다 복사하지 않음)
+    shared_context_paths = {
+        "team_charter": "agents/team_charter.md",
+        "lessons_learned": "agents/lessons_learned.md",
+        "skill_playwright": ".claude/skills/playwright-best-practices/SKILL.md",
+    }
 
+    # 4. subagent 컨텍스트 빌드 (배치 단위) — 고유 데이터만 포함
+    contexts = []
+    for t in targets:
+        all_cases = []
+        for cp in t["cases_paths"]:
+            all_cases.extend(load_cases(str(cp)))
+
+        page_key = t["group_dir"]
+        output_dir = PROJECT_ROOT / "tests" / "generated" / t["group_dir"]
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        page_meta = resolve_page_meta(page_key, pages)
+        ctx = {
+            "group_dir": t["group_dir"],
+            "group_label": t["group_label"],
+            "batch_info": t.get("batch_info", ""),
+            "batch_files": t.get("batch_files", []),
+            "url": t["url"],
+            "page_meta": page_meta,
+            "dom_info": dom_cache.get(t["url"], {}),
+            "test_cases": all_cases,
+            "test_data": test_data.get(page_key, {}),
+            "output_path": f"tests/generated/{t['group_dir']}/",
+        }
+        contexts.append(ctx)
+        files_str = ", ".join(t.get("batch_files", [])[:3])
+        if len(t.get("batch_files", [])) > 3:
+            files_str += f" 외 {len(t['batch_files']) - 3}개"
+        print(f"  [{t['group_label']}] {len(all_cases)}개 케이스 ({files_str}) → {ctx['output_path']}")
+
+    # 5. 상태 파일 저장 (ready = subagent 대기)
+    total_cases = sum(len(c["test_cases"]) for c in contexts)
+    _save_state({
+        "status": "ready",
+        "total_count": len(contexts),
+        "total_cases": total_cases,
+        "completed_count": 0,
+        "targets": [
+            {
+                "group_dir": c["group_dir"],
+                "group_label": c["group_label"],
+                "batch_info": c.get("batch_info", ""),
+                "url": c["url"],
+                "output_path": c["output_path"],
+                "case_count": len(c["test_cases"]),
+            }
+            for c in contexts
+        ],
+    })
+
+    # 6. subagent 컨텍스트 출력 (공통 데이터는 파일 경로만, 고유 데이터만 JSON)
+    output_payload = {
+        "shared_context_paths": shared_context_paths,
+        "subagents": contexts,
+    }
     print()
-    print("=" * 60)
-    print("  worker 준비 완료")
-    print("=" * 60)
-    for w in workers:
-        print(f"  [{w['worker_id']}] {w['url']}")
-        print(f"    디렉토리 : {w['worker_dir']}")
-        print(f"    케이스   : {w['case_count']}개")
-        print()
+    print("=== PARALLEL_SUBAGENT_CONTEXTS_START ===")
+    print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    print("=== PARALLEL_SUBAGENT_CONTEXTS_END ===")
+    print()
 
     print("=" * 60)
-    print("  -- Claude Code에 아래 지시를 전달하세요 --")
+    print("  Claude Code에 아래 지시를 전달하세요:")
     print("=" * 60)
     print()
-    print("  parallel/batch_state.json 의 workers 목록을 읽고")
-    print("  각 worker를 Agent tool로 동시에 실행해줘.")
+    print(f"  위 PARALLEL_SUBAGENT_CONTEXTS의 {len(contexts)}개 배치를 Agent tool로 동시에 실행해줘.")
+    print(f"  (총 {total_cases}개 케이스, 배치당 최대 {BATCH_SIZE}개)")
     print()
-    print("  각 subagent에게 전달할 지시:")
-    print("  CLAUDE.md 병렬 파이프라인 섹션의 Subagent 지시 형식을 따를 것.")
+    print("  shared_context_paths의 파일들은 각 subagent가 직접 읽어서 참조합니다.")
+    print("  (서브에이전트별 컨텍스트에는 고유 데이터만 포함)")
     print()
-    print("  전체 완료 후:")
-    print("  python parallel/99_merge.py 를 실행해 결과를 병합할 것.")
+    print("  각 subagent는:")
+    print("  1. shared_context_paths의 파일들을 먼저 읽기 (lessons_learned, team_charter, SKILL.md)")
+    print("  2. 배치 내 모든 test_cases에 대해 dom_info 바탕으로 plan 수립")
+    print("  3. plan 기반으로 Playwright 테스트 코드 작성 (tc_*.md 1개 = 파일 1개)")
+    print("  4. output_path에 직접 저장")
+    print()
+    print("  완료 후: python parallel/99_merge.py 실행")
     print("=" * 60)
 
 

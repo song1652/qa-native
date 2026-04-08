@@ -6,11 +6,10 @@
 """
 import json
 import sys
-from pathlib import Path
 from datetime import datetime
+from _paths import DISCUSS_STATE, PROJECT_ROOT, read_state
 
-PROJECT_ROOT = Path(__file__).parent.parent
-DISCUSS_STATE_PATH = PROJECT_ROOT / "discuss_state.json"
+DISCUSS_STATE_PATH = DISCUSS_STATE
 TEAM_NOTES_PATH = PROJECT_ROOT / "agents" / "team_notes.md"
 DIALOG_PATH = PROJECT_ROOT / "agents" / "dialog.json"
 
@@ -27,15 +26,15 @@ def append_to_notes(topic: str, conclusion: str):
 
 def main():
     if not DISCUSS_STATE_PATH.exists():
-        print("[오류] discuss_state.json 없음.")
+        print("[오류] state/discuss.json 없음.")
         sys.exit(1)
 
-    discuss = json.loads(DISCUSS_STATE_PATH.read_text(encoding="utf-8"))
+    discuss = read_state(DISCUSS_STATE_PATH)
     topic = discuss.get("topic", "")
     conclusion = discuss.get("conclusion", "")
 
     if not conclusion:
-        print("[오류] 결론 없음. 심의 agent가 discuss_state.json에 conclusion을 저장해야 합니다.")
+        print("[오류] 결론 없음. 심의 agent가 state/discuss.json에 conclusion을 저장해야 합니다.")
         sys.exit(1)
 
     print("=" * 60)

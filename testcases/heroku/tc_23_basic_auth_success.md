@@ -1,0 +1,19 @@
+---
+id: tc_23_basic_auth_success
+data_key: null
+priority: medium
+tags: [positive, auth, basic_auth]
+type: structured
+---
+# Basic Auth 인증 성공
+
+## Precondition
+- https://admin:admin@the-internet.herokuapp.com/basic_auth 접속 상태
+
+## Steps
+1. 페이지 로드 완료 대기
+2. 성공 메시지 확인
+
+## Expected
+- "Congratulations!" 메시지가 표시된다
+- 페이지가 정상적으로 로드된다

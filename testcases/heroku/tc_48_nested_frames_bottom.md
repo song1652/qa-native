@@ -1,0 +1,18 @@
+---
+id: tc_48_nested_frames_bottom
+data_key: null
+priority: low
+tags: [positive, content, nested_frames]
+type: structured
+---
+# 중첩 프레임 하단 프레임 텍스트 확인
+
+## Precondition
+- https://the-internet.herokuapp.com/nested_frames 접속 상태
+
+## Steps
+1. 하단 프레임 접근
+2. 프레임 내 텍스트 읽기
+
+## Expected
+- 하단 프레임에 "BOTTOM" 텍스트가 표시된다

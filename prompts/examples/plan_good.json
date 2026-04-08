@@ -1,0 +1,35 @@
+{
+  "_comment": "GOOD plan 예시 — 로그인 페이지 테스트",
+  "plan": [
+    {
+      "case_name": "tc_01_login_success",
+      "case_type": "structured",
+      "description": "유효한 자격증명으로 로그인 성공 검증",
+      "steps": [
+        {"action": "goto", "selector": null, "value": "BASE_URL"},
+        {"action": "fill", "selector": "#username", "value": "test_data.valid_user.username"},
+        {"action": "fill", "selector": "#password", "value": "test_data.valid_user.password"},
+        {"action": "click", "selector": "button[type='submit']"}
+      ],
+      "assertion": {
+        "type": "url_contains",
+        "expected": "/secure"
+      }
+    },
+    {
+      "case_name": "tc_02_login_invalid_password",
+      "case_type": "structured",
+      "description": "잘못된 비밀번호로 로그인 실패 시 에러 메시지 표시 검증",
+      "steps": [
+        {"action": "goto", "selector": null, "value": "BASE_URL"},
+        {"action": "fill", "selector": "#username", "value": "test_data.valid_user.username"},
+        {"action": "fill", "selector": "#password", "value": "test_data.invalid_password.password"},
+        {"action": "click", "selector": "button[type='submit']"}
+      ],
+      "assertion": {
+        "type": "element_visible",
+        "expected": "#flash.error"
+      }
+    }
+  ]
+}
