@@ -1,0 +1,20 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python scripts/check_pending_discuss.py",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python scripts/check_pending_impl.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "login": {
+    "valid_user": { "username": "tomsmith", "password": "SuperSecretPassword!" }
+  },
+  "saintcore": {
+    "valid_user": { "username": "skj942", "password": "danawa1631" },
+    "invalid_user": { "username": "skj942", "password": "wrongpassword123" }
+  }
+}

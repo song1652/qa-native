@@ -1,0 +1,125 @@
+# QA-Native — 아키텍처 문서
+
+> **독자**: 사람 — 내부 설계·아키텍처 문서. 에이전트가 읽지 않음.
+> **Claude Code가 LLM 역할을 직접 수행하는 API-Free QA 자동화 파이프라인**
+
+---
+
+## 핵심 설계 원칙
+
+| 원칙 | 내용 |
+|---|---|
+| **API-Free** | `anthropic`, `openai`, `langchain` 등 외부 LLM SDK 일절 미사용 |
+| **Claude Code = 두뇌** | 전략 수립, 코드 작성, 리뷰, 실패 패치를 직접 수행 |
+| **스크립트 = 실행 도구** | 01~06 스크립트는 DOM 추출·lint·pytest·결과 수집만 담당 |
+| **state.json 중심** | 모든 단계 결과가 하나의 파일에 누적 → 단계 간 컨텍스트 공유 |
+| **단일 심의 Agent** | 사수/부사수 두 관점을 한 번의 Agent 호출로 내부 시뮬레이션 |
+| **컨텍스트 주입** | `02a/03a/06a_dialog.py`가 파일을 병렬 읽기 후 JSON으로 출력 → Agent가 추가 파일 읽기 불필요 |
+
+---
+
+## 아키텍처
+
+### 단일 파이프라인
+
+```
+┌────────────────────────────────────────────────┐
+│               Claude Code (두뇌)               │
+│  DOM 분석 해석 → 테스트 전략 수립              │
+│  테스트 코드 직접 작성                          │
+│  실패 트레이스백 분석 → 코드 자동 패치          │
+└──────────────────┬─────────────────────────────┘
+                   │  읽기 / 쓰기
+                   ▼
+              state.json
+                   │
+       ┌───────────┼───────────┐
+       ▼           ▼           ▼
+  Python        Playwright   pytest
+  스크립트      (브라우저)   (테스트 실행)
+ 01~06_*.py    Chromium      HTML 리포트
+```
+
+### 병렬 파이프라인
+
+```
+testcases/{group}/tc_*.md  (1파일 = 1케이스)
+      ↓
+run_qa.py (N개 케이스 자동 감지)
+      ↓
+parallel/00_split.py
+  케이스별 workers/{id}/ 생성
+  DOM 분석 (URL당 1회, 캐시)
+  workers/{id}/state.json 초기화
+      ↓
+오케스트레이터 Claude (Agent tool)
+  ┌──────────┬──────────┬──────────┐
+  │Subagent 1│Subagent 2│Subagent N│  ← 동시 실행
+  │ tc_01    │ tc_02    │ tc_N     │
+  │plan→코드 │plan→코드 │plan→코드 │
+  └──────────┴──────────┴──────────┘
+      ↓
+  tests/generated/{group}/{label}.py  저장
+      ↓
+parallel/99_merge.py
+  pytest tests/generated/ 일괄 실행
+  통합 HTML 리포트 생성
+  workers/ 정리
+```
+
+### 심의 Agent 흐름 (Plan / Code Review / Healing)
+
+```
+*a_dialog.py 실행
+  └─ team_charter.md, senior.md, junior.md, lessons_learned.md, 코드 병렬 읽기
+  └─ DELIBERATION_CONTEXT_START ... END  JSON 출력
+
+오케스트레이터 Claude가 JSON 추출
+  └─ 심의 Agent 1회 호출 (사수/부사수 내부 시뮬레이션)
+       └─ plan / review / patch 확정
+       └─ state.json 업데이트 (결과 저장)
+       └─ 필요 시 agents/lessons_learned.md 오류 패턴 추가
+
+※ dialog.json은 팀 자유 토론 전용. QA 파이프라인 심의는 state.json에만 기록됨.
+```
+
+### 팀 토론 흐름
+
+```
+대시보드 "토론 시작" 또는 run_team.py
+  └─ team_discuss.py: 컨텍스트 수집 → DELIBERATION_CONTEXT 출력
+
+Claude가 멀티라운드 티키타카 진행 (최소 3라운드)
+  └─ 발언마다 agents/dialog.json에 즉시 append (Edit tool, 배치 금지)
+  └─ 대시보드 SSE로 실시간 표시
+
+결론 도출 → 사용자가 대시보드에서 항목별 승인/반려
+  └─ 승인 시: team_notes.md 저장 + pending_impl.json 생성
+  └─ 스케줄러(2분 내) → Claude가 자동 구현
+```
+
+---
+
+## Healer (자가 치유)
+
+테스트 실패 시 `06_heal.py`가 traceback을 수집하고 Claude Code가 패치합니다. 최대 3회 자동 시도.
+
+| 실패 유형 | 패치 방법 |
+|---|---|
+| Locator 오류 (`strict mode violation`, `Element not found`) | dom_info 셀렉터와 대조해 수정 |
+| Assertion 오류 (`Expected ... to contain`) | 실제 페이지 텍스트로 기댓값 수정 |
+| Timeout | `wait_for_selector` 추가 또는 `expect(..., timeout=N)` 조정 |
+| URL 오류 | BASE_URL 또는 goto 인자 수정 |
+
+---
+
+## 기술 스택
+
+| 분류 | 기술 |
+|---|---|
+| 언어 | Python 3.12 |
+| 브라우저 자동화 | Playwright (Chromium headless) |
+| 테스트 프레임워크 | pytest + pytest-playwright |
+| 코드 품질 | flake8 |
+| 상태 관리 | state.json (단일 파일) |
+| LLM | Claude Code 자체 (API 없음) |
