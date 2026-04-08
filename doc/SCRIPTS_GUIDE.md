@@ -91,8 +91,11 @@ object 형식 사용 시 `page_meta`(auth, spa, preconditions, notes)가 subagen
 **동작 순서:**
 1. `config/pages.json` 읽기 + `testcases/` 폴더 자동 스캔
 2. URL별 DOM 분석 (동일 URL 1회만, 캐시)
-3. `PARALLEL_SUBAGENT_CONTEXTS` 출력 → Claude가 subagent 동시 실행
-4. 모든 subagent 완료 후: `python parallel/99_merge.py` 실행
+3. `PARALLEL_SUBAGENT_CONTEXTS` 출력 → 구조: `{ shared_context_paths: {...}, subagents: [...] }`
+   - `shared_context_paths`: 공통 참조 파일 경로 (lessons_learned, team_charter, SKILL.md) — 각 subagent가 직접 읽음
+   - `subagents[]`: 배치별 고유 데이터 (dom_info, test_cases, test_data 등)
+4. Claude가 `subagents[]`의 각 항목을 Agent tool로 동시 실행
+5. 모든 subagent 완료 후: `python parallel/99_merge.py` 실행
 
 ---
 

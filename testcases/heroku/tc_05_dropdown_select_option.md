@@ -1,0 +1,20 @@
+---
+id: tc_05_dropdown_select_option
+data_key: null
+priority: medium
+tags: [positive, content]
+type: structured
+---
+# 드롭다운 옵션 선택
+
+## Precondition
+- https://the-internet.herokuapp.com/dropdown 접속 상태
+
+## Steps
+1. 드롭다운에서 "Option 1" 선택
+2. 선택값 확인
+3. 드롭다운에서 "Option 2" 선택
+
+## Expected
+- "Option 1" 선택 시 value가 "1"이다
+- "Option 2" 선택 시 value가 "2"이다

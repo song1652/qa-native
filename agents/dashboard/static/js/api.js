@@ -72,7 +72,12 @@ function _restoreScrollPos() {
   }
 }
 
+var _confirmOpen = false;
+
 async function refreshAll() {
+  // confirm/prompt 팝업이 열려있으면 리렌더 스킵 (팝업 강제 닫힘 방지)
+  if (_confirmOpen) return;
+
   await Promise.all([
     fetch('/api/dialogs?' + Date.now()).then(r => r.ok ? r.text() : null).then(t => { if (t) applyDialogData(t); }),
     fetchPipelineState(),
@@ -90,10 +95,35 @@ async function refreshAll() {
   }
 }
 
+// confirm 래퍼 — 커스텀 모달 (SSE로 네이티브 confirm 닫힘 방지)
+function safeConfirm(msg) {
+  return new Promise(resolve => {
+    _confirmOpen = true;
+    const overlay = document.createElement('div');
+    overlay.id = 'confirm-modal';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:99999;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:rgba(18,16,42,0.95);backdrop-filter:blur(20px);border:1px solid rgba(140,120,220,0.2);border-radius:12px;padding:28px 32px;max-width:400px;text-align:center;box-shadow:0 16px 48px rgba(0,0,0,0.5);';
+    box.innerHTML = `
+      <p style="color:var(--text);font-size:14px;margin:0 0 24px;line-height:1.6;">${msg}</p>
+      <div style="display:flex;gap:10px;justify-content:center;">
+        <button id="confirm-yes" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:9px 24px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">확인</button>
+        <button id="confirm-no" style="background:transparent;color:var(--text-dim);border:1px solid var(--border);border-radius:8px;padding:9px 24px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
+      </div>`;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    const close = (val) => { _confirmOpen = false; overlay.remove(); resolve(val); };
+    document.getElementById('confirm-yes').onclick = () => close(true);
+    document.getElementById('confirm-no').onclick = () => close(false);
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(false); });
+  });
+}
+
 // SSE — state/pipeline.json 변경 시 파이프라인 상태도 즉시 갱신
 function connectSSE() {
   const es = new EventSource('/api/events');
   es.onmessage = async e => {
+    if (_confirmOpen) return;
     applyDialogData(e.data);
     await fetchPipelineState();
     await fetchBatchState();

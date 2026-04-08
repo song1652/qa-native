@@ -137,7 +137,7 @@ async function runQuickTest() {
           const logEl = document.getElementById('run-quick-log-content');
           if (logEl) _quickRunState.logContent = logEl.textContent;
           _quickRunState.running = false;
-          if (currentView === 'quick_run') renderQuickRun(document.getElementById('main'));
+          if (currentView === 'quick_run' && !_confirmOpen) renderQuickRun(document.getElementById('main'));
           if (btn) { btn.textContent = '테스트 실행'; btn.disabled = false; }
         }
       }, 3000);
@@ -160,7 +160,7 @@ async function runQuickTest() {
 }
 
 async function quickReset() {
-  if (!confirm('빠른 실행 상태를 초기화하시겠습니까?')) return;
+  if (!(await safeConfirm('빠른 실행 상태를 초기화하시겠습니까?'))) return;
   try {
     const res = await fetch('/api/quick/reset', { method: 'POST' });
     const data = await res.json();

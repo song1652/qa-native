@@ -1,0 +1,18 @@
+---
+id: tc_11_hover_user_info_display
+data_key: null
+priority: medium
+tags: [positive, content]
+type: structured
+---
+# 호버 시 사용자 정보 표시
+
+## Precondition
+- https://the-internet.herokuapp.com/hovers 접속 상태
+
+## Steps
+1. 첫 번째 사용자 이미지에 마우스 호버
+
+## Expected
+- "name: user1" 텍스트가 표시된다
+- "View profile" 링크가 표시된다

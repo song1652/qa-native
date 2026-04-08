@@ -97,7 +97,8 @@ type: structured
 ```bash
 python run_qa_parallel.py
 # pages.json + testcases/ 자동 스캔 → PARALLEL_SUBAGENT_CONTEXTS 출력
-# Claude Code가 각 subagent를 동시 실행 (코드 생성)
+# 공통 참조(lessons_learned 등)는 파일 경로로, 고유 데이터만 JSON으로 전달
+# Claude Code가 subagents[] 각 항목을 동시 실행 (코드 생성)
 python parallel/99_merge.py
 # pytest 일괄 실행 + HTML 리포트 생성
 ```

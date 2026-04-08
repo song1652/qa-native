@@ -1,0 +1,21 @@
+---
+id: tc_03_login_then_logout
+data_key: valid_user
+priority: medium
+tags: [positive, session]
+type: structured
+---
+# 로그인 후 로그아웃
+
+## Precondition
+- https://the-internet.herokuapp.com/login 접속 상태
+
+## Steps
+1. Username 필드에 test_data[valid_user].username 입력
+2. Password 필드에 test_data[valid_user].password 입력
+3. Login 버튼 클릭
+4. /secure 페이지에서 Logout 버튼 클릭
+
+## Expected
+- /login 페이지로 돌아간다
+- "You logged out of the secure area!" 플래시 메시지가 표시된다

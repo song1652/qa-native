@@ -93,6 +93,8 @@ config/pages.json → URL 조회 + testcases/ 폴더 자동 스캔
 DOM 분석 (URL당 1회, 캐시)
       ↓
 PARALLEL_SUBAGENT_CONTEXTS 출력
+  { shared_context_paths: {파일경로...},  ← 공통 (1회)
+    subagents: [{고유 데이터}, ...] }      ← 배치별
       ↓
 오케스트레이터 Claude (Agent tool)
   ┌──────────┬──────────┬──────────┐

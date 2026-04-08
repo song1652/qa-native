@@ -46,10 +46,11 @@ if contexts_json:
 lines += [
     "",
     "진행 방법: CLAUDE.md의 '병렬 파이프라인' 지침을 따라 실행하세요.",
-    "1. 위 PARALLEL_SUBAGENT_CONTEXTS의 각 항목을 Agent tool로 동시에 실행",
-    "2. 각 subagent는 컨텍스트의 dom_info와 test_cases를 바탕으로 Playwright 테스트 코드 작성 → output_path에 저장",
-    "3. 모든 subagent 완료 후 python parallel/99_merge.py 실행",
-    "4. 완료 후 state/parallel.json의 status를 'done'으로 변경",
+    "1. 위 PARALLEL_SUBAGENT_CONTEXTS에서 shared_context_paths의 파일들은 각 subagent가 직접 읽어 참조",
+    "2. subagents 배열의 각 항목을 Agent tool로 동시에 실행",
+    "3. 각 subagent는 dom_info와 test_cases를 바탕으로 Playwright 테스트 코드 작성 → output_path에 저장",
+    "4. 모든 subagent 완료 후 python parallel/99_merge.py 실행",
+    "5. 완료 후 state/parallel.json의 status를 'done'으로 변경",
 ]
 
 print("\n".join(lines))

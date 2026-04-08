@@ -238,7 +238,7 @@ function renderSinglePipeline(main) {
 }
 
 async function pipelineReset() {
-  if (!confirm('파이프라인 상태를 초기화하시겠습니까?')) return;
+  if (!(await safeConfirm('파이프라인 상태를 초기화하시겠습니까?'))) return;
   try {
     const res = await fetch('/api/pipeline/reset', { method: 'POST' });
     const data = await res.json();

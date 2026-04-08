@@ -246,7 +246,7 @@ async function showMergeLog() {
 }
 
 async function parallelReset() {
-  if (!confirm('병렬 파이프라인 상태를 초기화하시겠습니까?')) return;
+  if (!(await safeConfirm('병렬 파이프라인 상태를 초기화하시겠습니까?'))) return;
   try {
     const res = await fetch('/api/parallel/reset', { method: 'POST' });
     const data = await res.json();

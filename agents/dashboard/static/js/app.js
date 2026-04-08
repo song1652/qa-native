@@ -17,7 +17,7 @@ async function submitTopic() {
 }
 
 async function resetDialog() {
-  if (!confirm('대화 기록을 초기화하시겠습니까?')) return;
+  if (!(await safeConfirm('대화 기록을 초기화하시겠습니까?'))) return;
   try { await fetch('/api/reset', { method: 'POST' }); lastJson = ''; await refreshAll(); }
   catch (e) { showToast('초기화 실패'); }
 }

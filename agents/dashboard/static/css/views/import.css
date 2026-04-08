@@ -20,7 +20,7 @@
     }
 
     .import-sheet-item:hover {
-      background: rgba(255, 255, 255, 0.05);
+      background: rgba(139, 92, 246, 0.04);
     }
 
     .import-sheet-item input[type="checkbox"] {

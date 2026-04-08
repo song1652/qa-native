@@ -346,7 +346,7 @@ def build_html(test_results: dict, summary: dict,
                 case_id = case.get("id", "")
                 matched = next(
                     (v for k, v in group_tests.items()
-                     if case_id and f"/{case_id}_" in k),
+                     if case_id and (f"/{case_id}." in k or f"/{case_id}_" in k)),
                     None,
                 )
                 case_pass = matched if matched is not None else False
@@ -520,11 +520,10 @@ def main():
             if heal_ctx:
                 # auto_heal 시도 (deterministic 패치)
                 auto_heal_applied = _try_auto_heal()
+                pl = "quick" if quick_mode else "parallel"
                 if auto_heal_applied:
                     print("[99] auto_heal 성공 — Agent 힐링 불필요할 수 있습니다.")
                     print("     python parallel/99_merge.py 를 다시 실행하여 확인하세요.")
-                else:
-                    pl = "quick" if quick_mode else "parallel"
                 print_heal_instructions(heal_ctx, pipeline=pl)
             else:
                 # build_heal_context가 None 반환 (사이트 불가 또는 전체 반복)

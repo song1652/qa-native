@@ -1,13 +1,13 @@
     /* ── Session card ── */
     .session {
-      border: 1px solid rgba(255, 255, 255, 0.07);
+      border: 1px solid var(--border);
       border-radius: var(--radius-lg);
       overflow: hidden;
       margin-bottom: 16px;
       background: var(--surface-glass);
       backdrop-filter: blur(24px);
       -webkit-backdrop-filter: blur(24px);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
       position: relative;
     }
 
@@ -18,7 +18,7 @@
       left: 0;
       right: 0;
       height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.4), rgba(167, 139, 250, 0.3), transparent);
+      background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.25), rgba(167, 139, 250, 0.3), transparent);
       z-index: 1;
     }
 
@@ -31,15 +31,15 @@
       align-items: center;
       gap: 10px;
       padding: 16px 20px;
-      background: rgba(30, 41, 59, 0.3);
+      background: rgba(22, 20, 50, 0.3);
       cursor: pointer;
       user-select: none;
       transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      border-bottom: 1px solid var(--border);
     }
 
     .session-header:hover {
-      background: rgba(30, 41, 59, 0.45);
+      background: rgba(28, 24, 60, 0.4);
     }
 
     .session-stage {
@@ -65,7 +65,7 @@
       display: flex;
       flex-direction: column;
       gap: 18px;
-      background: rgba(13, 17, 23, 0.4);
+      background: rgba(12, 10, 30, 0.35);
     }
 
     .messages.collapsed {
@@ -121,7 +121,7 @@
     }
 
     .bubble-senior {
-      background: rgba(30, 41, 59, 0.5);
+      background: rgba(22, 20, 50, 0.4);
       border: 1px solid rgba(96, 165, 250, 0.15);
     }
 
@@ -131,7 +131,7 @@
     }
 
     .bubble-deliberation {
-      background: rgba(42, 31, 61, 0.5);
+      background: rgba(42, 31, 70, 0.4);
       border: 1px solid rgba(167, 139, 250, 0.15);
     }
 
@@ -168,13 +168,13 @@
       margin-top: 8px;
       padding: 14px;
       border-radius: 8px;
-      background: rgba(5, 8, 12, 0.8);
+      background: rgba(8, 7, 20, 0.6);
       border: 1px solid var(--border-glass);
       font-size: 12.5px;
       font-family: 'Consolas', 'Courier New', monospace;
       white-space: pre-wrap;
       word-break: break-all;
-      color: #86efac;
+      color: var(--accent-secondary);
       display: none;
       max-height: 400px;
       overflow-y: auto;
@@ -187,7 +187,7 @@
     /* ── 항목별 투표 섹션 ── */
     .vote-section {
       padding: 16px 20px;
-      background: rgba(22, 27, 34, 0.4);
+      background: rgba(18, 16, 42, 0.35);
       border-top: 1px solid var(--border-glass);
     }
 
@@ -216,7 +216,7 @@
       overflow: hidden;
       transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       cursor: pointer;
-      background: rgba(13, 17, 23, 0.3);
+      background: rgba(12, 10, 30, 0.25);
     }
 
     .vote-item:last-child {
@@ -236,7 +236,7 @@
       align-items: center;
       gap: 10px;
       padding: 10px 14px;
-      background: rgba(30, 41, 59, 0.35);
+      background: rgba(22, 20, 50, 0.3);
     }
 
     .vote-item-title {
@@ -250,7 +250,7 @@
       padding: 10px 14px;
       font-size: 12px;
       color: var(--text-dim);
-      background: rgba(13, 17, 23, 0.3);
+      background: rgba(12, 10, 30, 0.25);
       white-space: pre-wrap;
       line-height: 1.6;
       display: block;
@@ -321,7 +321,7 @@
       align-items: center;
       gap: 10px;
       padding: 14px 20px;
-      background: rgba(30, 41, 59, 0.35);
+      background: rgba(22, 20, 50, 0.3);
       border-top: 1px solid var(--border-glass);
     }
 

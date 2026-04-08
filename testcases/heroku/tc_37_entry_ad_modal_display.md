@@ -1,0 +1,19 @@
+---
+id: tc_37_entry_ad_modal_display
+data_key: null
+priority: medium
+tags: [positive, content, entry_ad]
+type: structured
+---
+# Entry Ad 모달 표시 확인
+
+## Precondition
+- https://the-internet.herokuapp.com/entry_ad 접속 상태
+
+## Steps
+1. 페이지 로드 후 모달 다이얼로그 표시 대기
+2. 모달 제목 텍스트 확인
+
+## Expected
+- 모달 다이얼로그가 표시된다
+- 모달 제목에 "This is a modal window" 텍스트가 포함된다

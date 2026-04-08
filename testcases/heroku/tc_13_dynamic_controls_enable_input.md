@@ -1,0 +1,20 @@
+---
+id: tc_13_dynamic_controls_enable_input
+data_key: null
+priority: medium
+tags: [positive, content]
+type: structured
+---
+# Dynamic Controls 입력 필드 활성화
+
+## Precondition
+- https://the-internet.herokuapp.com/dynamic_controls 접속 상태
+
+## Steps
+1. 입력 필드가 비활성화 상태인지 확인
+2. "Enable" 버튼 클릭
+3. 로딩 완료 대기
+
+## Expected
+- 초기 상태에서 입력 필드가 disabled 이다
+- Enable 후 입력 필드가 활성화되고 "It's enabled!" 메시지가 표시된다

@@ -1,0 +1,523 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1775603777901,
+  "projectRoot": "/Users/songkyoungjin/qa-native",
+  "techStack": {
+    "languages": [
+      {
+        "name": "Python",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "requirements.txt"
+        ]
+      }
+    ],
+    "frameworks": [],
+    "packageManager": "pip",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "scripts",
+      "tests"
+    ],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "__pycache__": {
+      "path": "__pycache__",
+      "purpose": null,
+      "fileCount": 5,
+      "lastAccessed": 1775603777897,
+      "keyFiles": [
+        "_bootstrap.cpython-313.pyc",
+        "run_qa.cpython-313.pyc",
+        "run_qa_parallel.cpython-313.pyc",
+        "run_team.cpython-313.pyc",
+        "telegram_bot.cpython-313.pyc"
+      ]
+    },
+    "agents": {
+      "path": "agents",
+      "purpose": null,
+      "fileCount": 8,
+      "lastAccessed": 1775603777897,
+      "keyFiles": [
+        "IDENTITY.md",
+        "SOUL.md",
+        "dialog.json",
+        "lessons_learned.md",
+        "lessons_learned_auto.md"
+      ]
+    },
+    "config": {
+      "path": "config",
+      "purpose": "Configuration files",
+      "fileCount": 2,
+      "lastAccessed": 1775603777897,
+      "keyFiles": [
+        "pages.json",
+        "test_data.json"
+      ]
+    },
+    "doc": {
+      "path": "doc",
+      "purpose": null,
+      "fileCount": 8,
+      "lastAccessed": 1775603777898,
+      "keyFiles": [
+        "DIRECTORY.md",
+        "HEALING_GUIDE.md",
+        "PIPELINE_STATE.md",
+        "PROJECT_OVERVIEW.md",
+        "SCRIPTS_GUIDE.md"
+      ]
+    },
+    "import": {
+      "path": "import",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1775603777898,
+      "keyFiles": []
+    },
+    "knowledge": {
+      "path": "knowledge",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1775603777898,
+      "keyFiles": [
+        "qa-checklist.md",
+        "team-rules.md"
+      ]
+    },
+    "logs": {
+      "path": "logs",
+      "purpose": null,
+      "fileCount": 6,
+      "lastAccessed": 1775603777898,
+      "keyFiles": [
+        "merge.txt",
+        "quick_run.txt",
+        "run_parallel.txt",
+        "run_qa.txt",
+        "structured.jsonl"
+      ]
+    },
+    "parallel": {
+      "path": "parallel",
+      "purpose": null,
+      "fileCount": 3,
+      "lastAccessed": 1775603777898,
+      "keyFiles": [
+        "99_merge.py",
+        "run_parallel_log.txt",
+        "run_qa_log.txt"
+      ]
+    },
+    "prompts": {
+      "path": "prompts",
+      "purpose": null,
+      "fileCount": 5,
+      "lastAccessed": 1775603777898,
+      "keyFiles": [
+        "heal_deliberation.md",
+        "parallel_subagent.md",
+        "plan_deliberation.md",
+        "review_deliberation.md",
+        "team_discussion.md"
+      ]
+    },
+    "reports": {
+      "path": "reports",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1775603777899,
+      "keyFiles": []
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 29,
+      "lastAccessed": 1775603777899,
+      "keyFiles": [
+        "01_analyze.py",
+        "02_generate.py",
+        "02a_dialog.py",
+        "03_lint.py",
+        "03a_dialog.py"
+      ]
+    },
+    "state": {
+      "path": "state",
+      "purpose": null,
+      "fileCount": 14,
+      "lastAccessed": 1775603777899,
+      "keyFiles": [
+        "discuss.json",
+        "heal_stats.json",
+        "parallel.json",
+        "parallel_cases_demoqa.json",
+        "parallel_cases_heroku.json"
+      ]
+    },
+    "templates": {
+      "path": "templates",
+      "purpose": null,
+      "fileCount": 3,
+      "lastAccessed": 1775603777899,
+      "keyFiles": [
+        "issue-template.md",
+        "report-template.md",
+        "tc-template.md"
+      ]
+    },
+    "testcases": {
+      "path": "testcases",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1775603777899,
+      "keyFiles": []
+    },
+    "tests": {
+      "path": "tests",
+      "purpose": "Test files",
+      "fileCount": 3,
+      "lastAccessed": 1775603777899,
+      "keyFiles": [
+        "conftest.py",
+        "test_core_parsers.py"
+      ]
+    },
+    "prompts/examples": {
+      "path": "prompts/examples",
+      "purpose": "Example code",
+      "fileCount": 4,
+      "lastAccessed": 1775603777900,
+      "keyFiles": [
+        "heal_patch.json",
+        "plan_bad.json",
+        "plan_good.json"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "agents/dashboard/static/css/views/overview.css",
+      "accessCount": 23,
+      "lastAccessed": 1775621672975,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/static/js/views/overview.js",
+      "accessCount": 19,
+      "lastAccessed": 1775623066863,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/static/css/views/team.css",
+      "accessCount": 16,
+      "lastAccessed": 1775620307779,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/static/css/views/pipeline.css",
+      "accessCount": 14,
+      "lastAccessed": 1775620267966,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/static/css/views/parallel.css",
+      "accessCount": 14,
+      "lastAccessed": 1775621946639,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/static/css/layout.css",
+      "accessCount": 12,
+      "lastAccessed": 1775620119695,
+      "type": "file"
+    },
+    {
+      "path": "",
+      "accessCount": 11,
+      "lastAccessed": 1775622039595,
+      "type": "directory"
+    },
+    {
+      "path": "agents/dashboard/static/js",
+      "accessCount": 11,
+      "lastAccessed": 1775623057376,
+      "type": "directory"
+    },
+    {
+      "path": "agents/dashboard/static/css/components.css",
+      "accessCount": 9,
+      "lastAccessed": 1775620248784,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/static/css/views/reports.css",
+      "accessCount": 8,
+      "lastAccessed": 1775620314347,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/static/css/variables.css",
+      "accessCount": 8,
+      "lastAccessed": 1775621773113,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/static/js/api.js",
+      "accessCount": 7,
+      "lastAccessed": 1775623051158,
+      "type": "file"
+    },
+    {
+      "path": "parallel/99_merge.py",
+      "accessCount": 6,
+      "lastAccessed": 1775622319542,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/static/js/views/quick-run.js",
+      "accessCount": 6,
+      "lastAccessed": 1775623070646,
+      "type": "file"
+    },
+    {
+      "path": "CLAUDE.md",
+      "accessCount": 5,
+      "lastAccessed": 1775618116338,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/index.html",
+      "accessCount": 5,
+      "lastAccessed": 1775620043097,
+      "type": "file"
+    },
+    {
+      "path": "doc/SCRIPTS_GUIDE.md",
+      "accessCount": 4,
+      "lastAccessed": 1775618308229,
+      "type": "file"
+    },
+    {
+      "path": "doc/PROJECT_OVERVIEW.md",
+      "accessCount": 4,
+      "lastAccessed": 1775618310555,
+      "type": "file"
+    },
+    {
+      "path": "scripts/05_execute.py",
+      "accessCount": 4,
+      "lastAccessed": 1775622117978,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/static/js/app.js",
+      "accessCount": 4,
+      "lastAccessed": 1775623064354,
+      "type": "directory"
+    },
+    {
+      "path": "agents/dashboard/static/js/views/pipeline.js",
+      "accessCount": 4,
+      "lastAccessed": 1775623068130,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/static/js/views/parallel.js",
+      "accessCount": 4,
+      "lastAccessed": 1775623069596,
+      "type": "file"
+    },
+    {
+      "path": "run_qa_parallel.py",
+      "accessCount": 3,
+      "lastAccessed": 1775618030092,
+      "type": "file"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 3,
+      "lastAccessed": 1775618312948,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/static/js/utils.js",
+      "accessCount": 3,
+      "lastAccessed": 1775618679147,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/static/css/views/quick-run.css",
+      "accessCount": 3,
+      "lastAccessed": 1775620315719,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/static/css/views/import.css",
+      "accessCount": 3,
+      "lastAccessed": 1775620316884,
+      "type": "file"
+    },
+    {
+      "path": "scripts/report_html.py",
+      "accessCount": 3,
+      "lastAccessed": 1775622032852,
+      "type": "directory"
+    },
+    {
+      "path": "agents/lessons_learned.md",
+      "accessCount": 2,
+      "lastAccessed": 1775617964905,
+      "type": "file"
+    },
+    {
+      "path": "scripts/check_pending_parallel.py",
+      "accessCount": 2,
+      "lastAccessed": 1775618038747,
+      "type": "file"
+    },
+    {
+      "path": "prompts/parallel_subagent.md",
+      "accessCount": 2,
+      "lastAccessed": 1775618066034,
+      "type": "file"
+    },
+    {
+      "path": "doc/PIPELINE_STATE.md",
+      "accessCount": 2,
+      "lastAccessed": 1775618271786,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/static/css/animations.css",
+      "accessCount": 2,
+      "lastAccessed": 1775618640317,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard",
+      "accessCount": 2,
+      "lastAccessed": 1775618995032,
+      "type": "directory"
+    },
+    {
+      "path": "agents/dashboard/static/js/components/test-list.js",
+      "accessCount": 2,
+      "lastAccessed": 1775621919740,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/static/js/components/group-result.js",
+      "accessCount": 2,
+      "lastAccessed": 1775621928203,
+      "type": "file"
+    },
+    {
+      "path": "scripts",
+      "accessCount": 2,
+      "lastAccessed": 1775622067863,
+      "type": "directory"
+    },
+    {
+      "path": "agents/dashboard/static/js/router.js",
+      "accessCount": 2,
+      "lastAccessed": 1775622861349,
+      "type": "file"
+    },
+    {
+      "path": "scripts/02a_dialog.py",
+      "accessCount": 1,
+      "lastAccessed": 1775617746313,
+      "type": "file"
+    },
+    {
+      "path": "scripts/06_heal.py",
+      "accessCount": 1,
+      "lastAccessed": 1775617748839,
+      "type": "file"
+    },
+    {
+      "path": "doc/DIRECTORY.md",
+      "accessCount": 1,
+      "lastAccessed": 1775618263436,
+      "type": "file"
+    },
+    {
+      "path": "prompts",
+      "accessCount": 1,
+      "lastAccessed": 1775618275045,
+      "type": "directory"
+    },
+    {
+      "path": "agents",
+      "accessCount": 1,
+      "lastAccessed": 1775618275309,
+      "type": "directory"
+    },
+    {
+      "path": "agents/dashboard/static/js/views/reports.js",
+      "accessCount": 1,
+      "lastAccessed": 1775618895737,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/static/js/views/team.js",
+      "accessCount": 1,
+      "lastAccessed": 1775618895886,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/static/js/views/import.js",
+      "accessCount": 1,
+      "lastAccessed": 1775618896025,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/static/js/components/sidebar.js",
+      "accessCount": 1,
+      "lastAccessed": 1775618899078,
+      "type": "file"
+    },
+    {
+      "path": "agents/dashboard/static/js/views",
+      "accessCount": 1,
+      "lastAccessed": 1775618902825,
+      "type": "directory"
+    },
+    {
+      "path": "agents/dashboard/static/js/components",
+      "accessCount": 1,
+      "lastAccessed": 1775618903169,
+      "type": "directory"
+    },
+    {
+      "path": "import/스크린샷 2026-04-08 오후 12.37.07.png",
+      "accessCount": 1,
+      "lastAccessed": 1775619725363,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

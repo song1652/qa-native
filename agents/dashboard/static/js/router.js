@@ -8,6 +8,7 @@ function selectView(viewId) {
 }
 
 function renderCurrentView() {
+  if (_confirmOpen) return;
   const main = document.getElementById('main');
   if (currentView === 'single_pipeline') {
     renderSinglePipeline(main);

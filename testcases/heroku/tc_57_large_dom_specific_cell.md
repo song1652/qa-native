@@ -1,0 +1,19 @@
+---
+id: tc_57_large_dom_specific_cell
+data_key: null
+priority: low
+tags: [positive, content, large_dom]
+type: structured
+---
+# 대규모 DOM 특정 요소 접근
+
+## Precondition
+- https://the-internet.herokuapp.com/large 접속 상태
+
+## Steps
+1. 테이블의 특정 셀(예: row 50, column 1) 접근
+2. 셀 텍스트 확인
+
+## Expected
+- 특정 셀에 접근 가능하다
+- 셀에 "50.1" 텍스트가 표시된다

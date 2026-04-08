@@ -1,23 +1,27 @@
 # 병렬 Subagent 코드 생성 프롬프트 (run_qa_parallel.py 후 사용)
 
 > 이 파일은 병렬 subagent에 대한 행동 지침이다.
-> `{ctx.*}` 참조는 PARALLEL_SUBAGENT_CONTEXTS JSON의 해당 키를 의미한다.
-> Playwright 코드 작성: `.claude/skills/playwright-best-practices/SKILL.md` 참조.
+> `{ctx.*}` 참조는 PARALLEL_SUBAGENT_CONTEXTS → `subagents[]` 배열의 해당 키를 의미한다.
+> 공통 참조 파일은 `shared_context_paths`에 경로가 명시되어 있으며, subagent가 직접 읽는다.
 
 아래 컨텍스트를 바탕으로 Playwright 테스트 코드를 생성하라.
 
+### subagent 고유 데이터 (JSON으로 전달됨)
 url: {ctx.url}
 dom_info: {ctx.dom_info}
 test_cases: {ctx.test_cases}
 test_data: {ctx.test_data}
-team_charter: {ctx.team_charter}
-lessons_learned: {ctx.lessons_learned}
 output_path: {ctx.output_path}
 batch_info: {ctx.batch_info}
 batch_files: {ctx.batch_files}
 
+### 공통 참조 파일 (subagent가 직접 읽기 — JSON에 포함되지 않음)
+- lessons_learned: `agents/lessons_learned.md`
+- team_charter: `agents/team_charter.md`
+- Playwright SKILL: `.claude/skills/playwright-best-practices/SKILL.md`
+
 수행할 작업:
-1. **lessons_learned를 먼저 읽고** 과거 실수 패턴 확인 (같은 실수 반복 금지)
+1. **공통 참조 파일을 먼저 읽기**: `agents/lessons_learned.md` → 과거 실수 패턴 확인 (같은 실수 반복 금지)
 2. 배치 내 **모든 test_cases**와 dom_info를 분석해 테스트 plan 수립
    - structured 케이스: precondition/steps/expected 직접 반영
    - natural 케이스: dom_info 기반 steps/assertion 자동 추론

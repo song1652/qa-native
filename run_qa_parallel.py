@@ -263,11 +263,14 @@ def main():
         print(f"[오류] DOM 분석 중 실패: {e}")
         raise
 
-    # 3. 컨텍스트 파일 1회 읽기
-    team_charter = read_file_safe(PROJECT_ROOT / "agents" / "team_charter.md")
-    lessons_learned = read_file_safe(PROJECT_ROOT / "agents" / "lessons_learned.md")
+    # 3. 공통 컨텍스트는 파일 경로로 참조 (토큰 절감: 서브에이전트마다 복사하지 않음)
+    shared_context_paths = {
+        "team_charter": "agents/team_charter.md",
+        "lessons_learned": "agents/lessons_learned.md",
+        "skill_playwright": ".claude/skills/playwright-best-practices/SKILL.md",
+    }
 
-    # 4. subagent 컨텍스트 빌드 (배치 단위)
+    # 4. subagent 컨텍스트 빌드 (배치 단위) — 고유 데이터만 포함
     contexts = []
     for t in targets:
         all_cases = []
@@ -289,8 +292,6 @@ def main():
             "dom_info": dom_cache.get(t["url"], {}),
             "test_cases": all_cases,
             "test_data": test_data.get(page_key, {}),
-            "team_charter": team_charter,
-            "lessons_learned": lessons_learned,
             "output_path": f"tests/generated/{t['group_dir']}/",
         }
         contexts.append(ctx)
@@ -319,10 +320,14 @@ def main():
         ],
     })
 
-    # 6. subagent 컨텍스트 출력
+    # 6. subagent 컨텍스트 출력 (공통 데이터는 파일 경로만, 고유 데이터만 JSON)
+    output_payload = {
+        "shared_context_paths": shared_context_paths,
+        "subagents": contexts,
+    }
     print()
     print("=== PARALLEL_SUBAGENT_CONTEXTS_START ===")
-    print(json.dumps(contexts, ensure_ascii=False, indent=2))
+    print(json.dumps(output_payload, ensure_ascii=False, indent=2))
     print("=== PARALLEL_SUBAGENT_CONTEXTS_END ===")
     print()
 
@@ -333,10 +338,14 @@ def main():
     print(f"  위 PARALLEL_SUBAGENT_CONTEXTS의 {len(contexts)}개 배치를 Agent tool로 동시에 실행해줘.")
     print(f"  (총 {total_cases}개 케이스, 배치당 최대 {BATCH_SIZE}개)")
     print()
+    print("  shared_context_paths의 파일들은 각 subagent가 직접 읽어서 참조합니다.")
+    print("  (서브에이전트별 컨텍스트에는 고유 데이터만 포함)")
+    print()
     print("  각 subagent는:")
-    print("  1. 배치 내 모든 test_cases에 대해 dom_info 바탕으로 plan 수립")
-    print("  2. plan 기반으로 Playwright 테스트 코드 작성 (tc_*.md 1개 = 파일 1개)")
-    print("  3. output_path에 직접 저장")
+    print("  1. shared_context_paths의 파일들을 먼저 읽기 (lessons_learned, team_charter, SKILL.md)")
+    print("  2. 배치 내 모든 test_cases에 대해 dom_info 바탕으로 plan 수립")
+    print("  3. plan 기반으로 Playwright 테스트 코드 작성 (tc_*.md 1개 = 파일 1개)")
+    print("  4. output_path에 직접 저장")
     print()
     print("  완료 후: python parallel/99_merge.py 실행")
     print("=" * 60)

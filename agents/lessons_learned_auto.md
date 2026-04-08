@@ -52,6 +52,8 @@
 
 ## Timeout 오류
 
+- **Timeout**: `raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None` — expect(..., timeout=10000) 또는 wait_for_selector 추가
+
 ## URL 오류
 
 ## JS평가 오류
