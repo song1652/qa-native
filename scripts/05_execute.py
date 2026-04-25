@@ -1,5 +1,5 @@
 """
-Step 5 — 테스트 실행
+Step 5 -- 테스트 실행
 LLM 없음. pytest 실행 후 결과를 state/pipeline.json에 저장.
 커스텀 다크 테마 HTML 리포트 생성 (report_html.py 공통 모듈 사용).
 """
@@ -37,22 +37,20 @@ def _load_cases_for_group(group_name: str) -> list:
     return []
 
 
-# ── 테스트 함수 수 계산 ─────────────────────────────────────────
+# ── 테스트 파일/함수 수 계산 ────────────────────────────────────
 
 
 def count_test_functions(file_path: str) -> tuple[int, bool]:
-    """테스트 함수 수와 의존성 여부 반환."""
+    """테스트 파일 수(디렉토리인 경우) 또는 함수 수(단일 파일)와 의존성 여부 반환.
+    디렉토리: tc_*.py 파일 수를 케이스 수로 사용 (1파일=1케이스 원칙).
+    """
     p = Path(file_path)
     try:
         if p.is_dir():
-            total = 0
-            for f in sorted(p.glob("*.py")):
-                if f.name in ("__init__.py", "conftest.py"):
-                    continue
-                tree = ast.parse(f.read_text(encoding="utf-8"))
-                total += sum(1 for n in tree.body
-                             if isinstance(n, ast.FunctionDef) and n.name.startswith("test_"))
-            return total, False
+            # 파일 수를 케이스 수로 사용
+            files = [f for f in sorted(p.glob("tc_*.py"))
+                     if f.name not in ("__init__.py", "conftest.py")]
+            return len(files), False
         tree = ast.parse(p.read_text(encoding="utf-8"))
         funcs = [n for n in tree.body
                  if isinstance(n, ast.FunctionDef) and n.name.startswith("test_")]
@@ -104,17 +102,17 @@ def _build_rows_html(test_results: dict, test_cases: list, group_name: str) -> s
     """테스트 결과와 케이스 메타데이터를 매칭하여 rows_html 생성."""
     rows_html = ""
     if test_cases:
-        group_passed = all(test_results.values()) if test_results else False
+        group_outcome = "passed" if all(v == "passed" for v in test_results.values()) else "failed"
         for case_idx, case in enumerate(test_cases):
             uid = f"{group_name}_{case_idx}"
             test_items = list(test_results.items())
             if case_idx < len(test_items):
-                is_passed = test_items[case_idx][1]
+                outcome = test_items[case_idx][1]  # "passed"|"failed"|"skipped"
             else:
-                is_passed = group_passed
-            rows_html += _case_row(case, uid, is_passed)
+                outcome = group_outcome
+            rows_html += _case_row(case, uid, outcome)
     else:
-        for idx, (nodeid, is_passed) in enumerate(test_results.items()):
+        for idx, (nodeid, outcome) in enumerate(test_results.items()):
             uid = f"{group_name}_{idx}"
             simple_case = {
                 "title": nodeid.split("::")[-1].replace("_", " ").title() if "::" in nodeid else nodeid,
@@ -122,7 +120,7 @@ def _build_rows_html(test_results: dict, test_cases: list, group_name: str) -> s
                 "steps": [],
                 "expected": "",
             }
-            rows_html += _case_row(simple_case, uid, is_passed)
+            rows_html += _case_row(simple_case, uid, outcome)
 
     if not rows_html:
         rows_html = '<p class="empty-msg">케이스 정보 없음</p>'
@@ -160,13 +158,23 @@ def main():
 
     n_funcs, has_dependent = count_test_functions(file_path)
     parallel_opts = []
-    if n_funcs > 1:
+    # 단일 세션 사이트(DirectCloud 등)는 병렬 실행 시 세션 충돌 발생 → n_workers=1 고정
+    # URL 또는 파일 경로로 단일세션 여부 판단
+    _url = state.get("url", "")
+    _single_session = any(h in _url for h in ["directcloud.jp"])
+
+    # 표시용 케이스 수: state의 test_cases(테스트 데이터) 우선, 없으면 파일/함수 수 사용
+    n_cases = len(state.get("test_cases", [])) or n_funcs
+
+    if n_funcs > 1 and not _single_session:
         dist_mode = "loadfile" if has_dependent else "load"
-        n_workers = min(n_funcs, 8)
+        n_workers = min(n_funcs, 4)
         parallel_opts = [f"-n{n_workers}", f"--dist={dist_mode}"]
-        print(f"[05] 테스트 실행 중: {file_path}  ({n_funcs}개 함수, 병렬 workers={n_workers}, dist={dist_mode})")
+        print(f"[05] 테스트 실행 중: {file_path}  ({n_cases}개 케이스, 병렬 workers={n_workers}, dist={dist_mode})")
+    elif _single_session and n_funcs > 1:
+        print(f"[05] 테스트 실행 중: {file_path}  ({n_cases}개 케이스, 단일세션 사이트 → 순차 실행)")
     else:
-        print(f"[05] 테스트 실행 중: {file_path}")
+        print(f"[05] 테스트 실행 중: {file_path}  ({n_cases}개 케이스)")
     slog("step_start", step="05_execute", file_path=file_path,
          n_funcs=n_funcs, no_report=no_report)
     print()
@@ -184,14 +192,14 @@ def main():
             ] + parallel_opts,
             capture_output=False,
             text=True,
-            timeout=900,
+            timeout=3600,
         )
     except subprocess.TimeoutExpired:
-        print("\n[05] pytest 실행 타임아웃 (900초 초과)")
+        print("\n[05] pytest 실행 타임아웃 (3600초 초과)")
         state["step"] = "timeout"
         state["execution_result"] = {
             "passed": 0, "failed": 0, "total": 0,
-            "exit_code": -1, "summary": "타임아웃 (900초 초과)",
+            "exit_code": -1, "summary": "타임아웃 (3600초 초과)",
             "executed_at": now, "heal_count": state.get("heal_count", 0),
         }
         write_state(state_path, state)
@@ -205,14 +213,16 @@ def main():
             pass
 
     pytest_summary = report.get("summary", {})
-    test_results = parse_results(report)
+    test_results = parse_results(report)  # {nodeid: "passed"|"failed"|"skipped"}
 
     passed_count = pytest_summary.get("passed", 0)
     failed_count = pytest_summary.get("failed", 0) + pytest_summary.get("error", 0)
+    skipped_count = pytest_summary.get("skipped", 0)
 
     if not test_results:
         passed_count = 0 if result.returncode != 0 else 1
         failed_count = 1 if result.returncode != 0 else 0
+        skipped_count = 0
 
     group_name = _extract_group_name(state)
 
@@ -223,7 +233,8 @@ def main():
     # report_html.build_report 사용 (병렬 리포트와 동일 형식)
     if not no_report:
         rows_html = _build_rows_html(test_results, test_cases, group_name)
-        g_pass_cnt = sum(1 for v in test_results.values() if v)
+        g_pass_cnt = sum(1 for v in test_results.values() if v == "passed")
+        g_skip_cnt = sum(1 for v in test_results.values() if v == "skipped")
         g_total_cnt = len(test_results)
         all_pass = failed_count == 0
 
@@ -234,6 +245,7 @@ def main():
             "total_cnt": g_total_cnt,
             "all_pass": all_pass,
             "has_tests": bool(test_results),
+            "skip_cnt": g_skip_cnt,
         }]
         html_content = build_report(
             groups_data=groups_data,
@@ -243,28 +255,35 @@ def main():
         )
         report_path.write_text(html_content, encoding="utf-8")
 
-    total = passed_count + failed_count
+    total = passed_count + failed_count + skipped_count
     pass_rate = round(passed_count / total * 100, 1) if total else 0
-    summary = f"{passed_count} passed, {failed_count} failed" if total else "결과 없음"
+    _parts = [f"{passed_count} passed", f"{failed_count} failed"]
+    if skipped_count:
+        _parts.append(f"{skipped_count} skipped")
+    summary = ", ".join(_parts) if total else "결과 없음"
 
     group_results = {}
     if test_results:
-        gr = {"passed": 0, "failed": 0, "tests": []}
-        for nodeid, is_passed in test_results.items():
-            if is_passed:
+        gr = {"passed": 0, "failed": 0, "skipped": 0, "tests": []}
+        for nodeid, outcome in test_results.items():
+            if outcome == "passed":
                 gr["passed"] += 1
+            elif outcome == "skipped":
+                gr["skipped"] += 1
             else:
                 gr["failed"] += 1
             gr["tests"].append({
                 "nodeid": nodeid,
                 "name": nodeid.split("::")[-1] if "::" in nodeid else nodeid,
-                "passed": is_passed,
+                "passed": outcome == "passed",
+                "outcome": outcome,
             })
         group_results[group_name] = gr
 
     execution_result = {
         "passed":      passed_count,
         "failed":      failed_count,
+        "skipped":     skipped_count,
         "total":       total,
         "pass_rate":   pass_rate,
         "exit_code":   result.returncode,
@@ -278,10 +297,18 @@ def main():
     }
 
     state["execution_result"] = execution_result
-    state["step"] = "done"
+    state["step"] = "heal_needed" if failed_count > 0 else "done"
     write_state(state_path, state)
     slog("step_end", step="05_execute", passed=passed_count,
          failed=failed_count, total=total, pass_rate=pass_rate)
+
+    # 테스트별 pass/fail/skip 결과 (flaky 감지용)
+    per_test_results = {
+        nid.split("::")[-1] if "::" in nid else nid: (
+            "pass" if oc == "passed" else ("skip" if oc == "skipped" else "fail")
+        )
+        for nid, oc in test_results.items()
+    } if test_results else {}
 
     append_run_history({
         "timestamp": now,
@@ -289,11 +316,13 @@ def main():
         "group": state.get("group_dir", "unknown"),
         "passed": passed_count,
         "failed": failed_count,
+        "skipped": skipped_count,
         "total": total,
         "pass_rate": pass_rate,
         "heal_count": state.get("heal_count", 0),
         "first_pass": state.get("heal_count", 0) == 0 and failed_count == 0,
         "duration_sec": None,
+        "per_test_results": per_test_results,
     })
 
     print()
@@ -304,7 +333,7 @@ def main():
     if not no_report:
         print(f"  HTML 리포트: {report_path}")
     else:
-        print("  (힐링 중 — 리포트 생성 건너뜀)")
+        print("  (힐링 중 -- 리포트 생성 건너뜀)")
     print("=" * 55)
 
 

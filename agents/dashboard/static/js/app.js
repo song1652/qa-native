@@ -1,4 +1,10 @@
 // ── App Initialization & Global Actions ──
+async function resetTeamDiscussion() {
+  if (!(await safeConfirm('팀 토론 기록을 초기화하시겠습니까?'))) return;
+  try { await fetch('/api/discuss/reset', { method: 'POST' }); await refreshAll(); showToast('팀 토론 초기화 완료'); }
+  catch (e) { showToast('초기화 실패'); }
+}
+
 async function submitTopic() {
   const input = document.getElementById('new-topic-input');
   const btn = document.getElementById('new-topic-btn');
@@ -16,11 +22,6 @@ async function submitTopic() {
   btn.disabled = false;
 }
 
-async function resetDialog() {
-  if (!(await safeConfirm('대화 기록을 초기화하시겠습니까?'))) return;
-  try { await fetch('/api/reset', { method: 'POST' }); lastJson = ''; await refreshAll(); }
-  catch (e) { showToast('초기화 실패'); }
-}
 
 // ── Bootstrap ──
 connectSSE();

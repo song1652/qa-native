@@ -67,6 +67,12 @@ function showHookAlert(type, detail) {
       title: '팀 토론 승인 완료',
       desc: `<strong style="color:#89b4fa;">${detail}</strong>`,
       action: 'Claude Code에서 <strong>아무 메시지</strong>를 보내주세요.<br>훅이 승인된 항목을 자동으로 구현합니다.'
+    },
+    quick_heal: {
+      icon: '&#x1FA79;',
+      title: '힐링이 필요합니다',
+      desc: `<strong style="color:#f38ba8;">${detail}</strong>`,
+      action: 'Claude Code에서 <strong>아무 메시지</strong>를 보내주세요.<br>훅이 자동으로 힐링을 시작합니다.'
     }
   };
   const cfg = configs[type] || configs.discuss;
@@ -96,16 +102,21 @@ function showHookAlert(type, detail) {
   document.body.appendChild(overlay);
 }
 
-// 로그 폴링 (3초 간격, 최대 120초)
+// 로그 폴링 (3초 간격, 최대 1800초)
 function startLogPolling(logAreaId, logContentId, logFileName) {
   if (_logTimers[logAreaId]) clearInterval(_logTimers[logAreaId]);
   const area = document.getElementById(logAreaId);
   if (area) area.style.display = 'block';
   // 토글 버튼 표시
-  const toggleId = logAreaId === 'run-single-log' ? 'log-toggle-single' : 'log-toggle-parallel';
-  const toggleBtn = document.getElementById(toggleId);
+  const toggleIdMap = {
+    'run-single-log': 'log-toggle-single',
+    'run-parallel-log': 'log-toggle-parallel',
+    'run-quick-log': 'log-toggle-quick',
+  };
+  const toggleBtn = document.getElementById(toggleIdMap[logAreaId] || '');
   if (toggleBtn) toggleBtn.style.display = 'inline-block';
   let elapsed = 0;
+  let _firstPoll = true;
   const poll = async () => {
     try {
       const res = await fetch('/api/run_log', {
@@ -115,14 +126,28 @@ function startLogPolling(logAreaId, logContentId, logFileName) {
       });
       const data = await res.json();
       const el = document.getElementById(logContentId);
-      if (el) {
-        el.textContent = data.log || '(대기 중...)';
-        const logArea = document.getElementById(logAreaId);
-        if (logArea) logArea.scrollTop = logArea.scrollHeight;
+      const logArea = document.getElementById(logAreaId);
+      if (el && logArea) {
+        // 현재 스크롤 위치 저장 (업데이트 전)
+        const prevScrollTop = logArea.scrollTop;
+        const isAtBottom = _firstPoll || (logArea.scrollHeight - prevScrollTop - logArea.clientHeight < 40);
+        const logText = data.log || '(대기 중...)';
+        el.textContent = logText;
+        // 맨 아래에 있었으면 자동 스크롤, 위로 올렸으면 위치 유지
+        if (isAtBottom) {
+          logArea.scrollTop = logArea.scrollHeight;
+        } else {
+          logArea.scrollTop = prevScrollTop;
+        }
+        _firstPoll = false;
+        // 빠른 실행: 재렌더링 시 내용 보존을 위해 상태에 저장
+        if (logAreaId === 'run-quick-log' && data.log) {
+          _quickRunState.logContent = data.log;
+        }
       }
     } catch (e) { }
     elapsed += 3;
-    if (elapsed >= 120 && _logTimers[logAreaId]) {
+    if (elapsed >= 1800 && _logTimers[logAreaId]) {
       clearInterval(_logTimers[logAreaId]);
       delete _logTimers[logAreaId];
     }

@@ -1,5 +1,5 @@
 """
-Step 4 — QA 리드 승인 게이트
+Step 4 -- QA 리드 승인 게이트
 LLM 없음. state.json의 review_summary를 출력하고 y/n 입력 대기.
 결과를 state.json의 approval_status에 저장.
 """
@@ -71,7 +71,7 @@ def main():
             state["step"] = "reviewed"
             write_state(state_path, state)
             print()
-            print("  [대기] stdin 없음 — 대시보드에서 승인/반려를 기다립니다.")
+            print("  [대기] stdin 없음 -- 대시보드에서 승인/반려를 기다립니다.")
             sys.exit(3)
 
         approved = answer in ("y", "yes")

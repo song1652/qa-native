@@ -29,4 +29,13 @@ function updateSidebar(data) {
     else if (pStatus === 'heal_failed') dotCls = 'pending';
     parallelDot.className = 'sidebar-dot ' + dotCls;
   }
+
+  const quickDot = document.getElementById('dot-quick');
+  if (quickDot && quickState) {
+    const qStep = quickState.step || '';
+    let dotCls = '';
+    if (qStep === 'done') dotCls = 'done';
+    else if (qStep && qStep !== 'init') dotCls = 'active-run';
+    quickDot.className = 'sidebar-dot ' + dotCls;
+  }
 }

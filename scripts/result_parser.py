@@ -5,9 +5,15 @@
 
 
 def parse_results(report: dict) -> dict:
-    """JSON 리포트 → {nodeid: passed} 매핑."""
+    """JSON 리포트 → {nodeid: outcome} 매핑.
+
+    outcome 값: "passed" | "failed" | "skipped"
+    """
     results = {}
     for t in report.get("tests", []):
         nodeid = t.get("nodeid", "")
-        results[nodeid] = t.get("outcome") == "passed"
+        outcome = t.get("outcome", "failed")
+        if outcome not in ("passed", "skipped"):
+            outcome = "failed"
+        results[nodeid] = outcome
     return results

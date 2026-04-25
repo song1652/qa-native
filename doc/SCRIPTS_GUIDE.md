@@ -12,6 +12,7 @@
 ├── run_qa_parallel.py         ← QA 자동화 시작 (여러 URL 동시)
 ├── run_team.py                ← 팀 토론 시작 (터미널용, 대시보드 권장)
 ├── agents/dashboard/serve.py  ← 모니터링 대시보드 서버
+├── parallel/00_split.py       ← 병렬 파이프라인 worker 환경 초기화 (URL별 디렉토리 + DOM 분석)
 ├── parallel/99_merge.py       ← 병렬 실행 완료 후 결과 통합
 ├── telegram_bot.py            ← 텔레그램 봇 서버
 └── _bootstrap.py              ← 루트 진입점 공통 경로 설정 (scripts/ → sys.path)
@@ -29,6 +30,14 @@ Claude가 자동으로 호출하는 파일 (직접 실행 불필요)
     ├── team_discuss.py            팀 토론: 심의 컨텍스트 준비
     ├── team_approve.py            팀 토론: 결론 승인 (터미널용, 대시보드 권장)
     ├── check_pending_*.py         훅 5개 (hook_utils.check_state() 공통 사용)
+    ├── coverage_matrix.py         커버리지 매트릭스 생성 (tc_*.md → state/coverage.json)
+    ├── flaky_detector.py          Flaky Test 감지 (run_history.json → state/flaky_tests.json)
+    ├── _add_login_retry.py        병렬 세션 충돌 대응 — 생성된 테스트에 로그인 재시도 로직 일괄 추가
+    ├── _complete_scaffolds.py     scaffold 파일 완성 보조
+    ├── _fix_final_lint.py         lint 최종 패치 (특수 케이스)
+    ├── _fix_login_wait.py         로그인 대기 패치 (특수 케이스)
+    ├── _fix_string_split.py       문자열 분리 패치 (특수 케이스)
+    ├── _revert_login.py           로그인 패치 롤백
     ├── _python.py                 라이브러리: .venv Python 경로 (PROJECT_ROOT는 _paths.py에서 import)
     ├── _paths.py                  라이브러리: 중앙 경로 상수 + read_state/write_state
     ├── _constants.py              라이브러리: 종료 코드 + VALID_TRANSITIONS 전이 맵
@@ -36,6 +45,7 @@ Claude가 자동으로 호출하는 파일 (직접 실행 불필요)
     ├── hook_utils.py              라이브러리: 훅 스크립트 공통 유틸 (check_state)
     ├── __init__.py                패키지 초기화
     ├── sync_test_data.py          test_data.json 동기화
+    ├── dom_helpers.js             JS 공통 유틸 (isVisible·esc·getSelectorsSimple) — 01_analyze.py의 _js()가 자동 주입
     └── parse_cases.py             라이브러리: 테스트케이스 파일 파서
 ```
 
@@ -136,7 +146,7 @@ python parallel/99_merge.py --quick --group mysite --no-heal
 
 ```bash
 python agents/dashboard/serve.py
-# 브라우저에서 http://localhost:8765 자동 열림
+# 브라우저에서 http://localhost:8766 자동 열림
 ```
 
 **대시보드에서 할 수 있는 것:**
@@ -179,7 +189,7 @@ python agents/dashboard/serve.py
 **서버 재시작 방법 (코드 변경 후):**
 ```bash
 # 포트 확인 (macOS)
-lsof -i :8765
+lsof -i :8766
 # PID 종료
 kill -9 [PID]
 # 재시작
@@ -225,9 +235,16 @@ Claude Code가 실행 중인 상태에서 함께 구동해야 합니다.
 ```
 01_analyze.py
   → 메인 URL + 서브페이지 DOM을 단일 브라우저에서 분석 (메인: networkidle+30s, 서브: load+500ms, Semaphore(8))
-  → input, button, form, link + React 컴포넌트(tree, tabs, drag, accordion, progress 등) 추출
-  → state/pipeline.json에 dom_info (인라인) + sub_dom_keys (URL→해시 매핑) 저장, state/dom_cache/에 캐시 (TTL 7일)
+  → 9가지 다중 셀렉터 전략 (id > testid > aria-label > role > placeholder > name > text > css > xpath) 추출
+  → inputs/buttons: visible + hidden 모두 포함 (visible 플래그 구분)
+  → navItems: 사이드바·메뉴 li 항목 추출 (nav li, aside li, [role="treeitem"] 등 최대 50개)
+  → hidden_elements: 모달·드롭다운 컨테이너 + 내부 자식 버튼·링크 텍스트
+  → testidElements: data-testid/data-test/data-cy/data-qa 속성명과 값을 실제 속성명 기준으로 추출
+  → analyze_dynamic(): hover·click 트리거 순회 → 노출 요소 캡처 (30초 상한, 페이지 복원 실패 시 중단)
+  → analyze_contextmenu(): 우클릭 후보 순회 → 컨텍스트 메뉴 캡처 (30초 상한, 중복 시그니처 제거)
+  → 정적 DOM TTL 7일 / 동적 요소 TTL 24시간 분리 관리 (만료 시 동적 분석만 재실행)
   → --force-refresh 플래그: 캐시를 무시하고 강제 재분석
+  → --skip-dynamic 플래그: 동적 UI 분석 건너뜀 (정적 DOM만 추출)
 
 02a_dialog.py
   → Plan 심의에 필요한 파일들을 병렬로 읽어 JSON으로 출력
@@ -265,7 +282,16 @@ Claude Code가 실행 중인 상태에서 함께 구동해야 합니다.
   → --lf 실행 시 0개 수집이면 --lf 없이 재실행 (fallback)
 
 06_auto_heal.py
-  → 06_heal.py 이후 자동 패치. 6개 정적 패턴(strict mode, timeout, to_have_class regex, triple_click, evaluate return, 광고 제거) + heal_stats 빈출 패턴 Top 5 보고
+  → 06_heal.py 이후 자동 패치. 8개 정적 패턴:
+     strict mode violation → .first 추가
+     timeout 오류 → timeout 값 증가 (5000→15000, 10000→20000)
+     to_have_class(r"...") → to_have_class(re.compile(r"..."))
+     triple_click() → click(click_count=3)
+     page.evaluate('return ...') → page.evaluate('() => ...')
+     UnicodeDecodeError cp949 → open() 에 encoding='utf-8' 추가
+     모달 wait_for timeout 10000 → 20000
+     광고 간섭 → adsbygoogle 제거 코드 삽입
+  + heal_stats 빈출 패턴 Top 5 보고
   → 수정 파일만 재실행하여 검증. 전부 통과 시 Agent 불필요 (종료코드 0)
   → 잔여 실패 시 heal_context 업데이트 후 Agent에 위임 (종료코드 1)
 
@@ -314,12 +340,12 @@ python scripts/05_execute.py
 | 파일 | 역할 | 직접 실행 |
 |---|---|---|
 | `scripts/_python.py` | `PROJECT_ROOT`를 `_paths.py`에서 import하여 `.venv` 경로 구성. `PYTHON_EXE` 상수 제공 | ❌ (다른 스크립트가 import) |
-| `scripts/_paths.py` | 중앙 경로 상수 (`STATE_DIR`, `LOGS_DIR`, `DOM_CACHE_DIR`, `RUN_HISTORY` 등) + `read_state()` (fcntl 공유 잠금) / `write_state()` (atomic rename + **pipeline.json FSM 전이 자동 검증**) / `append_run_history()` (실행 이력 append) / `get_cached_dom()` (TTL 체크) / `save_dom_cache()` (atomic write + `_cached_at`) / `resolve_sub_doms(state)` (sub_dom_keys → {url:dom} 매핑) 유틸 | ❌ (다른 스크립트가 import) |
+| `scripts/_paths.py` | 중앙 경로 상수 (`STATE_DIR`, `LOGS_DIR`, `DOM_CACHE_DIR`, `RUN_HISTORY` 등) + `DOM_CACHE_TTL_HOURS=168`(7일) / `DOM_DYNAMIC_CACHE_TTL_HOURS=24`(24시간) TTL 상수 + `read_state()` (fcntl 공유 잠금) / `write_state()` (atomic rename + **pipeline.json FSM 전이 자동 검증**) / `append_run_history()` (실행 이력 append) / `get_cached_dom()` (정적·동적 TTL 분리 체크 — 동적 만료 시 `dynamic_elements`/`contextmenu_elements`만 제거) / `save_dom_cache()` (atomic write + `_cached_at` / `_dynamic_cached_at` 분리 저장) / `resolve_sub_doms(state)` (sub_dom_keys → {url:dom} 매핑) 유틸 | ❌ (다른 스크립트가 import) |
 | `scripts/_constants.py` | 파이프라인 종료 코드 상수 (`EXIT_SUCCESS=0`, `EXIT_HEAL_NEEDED=10`, `EXIT_HEAL_EXCEEDED=2`, `EXIT_REJECTED=2`) + `VALID_TRANSITIONS` step 전이 맵 + `assert_valid_transition()` 검증 함수 | ❌ (다른 스크립트가 import) |
 | `scripts/result_parser.py` | pytest JSON 리포트 → `{nodeid: passed}` 매핑 파싱. `05_execute.py`와 `99_merge.py`가 공유 | ❌ (다른 스크립트가 import) |
 | `scripts/hook_utils.py` | 훅 스크립트 공통 유틸. `check_state(path, key, value, extra_check)` — 5개 `check_pending_*.py`가 공유 | ❌ (다른 스크립트가 import) |
 | `scripts/structured_log.py` | 구조화된 로그 (JSON Lines). `slog(event, **kwargs)` → `logs/structured.jsonl`에 기록. 05_execute, 06_heal, 99_merge에서 사용. 파이프라인 병목 분석·이벤트 추적용 | ❌ (다른 스크립트가 import) |
-| `scripts/heal_utils.py` (힐링 배치 병렬화: `build_heal_batches()` + `print_heal_batches()` — 단일/병렬/빠른 공통, HEAL_BATCH_SIZE=6) | 힐링 공용 유틸리티. `classify_error` (7분류: Locator/Assertion/Timeout/URL/JS평가/Python런타임/Playwright일반/기타), `extract_key_lines`, `find_screenshot_for_test`, `append_lessons` (→ `lessons_learned_auto.md`에 자동 기록), `update_heal_stats` — `06_heal.py`와 `99_merge.py`에서 공유 | ❌ (다른 스크립트가 import) |
+| `scripts/heal_utils.py` (힐링 배치 병렬화: `build_heal_batches()` + `print_heal_batches()` — 단일/병렬/빠른 공통, HEAL_BATCH_SIZE=6) | 힐링 공용 유틸리티. `classify_error` (7분류: Locator/Assertion/Timeout/URL/JS평가/Python런타임/Playwright일반/기타), `MCP_SNAPSHOT_ERROR_TYPES`, `extract_key_lines`, `find_screenshot_for_test`, `append_lessons` (→ `lessons_learned_auto.md`에 자동 기록), `update_heal_stats` — `06_heal.py`와 `99_merge.py`에서 공유 | ❌ (다른 스크립트가 import) |
 | `scripts/parse_cases.py` | `.md`/`.json` 테스트케이스 파일 파서 (YAML frontmatter 지원) | ❌ (run_qa.py가 import해서 사용) |
 | `tests/test_core_parsers.py` | 핵심 파서 유닛 테스트 (parse_cases 등) | ❌ (pytest가 자동 실행) |
 | `scripts/sync_test_data.py` | `test_data.json` 동기화 유틸 | ❌ (필요 시 import) |
@@ -329,15 +355,13 @@ python scripts/05_execute.py
 
 ## OMC 스킬 활용 (oh-my-claudecode)
 
-파이프라인 단계별로 OMC 스킬을 활용하여 속도와 효율을 극대화합니다.
+> 상세 명령·참조 SKILL.md·적용 방법은 `CLAUDE.md` "스킬 프레임워크 & OMC 적용" 섹션 참조.
 
-| 단계 | 스킬 | 효과 |
-|------|------|------|
-| 코드 완성 (scaffold → 실제 코드) | `/oh-my-claudecode:ultrapilot` | 파일 소유권 파티셔닝으로 N개 agent가 병렬 작성 |
-| 린트 수정 | Agent tool 직접 병렬 호출 | lint 이슈 파일별로 Agent 동시 실행 |
-| 힐링 루프 | `/oh-my-claudecode:ultraqa` | test→fix→repeat 자동 사이클. 전체 통과까지 자동 반복 |
-
-상세 사용법은 `CLAUDE.md`의 "OMC 스킬 적용" 섹션 참조.
+| 단계 | 명령 |
+|------|------|
+| 코드 완성 | `/oh-my-claudecode:ultrapilot` |
+| 린트 수정 | Agent tool 직접 병렬 호출 |
+| 힐링 루프 | `/oh-my-claudecode:ultraqa` |
 
 ---
 

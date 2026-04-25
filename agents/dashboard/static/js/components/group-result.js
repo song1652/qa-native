@@ -15,8 +15,9 @@ function buildGroupResultsHtml(gr, prefix) {
   grNames.forEach(g => {
     const gd = gr[g];
     const gPass = gd.failed === 0;
+    const gSkipped = gd.skipped || 0;
     const gCls = gPass ? 'pass' : 'fail';
-    const gBadge = gPass ? 'PASS' : 'FAIL';
+    const gBadge = gPass ? (gSkipped > 0 ? `PASS (${gSkipped} skip)` : 'PASS') : (gSkipped > 0 ? `FAIL (${gSkipped} skip)` : 'FAIL');
     const key = prefix + '__' + g;
     const isOpen = !!_groupOpenState[key];
     const testListHtml = buildTestListHtml(gd.tests || [], prefix, g);
@@ -26,7 +27,7 @@ function buildGroupResultsHtml(gr, prefix) {
           <span class="group-result-chevron ${isOpen ? 'open' : ''}" id="grchv_${esc(prefix)}_${esc(g)}">&#9654;</span>
           <span class="group-result-dot ${gCls}"></span>
           <span class="group-result-name">${esc(g.replace(/_/g, ' ').toUpperCase())}</span>
-          <span class="group-result-count">${gd.passed}/${gd.passed + gd.failed} passed</span>
+          <span class="group-result-count">${gd.passed}/${gd.passed + gd.failed} passed${gSkipped > 0 ? ` <span style="color:#a855f7;font-size:10px;">· ${gSkipped} skip</span>` : ''}</span>
           <span class="group-result-badge ${gCls}">${gBadge}</span>
         </div>
         <div class="group-result-body" id="grb_${esc(prefix)}_${esc(g)}" style="display:${isOpen ? 'block' : 'none'}">

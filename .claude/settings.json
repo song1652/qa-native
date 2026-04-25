@@ -5,12 +5,32 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python scripts/check_pending_discuss.py",
+            "command": "\"C:/Users/User/AppData/Local/Programs/Python/Python312/python.exe\" scripts/check_pending_pipeline.py",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "python scripts/check_pending_impl.py",
+            "command": "\"C:/Users/User/AppData/Local/Programs/Python/Python312/python.exe\" scripts/check_pending_approve.py",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "\"C:/Users/User/AppData/Local/Programs/Python/Python312/python.exe\" scripts/check_pending_discuss.py",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "\"C:/Users/User/AppData/Local/Programs/Python/Python312/python.exe\" scripts/check_pending_parallel.py",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "\"C:/Users/User/AppData/Local/Programs/Python/Python312/python.exe\" scripts/check_pending_impl.py",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "\"C:/Users/User/AppData/Local/Programs/Python/Python312/python.exe\" scripts/check_pending_quick_heal.py",
             "timeout": 10
           }
         ]

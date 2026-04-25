@@ -1,5 +1,5 @@
 """
-Step 6-auto — 자동 힐링 (deterministic pattern fixes)
+Step 6-auto -- 자동 힐링 (deterministic pattern fixes)
 LLM 없음. 알려진 패턴을 regex 기반으로 자동 패치.
 06_heal.py 이후, Agent 호출 전에 실행.
 
@@ -96,6 +96,33 @@ def fix_evaluate_return(source: str, traceback: str) -> tuple[str, bool]:
     return new_source, new_source != source
 
 
+def fix_unicode_encoding(source: str, traceback: str) -> tuple[str, bool]:
+    """UnicodeDecodeError cp949 → open() 에 encoding='utf-8' 추가."""
+    if "unicodedecodeerror" not in traceback.lower() and "cp949" not in traceback.lower():
+        return source, False
+
+    new_source = re.sub(
+        r"open\(([^)]+),\s*['\"]r['\"]\s*\)",
+        lambda m: m.group(0)[:-1] + ", encoding='utf-8')",
+        source
+    )
+    return new_source, new_source != source
+
+
+def fix_modal_timeout(source: str, traceback: str) -> tuple[str, bool]:
+    """모달 wait_for timeout 부족 → 20000으로 증가."""
+    if "timeout" not in traceback.lower():
+        return source, False
+    if "modal" not in source and "modal" not in traceback.lower():
+        return source, False
+
+    new_source = source.replace(
+        ".wait_for(state='visible', timeout=10000)",
+        ".wait_for(state='visible', timeout=20000)"
+    )
+    return new_source, new_source != source
+
+
 def fix_ad_removal(source: str, traceback: str) -> tuple[str, bool]:
     """광고 간섭 Timeout → 광고 제거 코드 삽입."""
     if "timeout" not in traceback.lower():
@@ -138,6 +165,8 @@ PATCHERS = [
     fix_to_have_class_regex,
     fix_triple_click,
     fix_evaluate_return,
+    fix_unicode_encoding,
+    fix_modal_timeout,
     fix_ad_removal,
 ]
 
@@ -238,7 +267,7 @@ def main():
         print(f"[06-auto] 재실행 결과: {passed} passed, {failed} failed")
 
         if failed == 0:
-            # 모든 자동 패치 성공 — 남은 실패에서 패치된 것 제거
+            # 모든 자동 패치 성공 -- 남은 실패에서 패치된 것 제거
             patched_ids = {nid for nid in patched_nodeids}
             remaining = [f for f in failures if f.get("test_id") not in patched_ids]
 
@@ -252,7 +281,7 @@ def main():
                 write_state(state_path, state)
                 sys.exit(0)
             else:
-                print(f"[06-auto] {len(remaining)}건 잔여 실패 — Agent 힐링 필요")
+                print(f"[06-auto] {len(remaining)}건 잔여 실패 -- Agent 힐링 필요")
                 heal_context["failures"] = remaining
                 heal_context["failure_count"] = len(remaining)
                 heal_context["auto_healed"] = len(patched_nodeids) - failed
@@ -260,7 +289,7 @@ def main():
                 write_state(state_path, state)
                 sys.exit(1)
         else:
-            print(f"[06-auto] 자동 패치 후에도 {failed}건 실패 — Agent 힐링 필요")
+            print(f"[06-auto] 자동 패치 후에도 {failed}건 실패 -- Agent 힐링 필요")
             sys.exit(1)
 
     sys.exit(1)

@@ -172,6 +172,11 @@ def validate_data_keys(cases: list, group: str, test_data_path: str | Path = Non
     return missing
 
 
+def _natural_sort_key(p: Path) -> list:
+    """파일명을 숫자 기준으로 정렬하는 키 (tc_10 > tc_9 보장)."""
+    return [int(c) if c.isdigit() else c.lower() for c in re.split(r"(\d+)", p.name)]
+
+
 def load_cases(path: str | Path) -> list:
     """
     파일 또는 디렉토리 경로에 따라 자동으로 파서를 선택해 test_cases를 반환.
@@ -189,8 +194,11 @@ def load_cases(path: str | Path) -> list:
 
     if p.is_dir():
         all_cases = []
-        # tc_*.md / tc_*.json 파일만 (targets.json 등 비케이스 파일 제외)
-        files = sorted(list(p.glob("tc_*.md")) + list(p.glob("tc_*.json")))
+        # tc_*.md / tc_*.json 파일만 (targets.json 등 비케이스 파일 제외), 자연 정렬
+        files = sorted(
+            list(p.glob("tc_*.md")) + list(p.glob("tc_*.json")),
+            key=_natural_sort_key,
+        )
         for f in files:
             all_cases.extend(load_cases(f))
         return all_cases

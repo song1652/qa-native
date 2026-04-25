@@ -26,11 +26,9 @@ screenshots: {ctx.screenshots}
 6. traceback만으로 원인 불명확 시 MCP 시각 검증 (HEALING_GUIDE.md 참조)
 
 ## 힐링 완료 체크리스트 (하나라도 빠지면 미완료)
+
+> 상세 기준: `doc/HEALING_GUIDE.md`
+
 1. 코드 패치 적용
-2. agents/lessons_learned.md에 교훈 수동 기록 (한 줄 패턴 형식):
-   ```
-   - **{핵심 키워드}**: {상황 설명}. {해결법/교훈}
-   ```
-   자동 로그(lessons_learned_auto.md)와 중복되는 단순 에러 로그는 기록 불필요.
-   이미 같은 패턴이 있으면 추가하지 말 것.
+2. `agents/lessons_learned.md` 교훈 수동 기록 (중복·단순 에러 로그는 생략)
 3. 재실행으로 통과 확인

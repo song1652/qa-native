@@ -1,5 +1,9 @@
 # 힐링 가이드
 
+> **독자**: Claude Code — 힐링 루프 진입 시 읽음 (`06_heal.py` 또는 `99_merge.py` 실패 후).
+> MCP 시각 검증 절차, 힐링 완료 체크리스트, 배치 병렬화 기준을 확인할 때 참조.
+> 스킬: [Heal Patterns](.claude/skills/heal-patterns/SKILL.md) (오류 유형별 패치 전략)
+
 모든 파이프라인(단일/병렬)에서 힐링 시 동일 기준 적용.
 단일(`06_heal.py` + `06_auto_heal.py`)과 병렬(`99_merge.py`)이 동일한 힐링 플로우를 공유:
 에러 분류(7종) → 사이트 사전 접근 체크 → 반복 실패 감지(2회 스킵) → auto_heal(deterministic 패치) → **배치 분할 병렬 힐링**(HEAL_SUBAGENT_CONTEXTS, 배치당 6건) → lessons/heal_stats 기록.
@@ -58,21 +62,21 @@ python scripts/05_execute.py --no-report
 
 **주의**: ultraqa는 최대 3회 제한을 추적하므로, 3회 초과 실패는 수동 개입 필요.
 
-## MCP 시각 검증 (힐링 시 선택 사용)
+## MCP 시각 검증
 
-traceback만으로 원인이 불명확한 Locator/Assertion/Timeout 오류에만 사용한다.
-heal_context의 각 failure에 `screenshot` 경로가 포함되어 있으면 활용 가능.
+`heal_context.mcp_snapshot_recommended`가 `true`이면 해당 배치의 heal agent가 자동으로 실시간 DOM을 확인한다 (Locator/Assertion/Timeout 오류 시 `06_heal.py`가 자동 설정).
+traceback만으로 원인이 불명확한 경우에도 수동으로 사용할 수 있다.
+
+MCP 호출 실패 시 dom_info 기반 힐링으로 자동 전환 (graceful degradation).
 
 1. **스크린샷 확인**: Read tool로 `heal_context.failures[].screenshot.path` 파일 열기 → 실패 시점 화면 확인
 2. **실제 페이지 탐색** (필요 시만):
-   - `Playwright_navigate` → heal_context의 URL로 접속
-   - `playwright_get_visible_html` → 현재 페이지 DOM 구조 확인
-   - `playwright_get_visible_text` → 현재 페이지 텍스트 확인
+   - `browser_navigate` → heal_context의 URL로 접속
+   - `browser_snapshot` → 현재 페이지 ARIA 트리 + DOM 구조 확인
 3. **셀렉터 검증** (필요 시만):
-   - `Playwright_evaluate` → `document.querySelector('셀렉터')` 로 셀렉터 존재 확인
+   - `browser_evaluate` → `document.querySelector('셀렉터')` 로 셀렉터 존재 확인
 4. **패치 적용**: 시각 검증 결과를 바탕으로 테스트 코드 수정
 
 **주의사항**:
-- MCP 도구는 힐링 경로에서만 사용 (정상 실행 시 사용 금지 → 비용 절감)
 - MCP 브라우저와 pytest 브라우저는 별개 세션이므로 쿠키/상태가 공유되지 않는다
 - 로그인 등 전제조건이 필요한 페이지는 DOM/텍스트 확인에 그친다

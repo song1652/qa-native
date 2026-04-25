@@ -31,6 +31,11 @@ function buildParallelStepProgress(status, files, totalTargets) {
 }
 
 function renderParallelPipeline(main) {
+  // 로그 스크롤 위치 보존
+  const _pLogArea = document.getElementById('run-parallel-log');
+  const _pLogScrollTop = _pLogArea ? _pLogArea.scrollTop : null;
+  const _pWasAtBottom = _pLogScrollTop === null || (_pLogArea.scrollHeight - _pLogScrollTop - _pLogArea.clientHeight < 40);
+
   const batch = batchState || {};
   const ps = batch.parallel_state || {};
   const files = batch.generated_files || [];
@@ -102,6 +107,7 @@ function renderParallelPipeline(main) {
           <div class="exec-stat"><div class="exec-stat-num" style="color:var(--text)">${execResult.total}</div><div class="exec-stat-label">Total</div></div>
           <div class="exec-stat"><div class="exec-stat-num" style="color:var(--approved-color)">${execResult.passed}</div><div class="exec-stat-label">Passed</div></div>
           <div class="exec-stat"><div class="exec-stat-num" style="color:var(--revision-color)">${execResult.failed}</div><div class="exec-stat-label">Failed</div></div>
+          ${(execResult.skipped || 0) > 0 ? `<div class="exec-stat"><div class="exec-stat-num" style="color:#a855f7">${execResult.skipped}</div><div class="exec-stat-label">Skipped</div></div>` : ''}
           <div class="exec-stat"><div class="exec-stat-num" style="color:${allPass ? 'var(--approved-color)' : 'var(--revision-color)'}">${execResult.pass_rate}%</div><div class="exec-stat-label">Pass Rate</div></div>
         </div>
         ${groupResultsHtml}
@@ -142,6 +148,12 @@ function renderParallelPipeline(main) {
         ${filesHtml}
       </div>` : `<div class="empty"><div class="empty-icon">&#x2699;&#xFE0F;</div><h2>생성된 테스트 없음</h2><p>run_qa_parallel.py를 실행하고 subagent로 코드를 생성하세요</p></div>`}
     </div>`;
+
+  // 로그 스크롤 복원
+  const _pNewLog = document.getElementById('run-parallel-log');
+  if (_pNewLog && _pLogScrollTop !== null) {
+    _pNewLog.scrollTop = _pWasAtBottom ? _pNewLog.scrollHeight : _pLogScrollTop;
+  }
 }
 
 // 병렬 파이프라인 실행

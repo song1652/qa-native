@@ -98,7 +98,7 @@ def analyze_url(url: str) -> dict:
         import importlib.util
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
-    main_dom, _sub_doms = asyncio.run(mod.analyze_all(url, []))
+    main_dom, _sub_doms = asyncio.run(mod.analyze_all(url, [], skip_dynamic=False))
     return main_dom
 
 

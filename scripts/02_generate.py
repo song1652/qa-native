@@ -1,5 +1,5 @@
 """
-Step 2 — 테스트 코드 뼈대 생성 (파일별 scaffold)
+Step 2 -- 테스트 코드 뼈대 생성 (파일별 scaffold)
 LLM 없음. plan을 읽어 케이스별 개별 파일로 뼈대를 생성.
 Claude Code가 각 뼈대를 완성해 tests/generated/{group}/ 에 저장.
 
@@ -110,10 +110,16 @@ def main():
         conftest_path.write_text(CONFTEST_TEMPLATE, encoding="utf-8")
         print(f"[02] conftest.py 생성: {conftest_path}")
     else:
-        print(f"[02] conftest.py 이미 존재 — 건너뜀: {conftest_path}")
+        print(f"[02] conftest.py 이미 존재 -- 건너뜀: {conftest_path}")
 
-    # 출력 디렉토리 생성
+    # 출력 디렉토리: 기존 .py 파일 정리 후 재생성 (잔여 파일 누적 방지)
     out_dir = Path("tests/generated") / group_dir
+    if out_dir.exists():
+        stale = [f for f in out_dir.glob("tc_*.py")]
+        if stale:
+            print(f"[02] 잔여 파일 {len(stale)}개 정리: {out_dir}")
+            for f in stale:
+                f.unlink()
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # __init__.py (pytest 모듈 충돌 방지)

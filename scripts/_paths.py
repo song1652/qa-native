@@ -1,11 +1,24 @@
-"""프로젝트 상태/로그 파일 경로 상수 + 안전한 JSON 읽기/쓰기."""
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
+
 import hashlib
+import io
 import json
 import os
+import sys
 import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
+
+# Windows cp949 터미널에서 한글/유니코드 출력 깨짐 방지
+if sys.stdout and hasattr(sys.stdout, "buffer"):
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -20,7 +33,8 @@ RUN_HISTORY = STATE_DIR / "run_history.json"
 
 # DOM 캐시
 DOM_CACHE_DIR = STATE_DIR / "dom_cache"
-DOM_CACHE_TTL_HOURS = int(os.environ.get("DOM_CACHE_TTL_HOURS", "168"))  # 7일
+DOM_CACHE_TTL_HOURS = int(os.environ.get("DOM_CACHE_TTL_HOURS", "168"))          # 정적 DOM: 7일
+DOM_DYNAMIC_CACHE_TTL_HOURS = int(os.environ.get("DOM_DYNAMIC_CACHE_TTL_HOURS", "24"))  # 동적 DOM: 24시간
 
 # 로그 파일
 LOGS_DIR = PROJECT_ROOT / "logs"
@@ -37,11 +51,13 @@ def append_run_history(entry: dict):
     if RUN_HISTORY.exists():
         try:
             with open(RUN_HISTORY, "r", encoding="utf-8") as f:
-                fcntl.flock(f, fcntl.LOCK_SH)
+                if fcntl:
+                    fcntl.flock(f, fcntl.LOCK_SH)
                 try:
                     history = json.loads(f.read())
                 finally:
-                    fcntl.flock(f, fcntl.LOCK_UN)
+                    if fcntl:
+                        fcntl.flock(f, fcntl.LOCK_UN)
         except (json.JSONDecodeError, Exception):
             history = []
     history.append(entry)
@@ -56,20 +72,51 @@ def append_run_history(entry: dict):
         raise
 
 
+def url_cache_key(url: str) -> str:
+    """URL을 MD5 해시해 캐시 파일명으로 사용."""
+    return hashlib.md5(url.encode()).hexdigest()
+
+
 def get_cached_dom(url: str) -> dict | None:
-    """캐시된 DOM 분석 결과가 있으면 반환. TTL 초과 시 None."""
+    """캐시된 DOM 분석 결과가 있으면 반환.
+
+    - 정적 DOM: _cached_at 기준 DOM_CACHE_TTL_HOURS(7일) 초과 시 None
+    - 동적 요소: _dynamic_cached_at 기준 DOM_DYNAMIC_CACHE_TTL_HOURS(24시간) 초과 시
+                dynamic_elements / contextmenu_elements 필드만 제거 후 반환
+    """
     cache_file = DOM_CACHE_DIR / f"{hashlib.md5(url.encode()).hexdigest()}.json"
     if cache_file.exists():
         try:
             data = json.loads(cache_file.read_text(encoding="utf-8"))
+
+            # 정적 DOM TTL 체크
             cached_at = data.get("_cached_at")
-            if cached_at and DOM_CACHE_TTL_HOURS > 0:
+            if DOM_CACHE_TTL_HOURS > 0:
+                if not cached_at:
+                    # 레거시 캐시(_cached_at 없음): mtime 기반 fallback
+                    mtime = datetime.fromtimestamp(cache_file.stat().st_mtime)
+                    if datetime.now() - mtime > timedelta(hours=DOM_CACHE_TTL_HOURS):
+                        return None
+                else:
+                    try:
+                        ts = datetime.fromisoformat(cached_at)
+                        if datetime.now() - ts > timedelta(hours=DOM_CACHE_TTL_HOURS):
+                            return None  # 정적 DOM 만료 → 전체 재분석
+                    except (ValueError, TypeError):
+                        pass
+
+            # 동적 요소 TTL 체크 — 만료 시 동적 필드만 제거
+            dynamic_cached_at = data.get("_dynamic_cached_at")
+            if dynamic_cached_at and DOM_DYNAMIC_CACHE_TTL_HOURS > 0:
                 try:
-                    ts = datetime.fromisoformat(cached_at)
-                    if datetime.now() - ts > timedelta(hours=DOM_CACHE_TTL_HOURS):
-                        return None  # expired
+                    ts = datetime.fromisoformat(dynamic_cached_at)
+                    if datetime.now() - ts > timedelta(hours=DOM_DYNAMIC_CACHE_TTL_HOURS):
+                        data = {k: v for k, v in data.items()
+                                if k not in ("dynamic_elements", "contextmenu_elements",
+                                             "_dynamic_cached_at")}
                 except (ValueError, TypeError):
                     pass
+
             return data
         except Exception:
             pass
@@ -77,9 +124,16 @@ def get_cached_dom(url: str) -> dict | None:
 
 
 def save_dom_cache(url: str, dom: dict):
-    """DOM 분석 결과를 캐시에 저장 (timestamp 포함). 원본 dict를 변경하지 않음."""
+    """DOM 분석 결과를 캐시에 저장.
+
+    동적 요소(dynamic_elements, contextmenu_elements)가 있으면
+    _dynamic_cached_at 타임스탬프를 별도로 기록해 TTL을 독립 관리한다.
+    """
     DOM_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    cache_data = {**dom, "_cached_at": datetime.now().isoformat()}
+    now = datetime.now().isoformat()
+    cache_data = {**dom, "_cached_at": now}
+    if "dynamic_elements" in dom or "contextmenu_elements" in dom:
+        cache_data["_dynamic_cached_at"] = now
     cache_file = DOM_CACHE_DIR / f"{hashlib.md5(url.encode()).hexdigest()}.json"
     content = json.dumps(cache_data, ensure_ascii=False, indent=2)
     fd, tmp_path = tempfile.mkstemp(dir=DOM_CACHE_DIR, suffix=".tmp")
@@ -108,11 +162,13 @@ def read_state(path: Path) -> dict:
     if not path.exists():
         return {}
     with open(path, "r", encoding="utf-8") as f:
-        fcntl.flock(f, fcntl.LOCK_SH)
+        if fcntl:
+            fcntl.flock(f, fcntl.LOCK_SH)
         try:
             return json.loads(f.read())
         finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
+            if fcntl:
+                fcntl.flock(f, fcntl.LOCK_UN)
 
 
 def write_state(path: Path, data: dict):

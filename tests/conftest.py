@@ -7,8 +7,10 @@ from playwright.sync_api import sync_playwright
 
 @pytest.fixture(scope="session")
 def browser_instance():
+    import os
+    headless = os.environ.get("HEADED", "0") != "1"
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=headless)
         yield browser
         browser.close()
 
@@ -17,7 +19,14 @@ def browser_instance():
 def page(browser_instance):
     context = browser_instance.new_context()
     page = context.new_page()
+    # DirectCloud 세션 충돌 dialog 자동 수락
+    page.on("dialog", lambda dialog: dialog.accept())
     yield page
+    # 테스트 종료 후 세션 명시적 정리 (다음 테스트 로그인 충돌 방지)
+    try:
+        page.goto("https://web.directcloud.jp/logout", timeout=5000)
+    except Exception:
+        pass
     context.close()
 
 

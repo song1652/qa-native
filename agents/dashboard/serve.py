@@ -37,6 +37,7 @@ REPORTS_DIR = PROJECT_ROOT / "tests" / "reports"
 QUICK_STATE_PATH = PROJECT_ROOT / "state" / "quick.json"
 RUN_HISTORY_PATH = PROJECT_ROOT / "state" / "run_history.json"
 HEAL_STATS_PATH = PROJECT_ROOT / "state" / "heal_stats.json"
+FLAKY_TESTS_PATH = PROJECT_ROOT / "state" / "flaky_tests.json"
 LOGS_DIR = PROJECT_ROOT / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
 IMPORT_DIR = PROJECT_ROOT / "import"
@@ -212,24 +213,46 @@ def list_testcase_groups() -> list:
     return groups
 
 
+def _natural_sort_key(name: str) -> list:
+    """숫자 부분을 정수로 변환해 자연 정렬 키 반환 (tc_9 < tc_10 < tc_11 보장)."""
+    return [int(c) if c.isdigit() else c.lower() for c in re.split(r"(\d+)", name)]
+
+
 def list_generated_groups() -> list:
-    """tests/generated/ 하위 그룹별 테스트 파일 목록 반환."""
+    """tests/generated/ 하위 그룹별 테스트 파일 목록 반환.
+    testcases/ 의 .md 파일 기준으로 유효한 파일만 집계 (잔여 파일 제외).
+    """
     if not GENERATED_DIR.exists():
         return []
     groups = []
-    for d in sorted(GENERATED_DIR.iterdir()):
+    for d in sorted(GENERATED_DIR.iterdir(), key=lambda p: _natural_sort_key(p.name)):
         if not d.is_dir() or d.name.startswith((".", "_")):
             continue
-        files = sorted([
-            f.name for f in d.glob("*.py")
-            if f.name not in ("conftest.py", "__init__.py")
-        ])
+        all_py = sorted([
+            f.name for f in d.glob("tc_*.py")
+        ], key=_natural_sort_key)
+        # testcases/{group}/tc_*.md 기준으로 유효 파일 집합 산출 (번호 prefix로 매칭)
+        tc_dir = TESTCASES_DIR / d.name
+        if tc_dir.exists():
+            import re as _re
+            def _tc_num(name):
+                m = _re.match(r'tc_(\d+)_', name)
+                return m.group(1) if m else None
+            valid_nums = {_tc_num(f.name) for f in tc_dir.glob("tc_*.md")} - {None}
+            files = [f for f in all_py if _tc_num(f) in valid_nums]
+            stale_count = len(all_py) - len(files)
+        else:
+            files = all_py
+            stale_count = 0
         if files:
-            groups.append({
+            entry = {
                 "name": d.name,
                 "file_count": len(files),
                 "files": files,
-            })
+            }
+            if stale_count > 0:
+                entry["stale_count"] = stale_count
+            groups.append(entry)
     return groups
 
 
@@ -441,14 +464,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
         "/api/quick_state":      "_get_quick_state",
         "/api/run_history":      "_get_run_history",
         "/api/heal_stats":       "_get_heal_stats",
+        "/api/flaky_tests":      "_get_flaky_tests",
         "/api/generated_groups": "_get_generated_groups",
         "/api/reports":          "_get_reports",
+        "/api/testcase":         "_get_testcase",
         "/api/import/files":     "_get_import_files",
         "/api/import/sheets":    "_get_import_sheets",
     }
 
     POST_ROUTES = {
         "/api/reset":              "_post_reset",
+        "/api/reset/all":          "_post_reset_all",
         "/api/discuss/start":      "_post_discuss_start",
         "/api/discuss/vote_item":  "_post_discuss_vote_item",
         "/api/discuss/reject":     "_post_discuss_reject",
@@ -464,6 +490,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         "/api/import/convert":     "_post_import_convert",
         "/api/heal_stats/reset":   "_post_heal_stats_reset",
         "/api/run_history/reset":  "_post_run_history_reset",
+        "/api/discuss/reset":      "_post_discuss_reset",
     }
 
     # ── Dispatchers ───────────────────────────────────────────────
@@ -561,6 +588,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "application/json; charset=utf-8"
         )
 
+    def _get_flaky_tests(self):
+        payload = load_json(FLAKY_TESTS_PATH) or {"flaky": []}
+        self._serve_bytes(
+            json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            "application/json; charset=utf-8"
+        )
+
     def _get_heal_stats(self):
         payload = load_json(HEAL_STATS_PATH) or {}
         self._serve_bytes(
@@ -579,6 +613,49 @@ class DashboardHandler(BaseHTTPRequestHandler):
         payload = list_reports()
         self._serve_bytes(
             json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            "application/json; charset=utf-8"
+        )
+
+    def _get_testcase(self):
+        import re as _re
+        from urllib.parse import urlparse, parse_qs
+        qs = parse_qs(urlparse(self.path).query)
+        nodeid = qs.get("nodeid", [""])[0]
+        if not nodeid:
+            self._serve_bytes(
+                b'{"ok":false,"error":"nodeid parameter required"}',
+                "application/json; charset=utf-8")
+            return
+        # nodeid 예: tests/heroku/tc_01_login.py::test_login
+        #           tests/generated/directcloud/tc_01_login_success_login_success.py::test_...
+        parts = nodeid.split("/")
+        py_file = parts[-1].split("::")[0]  # tc_01_*.py
+        # group = 마지막 디렉토리 (generated 건너뜀)
+        group = parts[-2] if len(parts) >= 2 else ""
+        if group == "generated" and len(parts) >= 3:
+            group = parts[-2]  # generated/{group}/file 구조에선 이미 parts[-2]가 group
+        if not group or not py_file or ".." in group:
+            self._serve_bytes(
+                b'{"ok":false,"error":"invalid nodeid"}',
+                "application/json; charset=utf-8")
+            return
+        # tc 번호 추출: tc_01_ → testcases/{group}/tc_01_*.md 검색
+        m = _re.match(r"(tc_\d+)_", py_file)
+        tc_prefix = m.group(1) if m else None
+        tc_dir = TESTCASES_DIR / group
+        fpath = None
+        if tc_prefix and tc_dir.exists():
+            matches = sorted(tc_dir.glob(f"{tc_prefix}_*.md"))
+            if matches:
+                fpath = matches[0]
+        if fpath is None or not fpath.exists():
+            self._serve_bytes(
+                json.dumps({"ok": False, "error": f"tc file not found for {py_file}"}, ensure_ascii=False).encode("utf-8"),
+                "application/json; charset=utf-8")
+            return
+        content = fpath.read_text(encoding="utf-8")
+        self._serve_bytes(
+            json.dumps({"ok": True, "content": content, "file": fpath.name}, ensure_ascii=False).encode("utf-8"),
             "application/json; charset=utf-8"
         )
 
@@ -828,6 +905,40 @@ class DashboardHandler(BaseHTTPRequestHandler):
         else:
             self._serve_bytes(b'{"ok":false,"log":""}', "application/json; charset=utf-8")
 
+    def _post_reset_all(self):
+        # dialog
+        empty = {"pipeline_url": "", "started_at": "", "sessions": []}
+        DIALOG_PATH.write_text(json.dumps(empty, ensure_ascii=False, indent=2), encoding="utf-8")
+        # pipeline
+        init_state = {
+            "url": "", "test_cases": [], "step": "init",
+            "dom_info": {}, "plan": [],
+            "generated_file_path": "tests/generated/test_generated.py",
+            "lint_result": {}, "review_summary": "",
+            "approval_status": "", "rejection_reason": "",
+            "rejection_count": 0, "execution_result": {},
+            "heal_count": 0, "heal_context": {}
+        }
+        STATE_PATH.write_text(json.dumps(init_state, ensure_ascii=False, indent=2), encoding="utf-8")
+        # parallel
+        PARALLEL_STATE_PATH.write_text(
+            json.dumps({"status": "", "total_count": 0, "targets": []}, ensure_ascii=False, indent=2),
+            encoding="utf-8"
+        )
+        heal_ctx = PROJECT_ROOT / "state" / "heal_context.json"
+        if heal_ctx.exists():
+            heal_ctx.unlink()
+        # quick
+        if QUICK_STATE_PATH.exists():
+            QUICK_STATE_PATH.unlink()
+        # heal stats
+        HEAL_STATS_PATH.write_text(
+            json.dumps({"version": 1, "patterns": {}}, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        # run history
+        RUN_HISTORY_PATH.write_text("[]", encoding="utf-8")
+        self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
+
     def _post_pipeline_reset(self):
         init_state = {
             "url": "", "test_cases": [], "step": "init",
@@ -856,6 +967,19 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
 
     def _post_quick_reset(self):
+        import subprocess as sp
+        body = _read_body(self)
+        pid = body.get("pid") if body else None
+        if pid:
+            try:
+                if sys.platform == "win32":
+                    sp.run(["taskkill", "/F", "/T", "/PID", str(pid)],
+                           capture_output=True, timeout=5)
+                else:
+                    import os as _os
+                    _os.kill(int(pid), 15)
+            except Exception:
+                pass
         if QUICK_STATE_PATH.exists():
             QUICK_STATE_PATH.unlink()
         self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
@@ -869,6 +993,22 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def _post_run_history_reset(self):
         RUN_HISTORY_PATH.write_text("[]", encoding="utf-8")
+        self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
+
+    def _post_discuss_reset(self):
+        # discuss.json 초기화 (topic/step/conclusion 등 모든 상태 제거)
+        DISCUSS_PATH.write_text(
+            json.dumps({}, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        # dialog.json의 team_discussion 세션도 제거
+        dialog = load_json(DIALOG_PATH) or {"sessions": []}
+        dialog["sessions"] = [
+            s for s in dialog.get("sessions", [])
+            if s.get("stage") != "team_discussion"
+        ]
+        DIALOG_PATH.write_text(
+            json.dumps(dialog, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         self._serve_bytes(b'{"ok":true}', "application/json; charset=utf-8")
 
     def _post_run_merge(self):
@@ -1067,7 +1207,7 @@ class ReusableHTTPServer(ThreadingHTTPServer):
 
 
 def main():
-    server = ReusableHTTPServer(("localhost", PORT), DashboardHandler)
+    server = ReusableHTTPServer(("127.0.0.1", PORT), DashboardHandler)
     url = f"http://localhost:{PORT}"
     print(f"[Dashboard] 서버 시작: {url}")
     print(f"[Dashboard] 종료: Ctrl+C")

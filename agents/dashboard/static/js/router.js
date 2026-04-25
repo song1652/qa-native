@@ -18,6 +18,8 @@ function renderCurrentView() {
     renderQuickRun(main);
   } else if (currentView === 'reports') {
     renderReports(main);
+  } else if (currentView === 'history') {
+    renderHistory(main);
   } else if (currentView.startsWith('team_')) {
     renderTeamView(main);
   } else {

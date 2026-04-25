@@ -16,10 +16,10 @@ var MSG_STATUS_STYLE = {
 };
 
 var PIPELINE_STEPS = ['init', 'analyzed', 'planned', 'generated', 'reviewed', 'done'];
-var STEP_LABELS = { init: 'Init', analyzed: '분석', planned: '계획', generated: '생성', reviewed: '리뷰', done: '완료', heal_needed: '힐링중', heal_failed: '힐링실패', scaffolded: '생성', linted: '생성', approved: '리뷰' };
+var STEP_LABELS = { init: 'Init', analyzed: '분석', planned: '계획', generated: '생성', reviewed: '리뷰', done: '완료', heal_needed: '힐링필요', heal_failed: '힐링실패', scaffolded: '생성', linted: '생성', approved: '리뷰' };
 
 var PARALLEL_STEPS = ['init', 'analyzing', 'ready', 'generating', 'testing', 'done'];
-var PARALLEL_STEP_LABELS = { init: '초기화', analyzing: 'DOM 분석', ready: '코드 생성 대기', generating: '코드 생성', testing: '테스트 실행', done: '완료', heal_needed: '힐링중', heal_failed: '힐링실패' };
+var PARALLEL_STEP_LABELS = { init: '초기화', analyzing: 'DOM 분석', ready: '코드 생성 대기', generating: '코드 생성', testing: '테스트 실행', done: '완료', heal_needed: '힐링필요', heal_failed: '힐링실패' };
 
 var TESTS_PER_PAGE = 20;
 var REPORTS_PER_PAGE = 20;

@@ -147,20 +147,9 @@ Claude가 멀티라운드 티키타카 진행 (최소 3라운드)
 
 ## 스킬 프레임워크 & OMC 통합
 
-`.claude/skills/`에 정적 가이드라인을 공식 SKILL.md 표준으로 관리. 자체 로더/엔진 없이 Claude Code가 자동 인식.
-
-| 스킬 | 용도 |
-|---|---|
-| `playwright-best-practices/SKILL.md` | Playwright 테스트 코드 작성 베스트프랙티스 |
-| `heal-patterns/SKILL.md` | 힐링 오류 유형별 패치 전략 |
-
-**OMC 스킬 통합:**
-- **team** — 코드 생성 단계(02_generate.py)에서 다중 케이스 병렬 작성, 린트 수정(03_lint.py)에서 일괄 수정
-- **ultraqa** — 힐링 루프(06_heal.py)에서 최대 3회 자동 패치 시도
+`.claude/skills/`에 정적 가이드라인을 공식 SKILL.md 표준으로 관리. 스킬 목록·OMC 적용 단계 상세는 [`CLAUDE.md`](../CLAUDE.md) "스킬 프레임워크 & OMC 적용" 섹션 참조.
 
 동적 빈도 데이터는 `state/heal_stats.json`에 기록. `06_heal.py`가 실패 시 자동 업데이트하고, `06a_dialog.py`가 Top 5 빈출 패턴을 DELIBERATION_CONTEXT에 주입.
-
-> 파이프라인 코어(prompts/, agents/, CLAUDE.md, lessons_learned.md)는 기존 구조 유지.
 
 ---
 
@@ -193,7 +182,7 @@ Claude가 멀티라운드 티키타카 진행 (최소 3라운드)
 
 ## 기술 스택
 
-Python 3.13 / Playwright (Chromium) / pytest / flake8 / Claude Code (API 없음)
+Python 3.12 / Playwright (Chromium) / pytest / flake8 / Claude Code (API 없음)
 
 > 대시보드: Python ThreadingHTTPServer + SSE + Vanilla JS (포트 8766, CORS는 localhost만 허용)
 > Overview에 Heal Stats 도넛 차트 + Top 빈출 패턴 시각화 포함

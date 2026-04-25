@@ -30,13 +30,19 @@ var _prevReportsJson = '';
 // Dashboard Overview 데이터 캐시
 var _ovRunHistory = null;
 var _ovHealStats = null;
+var _ovFlakyTests = null;
 var _ovDataLoaded = false;
+var _ovLogAutoRefresh = null;  // 로그 자동 갱신 타이머 (전역 보관, orphan 방지)
 
 // Group Result: 접기/펼치기 공통
 var _groupOpenState = {};
 
 // Test List 상태
 var _testListState = {};
+
+// Test Detail 열림 상태 & 콘텐츠 캐시 (nodeid → bool / string)
+var _testDetailOpen = {};
+var _testDetailContent = {};
 
 // 로그 타이머
 var _logTimers = {};

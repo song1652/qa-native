@@ -20,6 +20,7 @@ SCREENSHOTS_DIR = PROJECT_ROOT / "tests" / "screenshots"
 HEAL_STATS_PATH = PROJECT_ROOT / "state" / "heal_stats.json"
 
 HEAL_BATCH_SIZE = 6  # 힐링 배치당 실패 테스트 수
+MCP_SNAPSHOT_ERROR_TYPES = frozenset({"Locator", "Assertion", "Timeout"})
 
 
 def classify_error(traceback: str) -> str:
@@ -142,7 +143,7 @@ def append_lessons(failures: list[dict]) -> None:
     if not target_path.exists():
         target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_text(
-            "# Lessons Learned (Auto) — 자동 기록 힐링 패턴\n\n"
+            "# Lessons Learned (Auto) -- 자동 기록 힐링 패턴\n\n"
             "> 자동 생성 파일: heal_utils.py의 append_lessons()가 힐링 시 자동 기록.\n\n---\n\n"
             "## Locator 오류\n\n## Assertion 오류\n\n## Timeout 오류\n\n"
             "## URL 오류\n\n## JS평가 오류\n\n## Python런타임 오류\n\n"
@@ -190,7 +191,7 @@ def append_lessons(failures: list[dict]) -> None:
             "Playwright일반": "브라우저 상태 확인, 페이지 닫힘/크래시 대응",
         }.get(error_type, "")
 
-        entry = f"- **{error_type}**: `{error_summary}` — {fix_hint}\n"
+        entry = f"- **{error_type}**: `{error_summary}` -- {fix_hint}\n"
         new_entries.setdefault(error_type, []).append(entry)
 
     if not new_entries:
@@ -276,7 +277,7 @@ def print_heal_batches(batches: list[list[dict]], url: str = "",
     # 각 배치 요약 출력
     for i, batch in enumerate(batches, 1):
         names = [f["test_name"] for f in batch]
-        print(f"  배치 {i}/{len(batches)}: {len(batch)}건 — {', '.join(names[:3])}"
+        print(f"  배치 {i}/{len(batches)}: {len(batch)}건 -- {', '.join(names[:3])}"
               + (f" 외 {len(names) - 3}개" if len(names) > 3 else ""))
 
     # lessons_learned 스냅샷
@@ -298,6 +299,11 @@ def print_heal_batches(batches: list[list[dict]], url: str = "",
             if "::" in tid:
                 files.add(tid.split("::")[0])
 
+        needs_mcp = any(
+            f.get("error_type", classify_error(f.get("traceback", "")))
+            in MCP_SNAPSHOT_ERROR_TYPES
+            for f in batch
+        )
         ctx = {
             "batch_index": i + 1,
             "batch_total": len(batches),
@@ -307,6 +313,8 @@ def print_heal_batches(batches: list[list[dict]], url: str = "",
             "failures": batch,
             "files": sorted(files),
             "lessons_learned": lessons_text[-2000:] if lessons_text else "",
+            "mcp_snapshot_recommended": needs_mcp,
+            "mcp_snapshot_url": url if needs_mcp else "",
         }
         contexts.append(ctx)
 
@@ -322,7 +330,10 @@ def print_heal_batches(batches: list[list[dict]], url: str = "",
     print("  각 subagent는:")
     print("  1. 배치 내 실패 파일을 읽고 traceback 분석")
     print("  2. lessons_learned 패턴 참조하여 패치")
-    print("  3. 패치 후 개별 테스트 실행으로 통과 확인")
+    print("  3. mcp_snapshot_recommended=true 배치: browser_navigate → browser_snapshot으로")
+    print("     실시간 ARIA 트리 확인 후 셀렉터 보정 (Locator/Assertion/Timeout 오류 대상)")
+    print("  4. 패치 후 개별 테스트 실행으로 통과 확인")
+    print("  ※ MCP 실패 시 dom_info 기반 힐링으로 자동 전환 (graceful degradation)")
     print()
     if pipeline == "single":
         print("  완료 후: python scripts/05_execute.py --no-report → python scripts/06_heal.py")

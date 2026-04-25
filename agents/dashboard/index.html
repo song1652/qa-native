@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="/static/css/views/reports.css">
   <link rel="stylesheet" href="/static/css/views/team.css">
   <link rel="stylesheet" href="/static/css/views/overview.css">
+  <link rel="stylesheet" href="/static/css/views/history.css">
   <link rel="stylesheet" href="/static/css/views/import.css">
   <link rel="stylesheet" href="/static/css/animations.css">
 </head>
@@ -35,7 +36,6 @@
     </div>
     <div class="header-title" onclick="selectView('')" style="cursor:pointer;">QA CONTROL CENTER</div>
     <div style="flex:1"></div>
-    <button class="reset-btn" onclick="resetDialog()" id="reset-btn">대화 초기화</button>
     <div class="header-meta" id="header-meta"></div>
   </div>
 
@@ -43,6 +43,15 @@
     <!-- 사이드바 -->
     <div class="sidebar" id="sidebar">
       <div class="sidebar-scroll">
+        <!-- 대시보드 섹션 -->
+        <div class="sidebar-section">
+          <div class="sidebar-label">개요</div>
+          <div class="sidebar-item" id="tab-" onclick="selectView('')">
+            <div class="sidebar-dot-spacer"></div>
+            <span class="sidebar-name">Dashboard</span>
+          </div>
+        </div>
+
         <!-- 파이프라인 섹션 -->
         <div class="sidebar-section">
           <div class="sidebar-label">파이프라인</div>
@@ -64,14 +73,21 @@
         <div class="sidebar-section">
           <div class="sidebar-label">테스트 리포트</div>
           <div class="sidebar-item" id="tab-reports" onclick="selectView('reports')">
-            <div class="sidebar-dot"></div>
+            <div class="sidebar-dot-spacer"></div>
             <span class="sidebar-name">리포트 목록</span>
+          </div>
+          <div class="sidebar-item" id="tab-history" onclick="selectView('history')">
+            <div class="sidebar-dot-spacer"></div>
+            <span class="sidebar-name">실행 히스토리</span>
           </div>
         </div>
 
         <!-- 팀 토론 섹션 -->
         <div class="sidebar-section" id="team-section">
-          <div class="sidebar-label">팀 토론</div>
+          <div class="sidebar-label" style="display:flex;align-items:center;justify-content:space-between;">
+            팀 토론
+            <button onclick="resetTeamDiscussion()" style="font-size:10px;padding:2px 7px;background:transparent;border:1px solid rgba(200,80,80,0.4);border-radius:4px;color:rgba(220,100,100,0.8);cursor:pointer;line-height:1.4;" title="팀 토론 초기화">리셋</button>
+          </div>
           <div style="padding: 6px 12px 10px;">
             <div
               style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">
@@ -125,6 +141,7 @@
   <script src="/static/js/components/test-list.js"></script>
   <script src="/static/js/components/group-result.js"></script>
   <script src="/static/js/views/overview.js"></script>
+  <script src="/static/js/views/history.js"></script>
   <script src="/static/js/views/pipeline.js"></script>
   <script src="/static/js/views/parallel.js"></script>
   <script src="/static/js/views/quick-run.js"></script>

@@ -1,5 +1,5 @@
 """
-Step 6a — 힐링 심의 컨텍스트 준비
+Step 6a -- 힐링 심의 컨텍스트 준비
 LLM 없음. 심의 agent에 전달할 컨텍스트를 수집·출력한다.
 결과는 state.json에만 저장 (dialog.json은 팀 토론 전용).
 모든 파일 읽기를 이 스크립트에서 처리 → agent는 파일 읽기 없이 바로 심의 시작.
@@ -15,7 +15,7 @@ HEAL_STATS_PATH = PROJECT_ROOT / "state" / "heal_stats.json"
 
 def read_file(path, filter_files=None):
     """파일 또는 디렉토리의 내용을 읽는다.
-    filter_files: set of filenames — 지정 시 해당 파일만 포함 (힐링 시 실패 파일만 전달).
+    filter_files: set of filenames -- 지정 시 해당 파일만 포함 (힐링 시 실패 파일만 전달).
     """
     p = Path(path)
     if p.is_dir():

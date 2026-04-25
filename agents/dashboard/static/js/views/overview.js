@@ -1,41 +1,26 @@
 // ── Dashboard Overview (OAXIS-inspired) ──
-// 펼침 상태 보존 (폴링 리렌더 대비)
-if (!_uiState._covOpen) _uiState._covOpen = {};
 
-function toggleCovCases(name, evt) {
-  if (evt) { evt.stopPropagation(); evt.preventDefault(); }
-  const el = document.getElementById('cov-cases-' + name);
-  const chev = document.getElementById('cov-chev-' + name);
-  if (!el) return;
-  const open = el.style.display !== 'none';
-  el.style.display = open ? 'none' : 'block';
-  if (chev) chev.classList.toggle('cov-chevron--open', !open);
-  _uiState._covOpen[name] = !open;
-}
-
-async function resetHealStats() {
-  if (!(await safeConfirm('Heal Stats를 초기화하시겠습니까?'))) return;
-  await fetch('/api/heal_stats/reset', { method: 'POST' });
-  const main = document.getElementById('main');
-  if (main) renderDashboardOverview(main);
-}
-
-async function resetRunHistory() {
-  if (!(await safeConfirm('Run History를 초기화하시겠습니까?'))) return;
-  await fetch('/api/run_history/reset', { method: 'POST' });
+async function resetDashboard() {
+  if (!(await safeConfirm('대시보드를 초기화하시겠습니까?\n(힐링 통계, 실행 이력)'))) return;
+  await Promise.all([
+    fetch('/api/heal_stats/reset', { method: 'POST' }),
+    fetch('/api/run_history/reset', { method: 'POST' }),
+  ]);
   const main = document.getElementById('main');
   if (main) renderDashboardOverview(main);
 }
 
 async function _loadOverviewData() {
   try {
-    const [rh, hs] = await Promise.all([
+    const [rh, hs, flaky] = await Promise.all([
       fetch('/api/run_history').then(r => r.json()),
       fetch('/api/heal_stats').then(r => r.json()),
+      fetch('/api/flaky_tests').then(r => r.json()).catch(() => null),
     ]);
     _ovRunHistory = rh || [];
     _ovHealStats = hs || {};
-  } catch(e) { _ovRunHistory = []; _ovHealStats = {}; }
+    _ovFlakyTests = flaky || null;
+  } catch(e) { _ovRunHistory = []; _ovHealStats = {}; _ovFlakyTests = null; }
 }
 
 async function renderDashboardOverview(main) {
@@ -61,14 +46,20 @@ async function renderDashboardOverview(main) {
   const history = _ovRunHistory || [];
   const healStats = _ovHealStats || {};
   const patterns = healStats.patterns || {};
+  const flakyData = _ovFlakyTests || null;
 
   // 최근 실행
   const lastRun = history.length > 0 ? history[history.length - 1] : null;
   const totalTests = lastRun ? (lastRun.total || 0) : 0;
   const totalPassed = lastRun ? (lastRun.passed || 0) : 0;
   const totalFailed = lastRun ? (lastRun.failed || 0) : 0;
+  // skipped: run_history → pipeline state → batch state → quickState 순으로 폴백
+  const _rhSkipped = lastRun ? (lastRun.skipped ?? null) : null;
+  const _quickExecSkipped = (quickState && quickState.execution_result != null)
+    ? (quickState.execution_result.skipped ?? null) : null;
+  const _stateSkipped = psResult.skipped ?? bsResult.skipped ?? _quickExecSkipped ?? 0;
+  const totalSkipped = _rhSkipped !== null ? _rhSkipped : _stateSkipped;
   const passRate = totalTests > 0 ? Math.round(totalPassed / totalTests * 1000) / 10 : 0;
-  const passRateInt = Math.round(passRate);
 
   // 상태 헬퍼
   function sLabel(s) {
@@ -82,9 +73,12 @@ async function renderDashboardOverview(main) {
 
   // ── 1. Hero Section: 대형 도넛 + 핵심 지표 ──
   const donutPct = passRate;
-  const donutDash = (donutPct / 100) * 283;  // circumference = 2*PI*45 ≈ 283
-  const donutRemainder = 283 - donutDash;
   const donutColor = totalFailed === 0 ? 'var(--approved-color)' : donutPct >= 80 ? 'var(--pending-color)' : 'var(--revision-color)';
+  // 3-segment donut: circumference = 2π*42 ≈ 264
+  const _C = 264;
+  const _passedArc  = totalTests > 0 ? (totalPassed  / totalTests) * _C : 0;
+  const _failedArc  = totalTests > 0 ? (totalFailed  / totalTests) * _C : 0;
+  const _skippedArc = totalTests > 0 ? (totalSkipped / totalTests) * _C : 0;
 
   // 도넛 범례: 파이프라인별 표시
   const lastRunPipeline = lastRun ? ({parallel:'병렬', quick:'빠른 실행', single:'단일'}[lastRun.pipeline] || lastRun.pipeline) : '';
@@ -96,14 +90,12 @@ async function renderDashboardOverview(main) {
         <div class="oax-donut-wrap">
           <svg viewBox="-5 -5 110 110" class="oax-donut">
             <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(140,120,220,0.08)" stroke-width="5"/>
-            <circle cx="50" cy="50" r="42" fill="none" stroke="${donutColor}" stroke-width="5"
-              stroke-dasharray="${(donutPct / 100) * 264} ${264 - (donutPct / 100) * 264}"
-              stroke-dashoffset="66"
-              stroke-linecap="round"
-              style="transition:stroke-dasharray 0.8s ease;filter:drop-shadow(0 0 6px ${donutColor})"/>
+            ${_passedArc  > 0 ? `<circle cx="50" cy="50" r="42" fill="none" stroke="var(--approved-color)" stroke-width="5" stroke-dasharray="${_passedArc} ${_C-_passedArc}" stroke-dashoffset="66" stroke-linecap="butt" style="filter:drop-shadow(0 0 4px var(--approved-color))"/>` : ''}
+            ${_failedArc  > 0 ? `<circle cx="50" cy="50" r="42" fill="none" stroke="var(--revision-color)" stroke-width="5" stroke-dasharray="${_failedArc} ${_C-_failedArc}" stroke-dashoffset="${66-_passedArc}" stroke-linecap="butt" style="filter:drop-shadow(0 0 4px var(--revision-color))"/>` : ''}
+            ${_skippedArc > 0 ? `<circle cx="50" cy="50" r="42" fill="none" stroke="#a855f7" stroke-width="5" stroke-dasharray="${_skippedArc} ${_C-_skippedArc}" stroke-dashoffset="${66-_passedArc-_failedArc}" stroke-linecap="butt" style="filter:drop-shadow(0 0 4px #a855f7)"/>` : ''}
           </svg>
           <div class="oax-donut-center">
-            <div class="oax-donut-pct">${passRateInt}<span class="oax-donut-unit">%</span></div>
+            <div class="oax-donut-pct">${passRate}<span class="oax-donut-unit">%</span></div>
             <div class="oax-donut-label">Pass Rate</div>
           </div>
         </div>
@@ -122,6 +114,10 @@ async function renderDashboardOverview(main) {
               <div class="oax-hero-stat-val" style="color:${totalFailed > 0 ? 'var(--revision-color)' : 'var(--text-dim)'}">${totalFailed}</div>
               <div class="oax-hero-stat-label">Failed</div>
             </div>
+            ${totalSkipped > 0 ? `<div class="oax-hero-stat">
+              <div class="oax-hero-stat-val" style="color:#a855f7">${totalSkipped}</div>
+              <div class="oax-hero-stat-label">Skipped</div>
+            </div>` : ''}
           </div>
           <div class="oax-hero-legend">
             <span class="oax-legend-item"><span class="oax-legend-dot" style="background:var(--approved-color)"></span>통과</span>
@@ -165,64 +161,63 @@ async function renderDashboardOverview(main) {
     </div>`;
 
   // ── 3. 하단 그리드 ──
-  // Coverage
   const groups = pagesData.groups || [];
-  const genGroups = generatedGroups || [];
-  let coverageHtml = '';
-  if (groups.length > 0) {
-    const rows = groups.map(g => {
-      const gen = genGroups.find(gg => gg.name === g.name);
-      const genCount = gen ? gen.file_count : 0;
-      const caseCount = g.count || 0;
-      const pct = caseCount > 0 ? Math.round(genCount / caseCount * 100) : 0;
-      const barColor = pct === 100 ? 'var(--approved-color)' : pct > 0 ? 'var(--pending-color)' : 'var(--text-dim)';
-      return `<div class="cov-row">
-        <div class="cov-top"><span class="cov-name">${esc(g.name)}</span><span class="cov-nums">${genCount}/${caseCount}</span></div>
-        <div class="cov-bottom"><div class="cov-bar-track"><div class="cov-bar-fill" style="width:${pct}%;background:${barColor}"></div></div><div class="cov-pct" style="color:${barColor}">${pct}%</div></div>
+
+  // ── ③ 힐링 상황판 ──
+  let healPanelHtml = '';
+  const healCtx = ps.heal_context || {};
+  if (psStep === 'heal_needed' || psStep === 'heal_failed') {
+    const hCount = healCtx.heal_count || ps.heal_count || 0;
+    const maxHeals = 3;
+    const failGroups = healCtx.failure_groups || {};
+    const totalFailCount = healCtx.failure_count || 0;
+    if (psStep === 'heal_failed') {
+      healPanelHtml = `<div class="heal-panel heal-panel--failed">
+        <div class="heal-panel-title">⚠ 수동 수정 필요</div>
+        <div class="heal-panel-desc">힐링 ${maxHeals}회 모두 시도했으나 실패했습니다. 테스트 파일을 직접 수정해주세요.</div>
       </div>`;
-    }).join('');
-    coverageHtml = `<div class="oax-card"><div class="oax-card-title">Test Coverage</div>${rows}</div>`;
+    } else {
+      const groupBadges = Object.entries(failGroups).map(([type, tests]) =>
+        `<span class="heal-group-badge">${esc(type)} ${Array.isArray(tests) ? tests.length : tests}건</span>`
+      ).join('');
+      const dots = Array.from({length: maxHeals}, (_, i) =>
+        `<div class="heal-progress-dot ${i < hCount ? 'heal-progress-dot--done' : ''}"></div>`
+      ).join('');
+      healPanelHtml = `<div class="heal-panel">
+        <div class="heal-panel-title">힐링 진행 중</div>
+        <div class="heal-panel-progress">
+          <span>${hCount}/${maxHeals}회</span>
+          <div class="heal-progress-track">${dots}</div>
+        </div>
+        <div class="heal-panel-desc">실패 ${totalFailCount}건 ${groupBadges}</div>
+      </div>`;
+    }
   }
 
-  // Heal Stats
-  let healHtml = '';
-  const patternEntries = Object.values(patterns);
-  if (patternEntries.length > 0) {
-    const byType = {};
-    let totalHealCount = 0;
-    patternEntries.forEach(p => {
-      const t = p.error_type || '기타';
-      byType[t] = (byType[t] || 0) + (p.count || 0);
-      totalHealCount += (p.count || 0);
-    });
-    const typeEntries = Object.entries(byType).sort((a, b) => b[1] - a[1]);
-    const maxCount = typeEntries.length > 0 ? typeEntries[0][1] : 1;
-    const healRows = typeEntries.slice(0, 5).map(([type, count]) => {
-      const pct = Math.round(count / maxCount * 100);
-      return `<div class="heal-row">
-        <div class="heal-type">${esc(type)}</div>
-        <div class="heal-bar-track"><div class="heal-bar-fill" style="width:${pct}%;background:var(--accent)"></div></div>
-        <div class="heal-count">${count}</div>
+  // ── ④ Flaky Test 카드 ──
+  let flakyHtml = '';
+  {
+    const flakyList = (flakyData && flakyData.flaky) ? flakyData.flaky : [];
+    if (flakyList.length > 0) {
+      const rows = flakyList.slice(0, 6).map(f => {
+        const dots = (f.recent || []).slice(-5).map(r =>
+          `<span class="flaky-dot flaky-dot--${r}"></span>`
+        ).join('');
+        const rateColor = 'var(--pending-color)';
+        return `<div class="flaky-row">
+          <span class="flaky-name">${esc(f.test_id)}</span>
+          <div class="flaky-dots">${dots}</div>
+          <span class="flaky-rate" style="color:${rateColor}">${Math.round(f.pass_rate * 100)}%</span>
+        </div>`;
+      }).join('');
+      flakyHtml = `<div class="oax-card">
+        <div class="oax-card-title" style="color:var(--pending-color)">Flaky 테스트
+          <span class="oax-card-badge" style="color:var(--pending-color);background:rgba(251,191,36,0.08)">${flakyList.length}건</span>
+        </div>
+        ${rows}
       </div>`;
-    }).join('');
-    healHtml = `<div class="oax-card">
-      <div class="oax-card-title">Heal Stats <span class="oax-card-badge">${totalHealCount}건</span>
-        <button class="ov-reset-btn" onclick="resetHealStats()">Reset</button>
-      </div>
-      ${healRows}
-    </div>`;
+    }
   }
-
-  // Quick Actions
-  const quickHtml = `<div class="oax-card">
-    <div class="oax-card-title">Quick Actions</div>
-    <div class="cmd-grid">
-      <div class="cmd-btn" onclick="selectView('parallel_pipeline')">병렬 테스트</div>
-      <div class="cmd-btn" onclick="selectView('single_pipeline')">단일 테스트</div>
-      <div class="cmd-btn" onclick="selectView('reports')">리포트</div>
-      <div class="cmd-btn" onclick="selectView('quick_run')">빠른 실행</div>
-    </div>
-  </div>`;
 
   // Welcome (no data)
   const hasAnyData = totalTests > 0 || history.length > 0 || groups.length > 0;
@@ -252,29 +247,49 @@ async function renderDashboardOverview(main) {
       <div class="ov-log-box" id="ov-log-content">로그 로딩 중...</div>
     </div>`;
 
-  // ── 조합 ──
+  // ── 조합 ── (이전 로그 내용+스크롤 보존으로 깜빡임 방지)
+  const _prevLogEl = document.getElementById('ov-log-content');
+  const _prevLogContent = _prevLogEl?.textContent;
+  // null = 첫 로드(→맨아래로), 숫자 = 이전 스크롤 위치(→유지)
+  const _prevLogScrollTop = _prevLogEl ? _prevLogEl.scrollTop : null;
+
   main.innerHTML = `
     <div class="ov-wrap">
-      <h2 class="ov-heading">Dashboard</h2>
-      <div class="ov-subtitle">${totalTests > 0 ? totalTests + ' tests · ' + groups.length + ' groups' : 'QA Automation Control'}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <h2 class="ov-heading" style="margin-bottom:0;">Dashboard</h2>
+        <button class="action-btn action-btn-danger" onclick="resetDashboard()" style="font-size:11px;padding:5px 12px;">대시보드 초기화</button>
+      </div>
       ${welcomeHtml}
+      ${healPanelHtml}
       ${heroHtml}
       ${hasAnyData ? kpiHtml : ''}
-      ${hasAnyData ? `<div class="oax-grid-3">
-        <div class="oax-grid-col">${coverageHtml}${quickHtml}</div>
-        <div class="oax-grid-col">${healHtml}</div>
-      </div>` : ''}
+      ${hasAnyData && flakyHtml ? `<div class="oax-grid-3"><div class="oax-grid-col">${flakyHtml}</div></div>` : ''}
       ${logHtml}
     </div>`;
+
+  // 이전 로그 내용+스크롤 즉시 복원 (플래시 방지)
+  if (_prevLogContent && _prevLogContent !== '로그 로딩 중...') {
+    const logBoxInit = document.getElementById('ov-log-content');
+    if (logBoxInit) {
+      logBoxInit.textContent = _prevLogContent;
+      if (_prevLogScrollTop !== null) logBoxInit.scrollTop = _prevLogScrollTop;
+    }
+  }
 
   // 로그 이벤트
   const logBox = document.getElementById('ov-log-content');
   let _currentLogFile = _uiState.overviewLogTab || 'run_qa.txt';
-  let _logAutoRefresh = null;
+
+  // 이전 자동 갱신 타이머 클리어 (orphan interval 방지)
+  if (_ovLogAutoRefresh) { clearInterval(_ovLogAutoRefresh); _ovLogAutoRefresh = null; }
 
   async function loadLog(logName) {
     _currentLogFile = logName;
     _uiState.overviewLogTab = logName;
+    const isFirstLoad = _prevLogScrollTop === null;
+    const currentScrollTop = logBox.scrollTop;
+    // 맨 아래 기준: 첫 로드이거나 이미 맨 아래에 있는 경우
+    const isAtBottom = isFirstLoad || (logBox.scrollHeight - currentScrollTop - logBox.clientHeight < 40);
     try {
       const res = await fetch('/api/run_log', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({log: logName}) });
       const data = await res.json();
@@ -283,7 +298,12 @@ async function renderDashboardOverview(main) {
         logBox.textContent = lines.slice(-50).join('\\n') || '(빈 로그)';
       } else { logBox.textContent = '(로그 없음)'; }
     } catch(e) { logBox.textContent = '(로그 로드 실패)'; }
-    logBox.scrollTop = logBox.scrollHeight;
+    // 첫 로드 또는 맨 아래였으면 최신 로그 따라가기, 아니면 위치 고정
+    if (isAtBottom) {
+      logBox.scrollTop = logBox.scrollHeight;
+    } else {
+      logBox.scrollTop = currentScrollTop;
+    }
   }
 
   main.querySelectorAll('.ov-log-tab').forEach(btn => {
@@ -298,7 +318,7 @@ async function renderDashboardOverview(main) {
   document.getElementById('ov-log-refresh').addEventListener('click', () => loadLog(_currentLogFile));
 
   const isRunning = (psStatus !== 'done' && psStatus !== 'idle') || (bsStatus !== 'done' && bsStatus !== 'idle');
-  if (isRunning) _logAutoRefresh = setInterval(() => loadLog(_currentLogFile), 5000);
+  if (isRunning) _ovLogAutoRefresh = setInterval(() => loadLog(_currentLogFile), 5000);
   loadLog(_currentLogFile);
 }
 
@@ -343,7 +363,8 @@ function _buildTrendChart(history) {
     const ts = (r.timestamp || '').split(' ')[1] || '';
     const shortTs = ts.substring(0, 5);
     const color = rate === 100 ? 'var(--approved-color)' : rate >= 80 ? 'var(--pending-color)' : 'var(--revision-color)';
-    dots += `<circle cx="${x}" cy="${y}" r="3.5" fill="${color}" stroke="rgba(8,7,27,0.6)" stroke-width="1.5" style="filter:drop-shadow(0 0 3px ${color})"/>`;
+    const _skippedTip = r.skipped ? ` | 스킵:${r.skipped}` : '';
+    dots += `<circle cx="${x}" cy="${y}" r="3.5" fill="${color}" stroke="rgba(8,7,27,0.6)" stroke-width="1.5" style="filter:drop-shadow(0 0 3px ${color})"><title>${rDisplay}% | 통과:${r.passed||0} 실패:${r.failed||0}${_skippedTip}</title></circle>`;
 
     // 퍼센트 라벨 — 이전과 Y좌표가 가까우면 위/아래로 오프셋
     let labelY = y - 8;
@@ -373,7 +394,6 @@ function _buildTrendChart(history) {
     <div class="oax-trend">
       <div class="oax-trend-header">
         <span class="oax-trend-title">Run History</span>
-        <button class="ov-reset-btn" onclick="resetRunHistory()">Reset</button>
       </div>
       <svg viewBox="0 0 ${w} ${h}" class="oax-trend-svg">
         <defs>

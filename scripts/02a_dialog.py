@@ -1,5 +1,5 @@
 """
-Step 2a — Plan 심의 컨텍스트 준비
+Step 2a -- Plan 심의 컨텍스트 준비
 LLM 없음. 심의 agent에 전달할 컨텍스트를 수집·출력한다.
 결과는 state.json에만 저장 (dialog.json은 팀 토론 전용).
 모든 파일 읽기를 이 스크립트에서 처리 → agent는 파일 읽기 없이 바로 심의 시작.

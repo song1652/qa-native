@@ -8,8 +8,8 @@
 
 LLM 없음. 순수 Python.
 """
-import ast
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -43,6 +43,11 @@ GENERATED_DIR = PROJECT_ROOT / "tests" / "generated"
 TESTCASES_DIR = PROJECT_ROOT / "testcases"
 SCREENSHOTS_DIR = PROJECT_ROOT / "tests" / "screenshots"
 MAX_HEAL = 3
+
+
+def _natural_sort_key(p: Path) -> list:
+    """파일명을 숫자 기준으로 정렬하는 키 (tc_10 > tc_9 보장)."""
+    return [int(c) if c.isdigit() else c.lower() for c in re.split(r"(\d+)", p.name)]
 
 
 # ── 상태 업데이트 헬퍼 ──────────────────────────────────────────
@@ -183,7 +188,7 @@ def build_heal_context(report: dict, heal_count: int) -> dict | None:
 
     # 모든 실패가 반복 → 힐링 중단
     if not healable and skipped:
-        print("[99] 모든 실패가 반복 패턴 — 수동 수정이 필요합니다.")
+        print("[99] 모든 실패가 반복 패턴 -- 수동 수정이 필요합니다.")
         ctx = {
             "heal_count": heal_count,
             "skipped_repeated": [f["test_name"] for f in skipped],
@@ -284,7 +289,7 @@ def verify_lessons_learned_updated(heal_start_time: str) -> bool:
     print()
     print("⚠ [경고] lessons_learned.md 기록이 누락되었습니다!")
     print("  힐링 패치 후 반드시 agents/lessons_learned.md에 기록해야 합니다.")
-    print("  형식: ### [힐링] {날짜} — {파일명}")
+    print("  형식: ### [힐링] {날짜} -- {파일명}")
     print("        - **문제**: {traceback 요약}")
     print("        - **수정**: {적용한 패치 내용}")
     print("        - **재발 방지**: {동일 실수 방지 규칙}")
@@ -306,16 +311,19 @@ def _load_cases_for_group(group_name: str) -> list:
 
 
 def _scan_generated_groups() -> dict[str, list[Path]]:
-    """tests/generated/ 하위 그룹별 파일 목록 반환."""
+    """tests/generated/ 하위 그룹별 파일 목록 반환 (자연 정렬)."""
     groups: dict[str, list[Path]] = defaultdict(list)
     if not GENERATED_DIR.exists():
         return groups
-    for group_dir in sorted(GENERATED_DIR.iterdir()):
+    for group_dir in sorted(GENERATED_DIR.iterdir(), key=_natural_sort_key):
         if not group_dir.is_dir() or group_dir.name.startswith("."):
             continue
-        for f in sorted(group_dir.glob("*.py")):
-            if f.name != "conftest.py" and f.name != "__init__.py":
-                groups[group_dir.name].append(f)
+        for f in sorted(
+            (f for f in group_dir.glob("*.py")
+             if f.name not in ("conftest.py", "__init__.py")),
+            key=_natural_sort_key,
+        ):
+            groups[group_dir.name].append(f)
     return groups
 
 
@@ -331,9 +339,10 @@ def build_html(test_results: dict, summary: dict,
             k: v for k, v in test_results.items()
             if f"/{label}/" in k or f"\\{label}\\" in k
         }
-        g_pass_cnt = sum(1 for v in group_tests.values() if v)
+        g_pass_cnt = sum(1 for v in group_tests.values() if v == "passed")
+        g_skip_cnt = sum(1 for v in group_tests.values() if v == "skipped")
         g_total_cnt = len(group_tests)
-        g_passed = all(group_tests.values()) if group_tests else False
+        g_passed = not any(v == "failed" for v in group_tests.values()) if group_tests else False
 
         cases = _load_cases_for_group(label)
         rows_html = ""
@@ -349,20 +358,20 @@ def build_html(test_results: dict, summary: dict,
                      if case_id and (f"/{case_id}." in k or f"/{case_id}_" in k)),
                     None,
                 )
-                case_pass = matched if matched is not None else False
-                rows_html += _case_row(case, uid, case_pass)
+                case_outcome = matched if matched is not None else "failed"
+                rows_html += _case_row(case, uid, case_outcome)
         else:
             for file_idx, f in enumerate(files):
                 uid = f"{label}_{file_idx}"
                 nodeid_match = next(
                     (k for k in test_results if f.stem in k), None
                 )
-                is_passed = test_results.get(nodeid_match, False) if nodeid_match else False
+                outcome = test_results.get(nodeid_match, "failed") if nodeid_match else "failed"
                 simple_case = {
                     "title": f.stem.replace("_", " ").title(),
                     "precondition": "", "steps": [], "expected": "",
                 }
-                rows_html += _case_row(simple_case, uid, is_passed)
+                rows_html += _case_row(simple_case, uid, outcome)
 
         if not rows_html:
             rows_html = '<p class="empty-msg">케이스 정보 없음</p>'
@@ -371,6 +380,7 @@ def build_html(test_results: dict, summary: dict,
             "label": label, "rows_html": rows_html,
             "pass_cnt": g_pass_cnt, "total_cnt": g_total_cnt,
             "all_pass": g_passed, "has_tests": bool(group_tests),
+            "skip_cnt": g_skip_cnt,
         })
 
     return build_report(groups_data, summary, created_at, "Parallel Test Report")
@@ -402,7 +412,28 @@ def main():
     _start_time = _time.monotonic()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # 1. 실행 대상 결정
+    # 1. 실행 대상 결정 + 자연 정렬
+    def _valid_py_files(group_dir: Path) -> list:
+        """testcases/{group}/tc_*.md 기준으로 유효한 .py 파일만 반환 (잔여 파일 제외).
+        번호 prefix(tc_01_)로 매칭 — 슬러그 명명 차이 무관하게 동작.
+        """
+        import re as _re
+        def _tc_num(name: str):
+            m = _re.match(r"tc_(\d+)_", name)
+            return m.group(1) if m else None
+
+        tc_dir = TESTCASES_DIR / group_dir.name
+        if tc_dir.exists():
+            valid_nums = {_tc_num(f.name) for f in tc_dir.glob("tc_*.md")} - {None}
+            all_py = list(group_dir.glob("tc_*.py"))
+            files = [f for f in all_py if _tc_num(f.name) in valid_nums]
+            stale = [f for f in all_py if _tc_num(f.name) not in valid_nums]
+            if stale:
+                print(f"[99] 잔여 파일 {len(stale)}개 제외 ({group_dir.name}): {', '.join(f.name for f in stale[:5])}{'...' if len(stale) > 5 else ''}")
+        else:
+            files = [f for f in group_dir.glob("*.py") if f.name not in ("conftest.py", "__init__.py")]
+        return files
+
     if args.group:
         target_dirs = [GENERATED_DIR / g for g in args.group]
         missing = [str(d) for d in target_dirs if not d.exists()]
@@ -411,15 +442,22 @@ def main():
             available = [d.name for d in GENERATED_DIR.iterdir() if d.is_dir()]
             print(f"  사용 가능한 폴더: {', '.join(available) or '없음'}")
             return
-        existing = []
+        raw_files = []
         for d in target_dirs:
-            existing.extend(f for f in d.rglob("*.py") if f.name != "conftest.py")
+            raw_files.extend(_valid_py_files(d))
         scope_label = ", ".join(args.group)
     else:
-        existing = [f for f in GENERATED_DIR.rglob("*.py") if f.name != "conftest.py"] if GENERATED_DIR.exists() else []
+        raw_files = []
+        if GENERATED_DIR.exists():
+            for d in GENERATED_DIR.iterdir():
+                if d.is_dir() and not d.name.startswith((".", "_")):
+                    raw_files.extend(_valid_py_files(d))
         scope_label = "전체"
 
-    if not existing:
+    # 자연 정렬: tc_9 < tc_10 < tc_11 (문자열 정렬 버그 방지)
+    sorted_files = sorted(raw_files, key=_natural_sort_key)
+
+    if not sorted_files:
         print("[오류] 실행할 테스트 파일 없음.")
         if GENERATED_DIR.exists():
             available = [d.name for d in GENERATED_DIR.iterdir() if d.is_dir()]
@@ -428,22 +466,10 @@ def main():
                 print(f"  예시: python parallel/99_merge.py --group {available[0]}")
         return
 
-    n_workers = min(len(existing), 8)
-
-    # 의존성 있는 테스트 감지
-    has_dependent = any(
-        len([n for n in ast.parse(f.read_text(encoding="utf-8")).body
-             if isinstance(n, ast.FunctionDef) and n.name.startswith("test_")]) > 1
-        for f in existing
-    )
-    dist_mode = "loadfile" if has_dependent else "load"
-
     quick_mode = args.quick
     slog("step_start", step="99_merge", scope=scope_label,
-         file_count=len(existing), quick=quick_mode)
-    print(f"\n[99] 실행 범위: {scope_label}  ({len(existing)}개 파일)")
-    print(f"[99] 병렬 실행: workers={n_workers}  dist={dist_mode}"
-          + (" (의존 테스트 감지 → loadfile)" if has_dependent else ""))
+         file_count=len(sorted_files), quick=quick_mode)
+    print(f"\n[99] 실행 범위: {scope_label}  ({len(sorted_files)}개 케이스, 순차 실행)")
 
     # 기존 heal_context 읽기 (재실행 시 heal_count 이어받기)
     heal_count = 0
@@ -456,12 +482,6 @@ def main():
     # 힐링 재실행 시 lessons_learned 기록 검증
     if heal_count > 0 and heal_analyzed_at:
         verify_lessons_learned_updated(heal_analyzed_at)
-
-    # pytest 대상 경로
-    if args.group:
-        test_targets = [str(GENERATED_DIR / g) for g in args.group]
-    else:
-        test_targets = [str(GENERATED_DIR)]
 
     # 2. pytest 실행 전 스크린샷 정리 (최종 실패 시만 남기기)
     if SCREENSHOTS_DIR.exists():
@@ -477,30 +497,58 @@ def main():
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     json_report_path = Path(tempfile.gettempdir()) / f"qa_report_{ts}.json"
 
+    # 자연 정렬된 파일 경로를 직접 pytest에 전달 → 순차 실행 보장
+    # Windows 커맨드라인 길이 제한(~32KB) 초과 방지: 파일 수가 많으면 runner 스크립트 사용
+    import tempfile as _tempfile
+    _runner_script = None
     try:
-        proc = subprocess.run(
-            [PYTHON_EXE, "-m", "pytest"] + test_targets + [
-                f"-n{n_workers}",
-                f"--dist={dist_mode}",
+        file_args = [str(f) for f in sorted_files]
+        cmd_len = sum(len(f) + 1 for f in file_args)
+        if cmd_len > 20000:
+            # 임시 Python 스크립트로 pytest.main() 직접 호출 → 커맨드라인 길이 제한 우회
+            _json_report_str = str(json_report_path).replace("\\", "\\\\")
+            runner_code = (
+                "import sys, pytest\n"
+                f"files = {file_args!r}\n"
+                "args = files + [\n"
+                "    '--json-report',\n"
+                f"    '--json-report-file={_json_report_str}',\n"
+                "    '--tb=short', '-v',\n"
+                "]\n"
+                "sys.exit(pytest.main(args))\n"
+            )
+            _af = _tempfile.NamedTemporaryFile(mode="w", suffix="_pytest_runner.py", delete=False, encoding="utf-8")
+            _af.write(runner_code)
+            _af.close()
+            _runner_script = Path(_af.name)
+            cmd = [PYTHON_EXE, str(_runner_script)]
+            print(f"[99] 파일 수 {len(sorted_files)}개 — runner 스크립트 방식으로 pytest 실행")
+        else:
+            cmd = [PYTHON_EXE, "-m", "pytest"] + file_args + [
                 "--json-report",
                 f"--json-report-file={json_report_path}",
                 "--tb=short", "-v",
-            ],
+            ]
+        proc = subprocess.run(
+            cmd,
             cwd=str(PROJECT_ROOT),
             capture_output=False,
-            timeout=900,
+            timeout=7200,
         )
         pytest_exit_code = proc.returncode
     except subprocess.TimeoutExpired:
         print("\n[99] pytest 실행 타임아웃 (900초 초과)")
         pytest_exit_code = -1
+    finally:
+        if _runner_script and _runner_script.exists():
+            _runner_script.unlink(missing_ok=True)
     report = {}
     if json_report_path.exists():
         report = json.loads(json_report_path.read_text(encoding="utf-8"))
         json_report_path.unlink()
 
     # 3. 결과 파싱
-    test_results = parse_results(report)
+    test_results = parse_results(report)  # {nodeid: "passed"|"failed"|"skipped"}
     pytest_summary = report.get("summary", {})
 
     # 3-b. 실패 판정: pytest 종료코드 + JSON 리포트 모두 확인
@@ -509,10 +557,10 @@ def main():
     has_issues = pytest_exit_code != 0 or failed_count > 0
     if has_issues:
         if args.no_heal:
-            print(f"\n[99] 실패 {failed_count}건 — 힐링 생략 (--no-heal)")
+            print(f"\n[99] 실패 {failed_count}건 -- 힐링 생략 (--no-heal)")
             HEAL_CONTEXT_STATE.unlink(missing_ok=True)
         elif heal_count >= MAX_HEAL:
-            print(f"\n[99] 최대 힐링 횟수({MAX_HEAL}회) 초과 — 수동 수정이 필요합니다.")
+            print(f"\n[99] 최대 힐링 횟수({MAX_HEAL}회) 초과 -- 수동 수정이 필요합니다.")
             HEAL_CONTEXT_STATE.unlink(missing_ok=True)
         else:
             heal_count += 1
@@ -522,7 +570,7 @@ def main():
                 auto_heal_applied = _try_auto_heal()
                 pl = "quick" if quick_mode else "parallel"
                 if auto_heal_applied:
-                    print("[99] auto_heal 성공 — Agent 힐링 불필요할 수 있습니다.")
+                    print("[99] auto_heal 성공 -- Agent 힐링 불필요할 수 있습니다.")
                     print("     python parallel/99_merge.py 를 다시 실행하여 확인하세요.")
                 print_heal_instructions(heal_ctx, pipeline=pl)
             else:
@@ -547,12 +595,13 @@ def main():
     # 5. state/parallel.json (또는 quick.json)에 실행 결과 저장
     passed = pytest_summary.get("passed", 0)
     failed = pytest_summary.get("failed", 0) + pytest_summary.get("error", 0)
-    total = passed + failed
+    skipped = pytest_summary.get("skipped", 0)
+    total = passed + failed + skipped
     pass_rate = round(passed / total * 100, 1) if total else 0
 
     # 그룹별 결과 집계
     group_results = {}
-    for nodeid, is_passed in test_results.items():
+    for nodeid, outcome in test_results.items():
         parts = nodeid.split("/")
         group = None
         for i, p in enumerate(parts):
@@ -562,22 +611,27 @@ def main():
         if not group:
             continue
         if group not in group_results:
-            group_results[group] = {"passed": 0, "failed": 0, "tests": []}
-        if is_passed:
+            group_results[group] = {"passed": 0, "failed": 0, "skipped": 0, "tests": []}
+        if outcome == "passed":
             group_results[group]["passed"] += 1
+        elif outcome == "skipped":
+            group_results[group]["skipped"] += 1
         else:
             group_results[group]["failed"] += 1
         group_results[group]["tests"].append({
             "nodeid": nodeid,
             "name": nodeid.split("::")[-1] if "::" in nodeid else nodeid,
-            "passed": is_passed,
+            "passed": outcome == "passed",
+            "outcome": outcome,
         })
 
     run_state = read_state(state_path)
 
+    run_state["groups"] = args.group or []
     run_state["execution_result"] = {
         "passed": passed,
         "failed": failed,
+        "skipped": skipped,
         "total": total,
         "pass_rate": pass_rate,
         "report_path": str(index_path.relative_to(PROJECT_ROOT)) if index_path else None,
@@ -605,6 +659,7 @@ def main():
         "groups": groups_list,
         "passed": passed,
         "failed": failed,
+        "skipped": skipped,
         "total": total,
         "pass_rate": pass_rate,
         "heal_count": heal_count,
@@ -617,12 +672,14 @@ def main():
     print("=" * 60)
     print("  QA Report Generated")
     print("=" * 60)
-    print(f"  Total  : {total}")
-    print(f"  Passed : {passed}")
-    print(f"  Failed : {failed}")
+    print(f"  Total   : {total}")
+    print(f"  Passed  : {passed}")
+    print(f"  Failed  : {failed}")
+    if skipped:
+        print(f"  Skipped : {skipped}")
     print()
     print(f"  Tests  : {GENERATED_DIR}")
-    print(f"  Report : {index_path or '(힐링 중 — 최종 실행 시 생성)'}")
+    print(f"  Report : {index_path or '(힐링 필요 — 실패 수정 후 재실행 시 생성)'}")
     print("=" * 60)
     slog("step_end", step="99_merge", passed=passed, failed=failed,
          total=total, pass_rate=pass_rate, heal_count=heal_count,

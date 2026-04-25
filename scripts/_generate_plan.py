@@ -1509,7 +1509,7 @@ def main():
         print(f"ERROR: Missing plans for {len(missing)} cases: {missing}")
         return
 
-    # Update pipeline.json — only modify "plan" and "step"
+    # Update pipeline.json -- only modify "plan" and "step"
     data['plan'] = plan_list
     data['step'] = 'planned'
 

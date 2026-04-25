@@ -3,6 +3,12 @@ function renderQuickRun(main) {
   // 체크 상태 보존
   const prevChecked = {};
   document.querySelectorAll('.quick-group-cb').forEach(cb => { prevChecked[cb.value] = cb.checked; });
+  // 로그 스크롤 위치 보존
+  const _logArea = document.getElementById('run-quick-log');
+  const _logScrollTop = _logArea ? _logArea.scrollTop : null;
+  const _logScrollHeight = _logArea ? _logArea.scrollHeight : 0;
+  const _logClientHeight = _logArea ? _logArea.clientHeight : 0;
+  const _wasAtBottom = _logScrollTop === null || (_logScrollHeight - _logScrollTop - _logClientHeight < 40);
 
   const groups = generatedGroups || [];
   const execResult = quickState ? quickState.execution_result : null;
@@ -11,10 +17,11 @@ function renderQuickRun(main) {
   if (groups.length) {
     groupsHtml = groups.map(g => {
       const checked = prevChecked[g.name] !== undefined ? prevChecked[g.name] : true;
+      const staleWarn = g.stale_count ? `<span style="font-size:10px;color:var(--pending-color);margin-left:4px;" title="testcases와 불일치하는 잔여 파일 ${g.stale_count}개 있음 — 재생성 시 자동 정리됩니다">⚠ +${g.stale_count}</span>` : '';
       return `<label class="quick-group-item">
         <input type="checkbox" class="quick-group-cb" value="${esc(g.name)}" ${checked ? 'checked' : ''}>
         <span class="quick-group-name">${esc(g.name)}</span>
-        <span class="quick-group-count">${g.file_count}개 파일</span>
+        <span class="quick-group-count">${g.file_count}개 파일${staleWarn}</span>
       </label>`;
     }).join('');
   } else {
@@ -28,6 +35,14 @@ function renderQuickRun(main) {
     const badgeCls = allPass ? 'pass' : 'fail';
     const badgeTxt = allPass ? 'ALL PASS' : `${execResult.failed} FAILED`;
     const groupResultsHtml = buildGroupResultsHtml(execResult.group_results || {}, 'quick');
+    const quickStatus = quickState ? quickState.status : null;
+    const healBannerHtml = (!allPass && quickStatus === 'heal_needed') ? `
+      <div style="margin-top:12px;padding:10px 12px;background:rgba(255,165,0,0.1);border:1px solid var(--pending-color);border-radius:6px;font-size:12px;color:var(--pending-color);">
+        ⚠ 힐링 필요 — 실패한 테스트를 수정한 후 다시 실행하세요. (힐링 ${execResult.heal_count || 0}/3회 완료)
+      </div>` : (!allPass && quickStatus === 'heal_failed') ? `
+      <div style="margin-top:12px;padding:10px 12px;background:rgba(220,53,69,0.1);border:1px solid var(--danger);border-radius:6px;font-size:12px;color:var(--danger);">
+        ✗ 최대 힐링 횟수 초과 — 수동으로 실패 테스트를 수정하세요.
+      </div>` : '';
     resultHtml = `
       <div class="exec-result-card">
         <div class="exec-result-header">
@@ -38,9 +53,11 @@ function renderQuickRun(main) {
           <div class="exec-stat"><div class="exec-stat-num" style="color:var(--text)">${execResult.total}</div><div class="exec-stat-label">Total</div></div>
           <div class="exec-stat"><div class="exec-stat-num" style="color:var(--approved-color)">${execResult.passed}</div><div class="exec-stat-label">Passed</div></div>
           <div class="exec-stat"><div class="exec-stat-num" style="color:var(--revision-color)">${execResult.failed}</div><div class="exec-stat-label">Failed</div></div>
+          ${(execResult.skipped || 0) > 0 ? `<div class="exec-stat"><div class="exec-stat-num" style="color:#a855f7">${execResult.skipped}</div><div class="exec-stat-label">Skipped</div></div>` : ''}
           <div class="exec-stat"><div class="exec-stat-num" style="color:${allPass ? 'var(--approved-color)' : 'var(--revision-color)'}">${execResult.pass_rate}%</div><div class="exec-stat-label">Pass Rate</div></div>
         </div>
         ${groupResultsHtml}
+        ${healBannerHtml}
         <div style="margin-top:12px;font-size:11px;color:var(--text-dim);">
           실행: ${esc(execResult.executed_at || '')} | 힐링: ${execResult.heal_count || 0}회
           ${execResult.report_name ? ` | <a href="/reports/${esc(execResult.report_name)}" target="_blank" style="color:var(--senior-accent);text-decoration:none;">리포트 보기</a>` : ''}
@@ -90,6 +107,30 @@ function renderQuickRun(main) {
   if (allCb && cbs.length) {
     allCb.checked = Array.from(cbs).every(cb => cb.checked);
   }
+
+  // 로그 스크롤 위치 복원 (맨 아래에 있었으면 자동 스크롤, 위로 올렸으면 위치 유지)
+  const _newLogArea = document.getElementById('run-quick-log');
+  if (_newLogArea && _logScrollTop !== null) {
+    if (_wasAtBottom) {
+      _newLogArea.scrollTop = _newLogArea.scrollHeight;
+    } else {
+      _newLogArea.scrollTop = _logScrollTop;
+    }
+  }
+
+  // 실행 중이면 즉시 로그 갱신 (탭 전환 후 복귀 시 빈 화면 방지)
+  if (_quickRunState.running && _quickRunState.logVisible) {
+    fetch('/api/run_log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ log: 'quick_run.txt' }),
+    }).then(r => r.json()).then(data => {
+      const el = document.getElementById('run-quick-log-content');
+      const area = document.getElementById('run-quick-log');
+      if (el) el.textContent = data.log || '(대기 중...)';
+      if (area) area.scrollTop = area.scrollHeight;
+    }).catch(() => {});
+  }
 }
 
 function quickToggleAll(checked) {
@@ -120,6 +161,7 @@ async function runQuickTest() {
     });
     const data = await res.json();
     if (data.ok) {
+      _quickRunState.pid = data.pid;
       if (btn) btn.textContent = '실행됨 (PID: ' + (data.pid || '?') + ')';
       _quickRunState.logVisible = true;
       startLogPolling('run-quick-log', 'run-quick-log-content', 'quick_run.txt');
@@ -129,6 +171,7 @@ async function runQuickTest() {
         const qs = quickState || {};
         if (qs.status === 'done' || qs.status === 'heal_needed' || qs.status === 'heal_failed') {
           clearInterval(checkDone);
+          _quickRunState._checkDoneTimer = null;
           // 로그 폴링 정리 + 최종 로그 보존
           if (_logTimers['run-quick-log']) {
             clearInterval(_logTimers['run-quick-log']);
@@ -137,14 +180,22 @@ async function runQuickTest() {
           const logEl = document.getElementById('run-quick-log-content');
           if (logEl) _quickRunState.logContent = logEl.textContent;
           _quickRunState.running = false;
+          _quickRunState.pid = null;
           if (currentView === 'quick_run' && !_confirmOpen) renderQuickRun(document.getElementById('main'));
           if (btn) { btn.textContent = '테스트 실행'; btn.disabled = false; }
+          if (qs.status === 'heal_needed') {
+            const fc = qs.execution_result?.failed || 0;
+            showHookAlert('quick_heal', `실패 ${fc}건 — 힐링 대기 중`);
+          }
         }
       }, 3000);
+      _quickRunState._checkDoneTimer = checkDone;
       // 최대 5분 후 자동 해제
       setTimeout(() => {
         clearInterval(checkDone);
         _quickRunState.running = false;
+        _quickRunState.pid = null;
+        _quickRunState._checkDoneTimer = null;
         if (btn) { btn.textContent = '테스트 실행'; btn.disabled = false; }
       }, 300000);
     } else {
@@ -161,11 +212,24 @@ async function runQuickTest() {
 
 async function quickReset() {
   if (!(await safeConfirm('빠른 실행 상태를 초기화하시겠습니까?'))) return;
+  // 타이머 정리
+  if (_quickRunState._checkDoneTimer) {
+    clearInterval(_quickRunState._checkDoneTimer);
+  }
+  if (_logTimers['run-quick-log']) {
+    clearInterval(_logTimers['run-quick-log']);
+    delete _logTimers['run-quick-log'];
+  }
+  const pidToKill = _quickRunState.pid;
   try {
-    const res = await fetch('/api/quick/reset', { method: 'POST' });
+    const res = await fetch('/api/quick/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pid: pidToKill }),
+    });
     const data = await res.json();
     if (data.ok) {
-      _quickRunState = { running: false, logVisible: false, logContent: '' };
+      _quickRunState = { running: false, logVisible: false, logContent: '', pid: null, _checkDoneTimer: null };
       showToast('빠른 실행 초기화 완료', 'success');
       await refreshAll();
     } else {

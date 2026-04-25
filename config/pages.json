@@ -1,4 +1,15 @@
 {
+  "directcloud": {
+    "url": "https://web.directcloud.jp/login",
+    "auth": {
+      "company": "samplelab",
+      "username": "guest",
+      "password": "guest1234!!"
+    },
+    "spa": true,
+    "preconditions": [],
+    "notes": "DirectCloud 파일 공유 서비스 - 로그인 후 내부 기능 테스트"
+  },
   "heroku": {
     "url": "https://the-internet.herokuapp.com/",
     "auth": null,

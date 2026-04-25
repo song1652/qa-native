@@ -215,6 +215,13 @@
       transition: all 0.3s;
     }
 
+    /* 상태 없는 순수 내비 항목용 — 닷 대신 동일 크기 투명 공간 */
+    .sidebar-dot-spacer {
+      width: 7px;
+      height: 7px;
+      flex-shrink: 0;
+    }
+
     .sidebar-dot.active-run {
       background: var(--pending-color);
       border-color: var(--pending-color);

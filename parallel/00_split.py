@@ -1,5 +1,5 @@
 """
-병렬 파이프라인 Step 0 — URL별 worker 환경 초기화
+병렬 파이프라인 Step 0 -- URL별 worker 환경 초기화
 
 targets.json의 각 URL에 대해:
   1. workers/{worker_id}/ 독립 디렉토리 생성
@@ -57,6 +57,11 @@ def slugify_url(url: str) -> str:
     slug = re.sub(r"https?://", "", url)
     slug = re.sub(r"[^\w]", "_", slug).strip("_")
     return slug[:40]  # 최대 40자
+
+
+def _natural_sort_key(p) -> list:
+    """파일명을 숫자 기준으로 정렬하는 키 (tc_10 > tc_9 보장)."""
+    return [int(c) if c.isdigit() else c.lower() for c in re.split(r"(\d+)", p.name)]
 
 
 
@@ -161,7 +166,7 @@ def main():
             if not folder.is_dir():
                 continue
             if folder.name not in pages or not pages[folder.name]:
-                print(f"[건너뜀] '{folder.name}' — config/pages.json에 URL 없음")
+                print(f"[건너뜀] '{folder.name}' -- config/pages.json에 URL 없음")
                 continue
             targets.append({"url": pages[folder.name], "cases": str(folder),
                             "base_group": folder.name})
@@ -182,7 +187,7 @@ def main():
         if not cases_path.is_absolute():
             cases_path = PROJECT_ROOT / cases_path
         if cases_path.is_dir():
-            md_files = sorted(cases_path.glob("*.md"))
+            md_files = sorted(cases_path.glob("*.md"), key=_natural_sort_key)
             if not md_files:
                 print(f"[경고] 폴더에 .md 파일 없음: {cases_path}")
                 continue
@@ -208,7 +213,7 @@ def main():
 
         print(f"\n[00] ({i}/{len(expanded)}) 초기화 중: {url}  [{cases_path.name}]")
 
-        # worker 디렉토리 — 인덱스 포함으로 동일 URL 중복 실행 시 충돌 방지
+        # worker 디렉토리 -- 인덱스 포함으로 동일 URL 중복 실행 시 충돌 방지
         slug = slugify_url(url)
         worker_id = f"{i:02d}_{slug}_{ts}"
         worker_dir = workers_root / worker_id
@@ -223,7 +228,7 @@ def main():
             continue
         test_cases = load_cases(cases_path)
 
-        # DOM 분석 — 같은 URL이면 캐시 사용
+        # DOM 분석 -- 같은 URL이면 캐시 사용
         if url not in dom_cache:
             print(f"[00]   DOM 분석 중...")
             dom_cache[url] = run_analyze(worker_dir, url)

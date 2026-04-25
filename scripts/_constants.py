@@ -18,7 +18,7 @@ VALID_TRANSITIONS = {
     "init":         ["analyzed"],
     "analyzed":     ["generated"],
     "generated":    ["reviewed"],
-    "reviewed":     ["done"],
+    "reviewed":     ["done", "heal_needed"],
     "done":         ["heal_needed"],
     "heal_needed":  ["done", "heal_failed"],
     "heal_failed":  [],           # 종료 상태

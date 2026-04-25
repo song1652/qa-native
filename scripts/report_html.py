@@ -8,7 +8,7 @@ import re
 
 
 def _esc(text: str) -> str:
-    """HTML 이스케이프 — 사용자 데이터를 안전하게 출력."""
+    """HTML 이스케이프 -- 사용자 데이터를 안전하게 출력."""
     return _html.escape(str(text), quote=True)
 
 _STEP_NUM_RE = re.compile(r"^\s*\d+[\.\)]\s*")
@@ -23,13 +23,22 @@ def _strip_prefix(text: str) -> str:
     return t.strip()
 
 
-def case_row(case: dict, uid: str, is_passed: bool) -> str:
+def case_row(case: dict, uid: str, outcome) -> str:
+    """테스트 케이스 행 HTML 생성.
+
+    outcome: "passed" | "failed" | "skipped"  또는 bool (하위 호환)
+    """
+    if isinstance(outcome, bool):
+        outcome = "passed" if outcome else "failed"
+    _cls_map = {"passed": "pass", "failed": "fail", "skipped": "skip"}
+    _txt_map = {"passed": "PASS", "failed": "FAIL", "skipped": "SKIP"}
+    status_cls = _cls_map.get(outcome, "fail")
+    badge_txt = _txt_map.get(outcome, "FAIL")
+
     title = case.get("title", "untitled")
     precondition = case.get("precondition", "")
     steps = case.get("steps", [])
     expected = case.get("expected", "")
-    status_cls = "pass" if is_passed else "fail"
-    badge_txt = "PASS" if is_passed else "FAIL"
 
     clean_steps = [_esc(_strip_prefix(s)) for s in steps if s.strip()]
     steps_html = "".join(f"<li>{s}</li>" for s in clean_steps) if clean_steps else "<li>-</li>"
@@ -75,12 +84,20 @@ def case_row(case: dict, uid: str, is_passed: bool) -> str:
 
 def build_group_section(label: str, rows_html: str,
                         g_pass_cnt: int, g_total_cnt: int,
-                        g_passed: bool, has_tests: bool) -> str:
+                        g_passed: bool, has_tests: bool,
+                        g_skip_cnt: int = 0) -> str:
     """그룹 카드 HTML 생성. 접기/펼치기 + 필터 + 페이지네이션."""
     status_cls = "pass" if g_passed else ("fail" if has_tests else "warn")
+    g_fail_cnt = g_total_cnt - g_pass_cnt - g_skip_cnt
     status_txt = "PASS" if g_passed else ("FAIL" if has_tests else "N/A")
+    if g_passed and g_skip_cnt > 0:
+        status_txt = f"PASS · {g_skip_cnt} skipped"
     display_label = label.replace("_", " ").upper()
-    g_fail_cnt = g_total_cnt - g_pass_cnt
+    skip_btn = (
+        f'<button class="fbtn skip" data-filter="{label}" data-filter-val="skip">'
+        f'Skip ({g_skip_cnt})</button>'
+        if g_skip_cnt > 0 else ""
+    )
 
     return f"""
 <section class="group-card" id="group_{label}">
@@ -89,7 +106,7 @@ def build_group_section(label: str, rows_html: str,
       <span class="group-chevron" id="gchv_{label}">&#9654;</span>
       <span class="group-dot {status_cls}"></span>
       <span class="group-title">{display_label}</span>
-      <span class="group-sub">{g_pass_cnt} / {g_total_cnt} passed</span>
+      <span class="group-sub">{g_pass_cnt} / {g_total_cnt - g_skip_cnt} passed{f" · {g_skip_cnt} skipped" if g_skip_cnt else ""}</span>
     </div>
     <div class="group-right">
       <span class="badge {status_cls}">{status_txt}</span>
@@ -100,6 +117,7 @@ def build_group_section(label: str, rows_html: str,
       <button class="fbtn active" data-filter="{label}" data-filter-val="all">All ({g_total_cnt})</button>
       <button class="fbtn pass" data-filter="{label}" data-filter-val="pass">Pass ({g_pass_cnt})</button>
       <button class="fbtn fail" data-filter="{label}" data-filter-val="fail">Fail ({g_fail_cnt})</button>
+      {skip_btn}
       <span class="pager" id="pager_{label}"></span>
     </div>
     <div class="case-list" id="clist_{label}">{rows_html}</div>
@@ -120,6 +138,7 @@ def report_css() -> str:
     --pass:#10b981;--pass-bg:rgba(16,185,129,.1);
     --fail:#f43f5e;--fail-bg:rgba(244,63,94,.1);
     --warn:#f59e0b;--warn-bg:rgba(245,158,11,.1);
+    --skip:#a855f7;--skip-bg:rgba(168,85,247,.1);
     --accent:#6366f1;--accent-glow:rgba(99,102,241,.4);
     --radius:16px;--radius-sm:12px;--radius-lg:24px;
     --shadow:0 20px 60px -15px rgba(0,0,0,.6);
@@ -150,7 +169,7 @@ def report_css() -> str:
   .overall-badge{display:flex;align-items:center;gap:8px;padding:10px 18px;border-radius:var(--radius);font-size:13px;font-weight:700;letter-spacing:.3px;backdrop-filter:blur(20px)}
   .overall-badge.pass{background:var(--pass-bg);color:var(--pass);border:1px solid rgba(16,185,129,.25)}
   .overall-badge.fail{background:var(--fail-bg);color:var(--fail);border:1px solid rgba(244,63,94,.25)}
-  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:32px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px;margin-bottom:32px}
   .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;transition:transform .2s,box-shadow .2s,border-color .2s;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:var(--shadow);position:relative;overflow:hidden}
   .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:.6}
   .stat-card:hover{transform:translateY(-3px);box-shadow:0 24px 64px -12px rgba(0,0,0,.7),0 0 0 1px var(--accent-glow)}
@@ -172,7 +191,7 @@ def report_css() -> str:
   .group-title{font-size:14px;font-weight:700;letter-spacing:.3px;font-family:'Outfit',-apple-system,sans-serif}
   .group-sub{font-size:12px;color:var(--text3)}
   .group-right{display:flex;align-items:center;gap:8px}
-  .badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.5px}
+  .badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.5px;white-space:nowrap}
   .badge.pass{background:var(--pass-bg);color:var(--pass);border:1px solid rgba(16,185,129,.3)}
   .badge.fail{background:var(--fail-bg);color:var(--fail);border:1px solid rgba(244,63,94,.3)}
   .badge.warn{background:var(--warn-bg);color:var(--warn);border:1px solid rgba(245,158,11,.3)}
@@ -182,6 +201,7 @@ def report_css() -> str:
   .fbtn.active{background:var(--surface2);color:var(--text);border-color:rgba(255,255,255,.2);backdrop-filter:blur(20px)}
   .fbtn.pass.active{background:var(--pass-bg);color:var(--pass);border-color:rgba(16,185,129,.4)}
   .fbtn.fail.active{background:var(--fail-bg);color:var(--fail);border-color:rgba(244,63,94,.4)}
+  .fbtn.skip.active{background:var(--skip-bg);color:var(--skip);border-color:rgba(168,85,247,.4)}
   .pager{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;color:var(--text2)}
   .pager button{padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.04);color:var(--text2);cursor:pointer;font-size:14px;font-weight:600;transition:all .15s}
   .pager button:disabled{opacity:.3;cursor:default}
@@ -195,12 +215,13 @@ def report_css() -> str:
   .case-item:hover{background:rgba(255,255,255,.04)}
   .case-header{display:flex;align-items:center;gap:12px;padding:10px 20px}
   .case-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-  .case-dot.pass{background:var(--pass)}.case-dot.fail{background:var(--fail)}
+  .case-dot.pass{background:var(--pass)}.case-dot.fail{background:var(--fail)}.case-dot.skip{background:var(--skip)}
   .case-title{flex:1;font-size:13px;font-weight:500;color:var(--text);line-height:1.4}
   .case-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
   .case-status-txt{font-size:11px;font-weight:700;letter-spacing:.5px}
   .case-status-txt.pass{color:var(--pass)}
   .case-status-txt.fail{color:var(--fail)}
+  .case-status-txt.skip{color:var(--skip)}
   .chevron{color:var(--text3);font-size:18px;transition:transform .2s;display:inline-block}
   .chevron.open{transform:rotate(90deg)}
   .case-detail{display:none;padding:0 20px 16px 38px;animation:fadeIn .15s ease}
@@ -315,7 +336,7 @@ function applyFilter(label) {
   }else{pg.innerHTML='';}
 }
 
-// Event delegation — no inline onclick needed
+// Event delegation -- no inline onclick needed
 document.addEventListener('click', function(e) {
   var t;
   t = e.target.closest('[data-toggle]');
@@ -343,11 +364,13 @@ def build_report(groups_data: list, summary: dict,
 
     groups_data: [{"label": str, "rows_html": str,
                    "pass_cnt": int, "total_cnt": int,
-                   "all_pass": bool, "has_tests": bool}, ...]
+                   "all_pass": bool, "has_tests": bool,
+                   "skip_cnt": int (optional)}, ...]
     """
     pass_total = summary.get("passed", 0)
     fail_total = summary.get("failed", 0) + summary.get("error", 0)
-    total = pass_total + fail_total
+    skip_total = summary.get("skipped", 0)
+    total = pass_total + fail_total + skip_total
     pass_rate = round(pass_total / total * 100, 1) if total else 0
     all_pass = fail_total == 0
     overall_cls = "pass" if all_pass else "fail"
@@ -356,12 +379,18 @@ def build_report(groups_data: list, summary: dict,
     nav_items = f'<li class="nav-item active" id="nav_all" data-nav="all">All ({total})</li>\n'
     for g in groups_data:
         lbl = g["label"]
+        g_skip_cnt = g.get("skip_cnt", 0)
+        g_non_skip = g["total_cnt"] - g_skip_cnt
         dot_cls = "pass" if g["all_pass"] else ("fail" if g["has_tests"] else "warn")
+        skip_label = (
+            f'<span style="font-size:10px;color:#a855f7;margin-left:3px;">· {g_skip_cnt} skip</span>'
+            if g_skip_cnt > 0 else ""
+        )
         nav_items += (
             f'<li class="nav-item" id="nav_{lbl}" data-nav="{lbl}">'
             f'<span class="nav-dot {dot_cls}"></span>'
             f'{lbl.replace("_"," ").upper()}'
-            f'<span class="nav-count">{g["pass_cnt"]}/{g["total_cnt"]}</span>'
+            f'<span class="nav-count">{g["pass_cnt"]}/{g_non_skip}{skip_label}</span>'
             f'</li>\n'
         )
 
@@ -371,6 +400,7 @@ def build_report(groups_data: list, summary: dict,
             g["label"], g["rows_html"],
             g["pass_cnt"], g["total_cnt"],
             g["all_pass"], g["has_tests"],
+            g_skip_cnt=g.get("skip_cnt", 0),
         )
 
     n_groups = len(groups_data)
@@ -408,6 +438,7 @@ def build_report(groups_data: list, summary: dict,
       <div class="stat-card"><div class="stat-num" style="color:var(--text);">{total}</div><div class="stat-lbl">Total</div></div>
       <div class="stat-card"><div class="stat-num" style="color:var(--pass);">{pass_total}</div><div class="stat-lbl">Passed</div></div>
       <div class="stat-card"><div class="stat-num" style="color:var(--fail);">{fail_total}</div><div class="stat-lbl">Failed</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:var(--skip);">{skip_total}</div><div class="stat-lbl">Skipped</div></div>
       <div class="stat-card"><div class="stat-num" style="color:{'var(--pass)' if all_pass else 'var(--fail)'};">{pass_rate}%</div><div class="stat-lbl">Pass Rate</div></div>
     </div>
     {group_sections}

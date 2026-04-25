@@ -1,5 +1,8 @@
 # 팀 자유 토론 파이프라인
 
+> **독자**: Claude Code — 사용자가 팀 토론을 요청할 때 읽음 (`run_team.py` 실행 후 또는 대시보드 토론 시작 시).
+> QA 파이프라인 심의(Plan·코드리뷰·힐링)와 무관. 팀 토론 전용 플로우.
+
 사용자가 `run_team.py`를 실행하면 아래 순서로 진행한다.
 어떤 주제든 사수/부사수가 토론하고, 사용자가 결론을 최종 승인한다.
 
@@ -23,7 +26,7 @@ python run_team.py --topic "주제"
 
 **2.** 심의 완료 후 사용자에게 알림:
    "토론이 완료됐어요. 대시보드에서 결론을 확인하고 승인/반려해주세요."
-   (대시보드 http://localhost:8765 → 해당 토론 세션 하단에 승인/반려 버튼이 표시됩니다)
+   (대시보드 http://localhost:8766 → 해당 토론 세션 하단에 승인/반려 버튼이 표시됩니다)
    - 승인 시: 서버가 `agents/team_notes.md` 저장 + `pending_impl.json` 생성
      → 스케줄러(2분 내)가 `pending_impl.json` 감지 → Claude가 항목 자동 구현
      → 구현 완료 후 `pending_impl.json` 삭제, `team_notes.md`·`state/discuss.json` 초기화

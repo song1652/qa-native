@@ -29,6 +29,7 @@ API 호출 없이 Claude Code 자체가 LLM 역할을 수행하는 QA 자동화 
 |------|------|
 | [pages.json](config/pages.json) | URL 매핑 (string/object 혼용). 키 = testcases/ 폴더명 |
 | [test_data.json](config/test_data.json) | 테스트 입력값. 하드코딩 금지 |
+| [weverse.json](config/weverse.json) | 위버스 전용 설정 (이메일·비밀번호·IMAP·커뮤니티 등). weverse TC 전용 |
 | [run_history.json](state/run_history.json) | 실행 이력 (자동 append) |
 
 테스트케이스: YAML frontmatter + Markdown 본문. 상세 스키마 → [SCRIPTS_GUIDE](doc/SCRIPTS_GUIDE.md)
@@ -44,24 +45,25 @@ API 호출 없이 Claude Code 자체가 LLM 역할을 수행하는 QA 자동화 
 
 | 스킬 | 경로 | 용도 |
 |------|------|------|
-| Playwright Best Practices | [SKILL.md](.claude/skills/playwright-best-practices/SKILL.md) | 테스트 코드 작성 시 참조 |
-| Heal Patterns | [SKILL.md](.claude/skills/heal-patterns/SKILL.md) | 힐링 패치 전략 참조 |
+| Playwright Best Practices | [SKILL.md](.claude/skills/playwright-best-practices/SKILL.md) | 테스트 코드 작성 시 셀렉터·대기 전략 참조 |
+| Heal Patterns | [SKILL.md](.claude/skills/heal-patterns/SKILL.md) | 힐링 패치 전략, 오류 유형별 수정 패턴 참조 |
+| E2E Testing (ECC) | [SKILL.md](.claude/skills/e2e-testing/SKILL.md) | POM, flaky test 전략, CI/CD 통합 패턴 |
+| Browser QA (ECC) | [SKILL.md](.claude/skills/browser-qa/SKILL.md) | 배포 후 시각 검증, 4단계 QA 플로우 |
+| Verification Loop (ECC) | [SKILL.md](.claude/skills/verification-loop/SKILL.md) | 패치 완료 후 6단계 체크리스트 |
+| Continuous Learning v2 (ECC) | [SKILL.md](.claude/skills/continuous-learning-v2/SKILL.md) | 신뢰도 기반 패턴 학습, lessons_learned 강화 |
+| Python Testing (ECC) | [SKILL.md](.claude/skills/python-testing/SKILL.md) | pytest 픽스처·파라미터화·mocking 전략 |
+| Verify | [SKILL.md](.claude/skills/verify/SKILL.md) | 패치 후 05_execute 기반 증거 검증. "됐을 것 같다" 금지 |
+| Skillify | [SKILL.md](.claude/skills/skillify/SKILL.md) | 반복 패턴 → heal-patterns/lessons_learned 공식 등록 |
 
 파이프라인 단계별 OMC 스킬:
 
-| 단계 | OMC 스킬 | 적용 방법 |
-|------|----------|----------|
-| 코드 완성 (02_generate 이후) | `/oh-my-claudecode:ultrapilot` | 파일 소유권 파티셔닝으로 N개 agent가 병렬 작성 |
-| 린트 수정 (03_lint 이후) | Agent tool 직접 병렬 호출 | lint 이슈 파일별로 Agent 동시 실행 |
-| 힐링 루프 (05_execute 실패 시) | `/oh-my-claudecode:ultraqa` | test→verify→fix→repeat 자동 사이클. 전체 통과까지 자동 반복 |
-
-### OMC 사용법 (요약)
-
-| 단계 | 명령 | 핵심 |
-|------|------|------|
-| 코드 완성 | `/oh-my-claudecode:ultrapilot` | scaffold 파일을 agent별 파티셔닝, dom_info+lessons_learned+SKILL.md 참조 |
-| 힐링 루프 | `/oh-my-claudecode:ultraqa` | 최대 3회, 동일 오류 2회 반복 시 자동 스킵. 패치마다 lessons_learned 기록 |
-| 린트 수정 | Agent tool 직접 병렬 호출 | lint 이슈 파일별 Agent 동시 실행 |
+| 단계 | 명령 | 참조 SKILL.md | 핵심 |
+|------|------|--------------|------|
+| 코드 완성 (02_generate 이후) | `/oh-my-claudecode:ultrapilot` | `playwright-best-practices`, `e2e-testing`, `python-testing` | scaffold 파일을 agent별 파티셔닝, dom_info+lessons_learned+SKILL.md 참조 |
+| 린트 수정 (03_lint 이후) | Agent tool 직접 병렬 호출 | `python-testing` | lint 이슈 파일별로 Agent 동시 실행 |
+| 힐링 루프 (05_execute 실패 시) | `/oh-my-claudecode:ultraqa` | `heal-patterns`, `verification-loop`, `browser-qa` | 최대 3회, 동일 오류 2회 반복 시 자동 스킵. 패치마다 lessons_learned 기록 |
+| 패치 후 검증 | `/oh-my-claudecode:verify` | `verify` | 힐링 패치 직후 05_execute 증거 확인. 통과 전 완료 선언 금지 |
+| 패턴 등록 (세션 종료 전) | `/oh-my-claudecode:skillify` | `skillify` | 반복 패턴 발견 시 heal-patterns 또는 lessons_learned에 등록 |
 
 ## 힐링
 
@@ -114,3 +116,5 @@ run_qa_parallel.py → testcases/ 스캔 + pages.json URL 조회 → PARALLEL_SU
 - state/pipeline.json 스키마 → [PIPELINE_STATE](doc/PIPELINE_STATE.md)
 - 디렉토리 구조 → [DIRECTORY](doc/DIRECTORY.md)
 - 스크립트 인자/옵션 상세 → [SCRIPTS_GUIDE](doc/SCRIPTS_GUIDE.md)
+- CLI 옵션 + API 엔드포인트 → [API_REFERENCE](doc/API_REFERENCE.md)
+- 프롬프트 템플릿 입출력 → [PROMPTS_REFERENCE](doc/PROMPTS_REFERENCE.md)

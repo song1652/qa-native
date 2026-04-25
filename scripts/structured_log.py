@@ -1,4 +1,4 @@
-"""구조화된 로그 (JSON Lines) — 각 스크립트에서 import하여 사용.
+"""구조화된 로그 (JSON Lines) -- 각 스크립트에서 import하여 사용.
 
 기존 print 출력은 유지하면서, 병행하여 JSON Lines 파일에 구조화된 이벤트를 기록한다.
 로그 파일: logs/structured.jsonl

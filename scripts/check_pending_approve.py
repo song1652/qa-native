@@ -2,7 +2,7 @@
 UserPromptSubmit 훅에서 실행됨.
 state/pipeline.json의 step=reviewed이고 execution_result가 없으면
 코드 리뷰가 완료된 것이므로 테스트 실행을 Claude에 요청한다.
-(승인 단계 제거 — 심의 완료 후 바로 실행)
+(승인 단계 제거 -- 심의 완료 후 바로 실행)
 """
 import sys
 from _paths import PIPELINE_STATE

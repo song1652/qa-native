@@ -1,5 +1,5 @@
 """
-Step 6 — Healer: 실패 테스트 자동 분석
+Step 6 -- Healer: 실패 테스트 자동 분석
 LLM 없음. pytest를 상세 모드로 재실행해 실패 정보를 수집, state.json에 저장.
 Claude Code가 heal_context를 읽고 test_generated.py를 직접 패치한 뒤 05_execute.py를 재실행한다.
 
@@ -19,7 +19,7 @@ from _constants import EXIT_SUCCESS, EXIT_HEAL_NEEDED, EXIT_HEAL_EXCEEDED
 from heal_utils import (
     classify_error, extract_key_lines,  # noqa: F401 (re-export for tests)
     find_screenshot_for_test, append_lessons, update_heal_stats,
-    build_heal_batches, print_heal_batches,
+    build_heal_batches, print_heal_batches, MCP_SNAPSHOT_ERROR_TYPES,
 )
 from structured_log import slog
 
@@ -250,7 +250,7 @@ def main():
         f["screenshot"] = find_screenshot_for_test(f["test_name"])
 
     # 동일 오류 2회 연속 반복 감지 → 해당 테스트 스킵
-    prev_heal_context = state.get("heal_context", {})
+    prev_heal_context = state.get("heal_context") or {}
     prev_failures = prev_heal_context.get("failures", [])
     healable, skipped = _detect_repeated_failures(failures, prev_failures)
 
@@ -265,7 +265,7 @@ def main():
 
     # 스킵 후 힐링 대상이 없으면 heal_failed로 종료
     if not healable and skipped:
-        print("[06] 모든 실패가 반복 패턴 — 수동 수정이 필요합니다.")
+        print("[06] 모든 실패가 반복 패턴 -- 수동 수정이 필요합니다.")
         state["step"] = "heal_failed"
         state["heal_context"] = {
             "heal_count": heal_count + 1,
@@ -284,6 +284,7 @@ def main():
             f["error_type"] = classify_error(f["traceback"])
         failure_groups[f["error_type"]].append(f["test_name"])
 
+    needs_mcp = any(f.get("error_type", "") in MCP_SNAPSHOT_ERROR_TYPES for f in healable)
     heal_context = {
         "heal_count": heal_count + 1,
         "failure_count": len(healable),
@@ -293,6 +294,8 @@ def main():
         "url": state.get("url", ""),
         "raw_tail": raw_output[-2000:],
         "analyzed_at": datetime.now().isoformat(),
+        "mcp_snapshot_recommended": needs_mcp,
+        "mcp_snapshot_url": state.get("url", "") if needs_mcp else "",
     }
 
     state["heal_context"] = heal_context

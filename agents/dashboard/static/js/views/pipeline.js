@@ -129,6 +129,10 @@ function renderSinglePipeline(main) {
   // 선택값 보존 (5초 폴링으로 DOM 교체 시 리셋 방지)
   const prevPage = (document.getElementById('run-page-select') || {}).value || '';
   const prevCase = (document.getElementById('run-case-select') || {}).value || '';
+  // 로그 스크롤 위치 보존
+  const _sLogArea = document.getElementById('run-single-log');
+  const _sLogScrollTop = _sLogArea ? _sLogArea.scrollTop : null;
+  const _sWasAtBottom = _sLogScrollTop === null || (_sLogArea.scrollHeight - _sLogScrollTop - _sLogArea.clientHeight < 40);
 
   const state = pipelineState || {};
   const currentStep = state.step || 'init';
@@ -187,6 +191,7 @@ function renderSinglePipeline(main) {
           <div class="exec-stat"><div class="exec-stat-num" style="color:var(--text)">${execResult.total}</div><div class="exec-stat-label">Total</div></div>
           <div class="exec-stat"><div class="exec-stat-num" style="color:var(--approved-color)">${execResult.passed}</div><div class="exec-stat-label">Passed</div></div>
           <div class="exec-stat"><div class="exec-stat-num" style="color:var(--revision-color)">${execResult.failed}</div><div class="exec-stat-label">Failed</div></div>
+          ${(execResult.skipped || 0) > 0 ? `<div class="exec-stat"><div class="exec-stat-num" style="color:#a855f7">${execResult.skipped}</div><div class="exec-stat-label">Skipped</div></div>` : ''}
           <div class="exec-stat"><div class="exec-stat-num" style="color:${allPass ? 'var(--approved-color)' : 'var(--revision-color)'}">${execResult.pass_rate}%</div><div class="exec-stat-label">Pass Rate</div></div>
         </div>
         ${groupResultsHtml}
@@ -235,6 +240,12 @@ function renderSinglePipeline(main) {
   const caseSel = document.getElementById('run-case-select');
   if (pageSel && prevPage) { pageSel.value = prevPage; onPageSelect(); }
   if (caseSel && prevCase) caseSel.value = prevCase;
+
+  // 로그 스크롤 복원
+  const _sNewLog = document.getElementById('run-single-log');
+  if (_sNewLog && _sLogScrollTop !== null) {
+    _sNewLog.scrollTop = _sWasAtBottom ? _sNewLog.scrollHeight : _sLogScrollTop;
+  }
 }
 
 async function pipelineReset() {
